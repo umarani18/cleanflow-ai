@@ -30,6 +30,7 @@ export function FileExplorer() {
     downloadCleanData,
     downloadQuarantineData,
     downloadDQReport,
+    downloadFileMultiFormat,
     startAutoRefresh,
     stopAutoRefresh,
     autoRefreshEnabled,
@@ -251,6 +252,23 @@ export function FileExplorer() {
     }
   }
 
+  const handleDownloadMultiFormat = async (file: any, format: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine') => {
+    if (!file.upload_id) {
+      toast({
+        title: "Download Error",
+        description: "File upload ID not available",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await downloadFileMultiFormat(file.upload_id, format, dataType)
+    } catch (error) {
+      // Error handling is done in the function
+    }
+  }
+
   const handleRefreshFiles = async () => {
     try {
       await refreshFiles()
@@ -283,8 +301,8 @@ export function FileExplorer() {
   }
 
   return (
-    <Card className="hover:glow transition-all duration-300">
-      <CardHeader>
+    <Card className="hover:glow transition-all duration-300 flex flex-col overflow-y-auto h-[400px] sm:h-[500px] lg:h-[700px]">
+      <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <span>Files ({filteredFiles.length}{searchQuery ? ` of ${files.length}` : ''})</span>
@@ -325,8 +343,8 @@ export function FileExplorer() {
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-96">
+      <CardContent className="flex flex-col h-full">
+        <ScrollArea className="flex-1">
           {filteredFiles.length === 0 ? (
             <div className="text-center py-8">
               <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -342,7 +360,7 @@ export function FileExplorer() {
               {filteredFiles.map((file, index) => (
                 <div
                   key={file.id}
-                  className={`border rounded-lg p-4 hover:bg-muted/50 transition-colors cursor-pointer ${
+                  className={`w-full border rounded-lg p-4 hover:bg-muted/50 transition-colors cursor-pointer ${
                     selectedFileId === file.id ? 'ring-2 ring-primary' : ''
                   }`}
                   onClick={() => handlePreviewFile(file)}
@@ -378,8 +396,8 @@ export function FileExplorer() {
                             <p className="text-green-600">✅ Data quality processing completed</p>
                           ) : file.status === 'processing' || file.status === 'dq_running' || file.status === 'queued' ? (
                             <p className="text-yellow-600">🔄 Processing data quality rules...</p>
-                          ) : (file.status === 'failed' || file.status === 'dq_failed') && file.last_error ? (
-                            <p className="text-red-600">❌ {file.last_error}</p>
+                          ) : (file.status === 'failed' || file.status === 'dq_failed') ? (
+                            <p className="text-red-600">❌ DQ failed</p>
                           ) : null}
                         </div>
                       </div>
@@ -415,16 +433,42 @@ export function FileExplorer() {
                           </DropdownMenuItem>
                         )}
                         {(file.status === 'processed' || file.status === 'dq_fixed') && (
-                          <DropdownMenuItem onClick={() => handleDownloadClean(file)}>
-                            <Download className="w-4 h-4 mr-2" />
-                            Download Clean Data
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuItem disabled className="font-medium text-green-700">
+                              Clean Data:
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownloadMultiFormat(file, 'csv', 'clean')}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download as CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownloadMultiFormat(file, 'excel', 'clean')}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download as Excel
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownloadMultiFormat(file, 'json', 'clean')}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download as JSON
+                            </DropdownMenuItem>
+                          </>
                         )}
                         {(file.status === 'processed' || file.status === 'dq_fixed') && file.rows_quarantined && file.rows_quarantined > 0 && (
-                          <DropdownMenuItem onClick={() => handleDownloadQuarantine(file)}>
-                            <Download className="w-4 h-4 mr-2" />
-                            Download Quarantine
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuItem disabled className="font-medium text-orange-700">
+                              Quarantine Data:
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownloadMultiFormat(file, 'csv', 'quarantine')}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download as CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownloadMultiFormat(file, 'excel', 'quarantine')}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download as Excel
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDownloadMultiFormat(file, 'json', 'quarantine')}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download as JSON
+                            </DropdownMenuItem>
+                          </>
                         )}
                         {(file.status === 'processed' || file.status === 'dq_fixed') && (
                           <DropdownMenuItem onClick={() => handleDownloadReport(file)}>

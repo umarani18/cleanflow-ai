@@ -15,14 +15,14 @@ export function FilesHeader() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">File Manager</h1>
-          <p className="text-muted-foreground">Browse, manage, and organize your transformation files</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">File Manager</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">Browse, manage, and organize your transformation files</p>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <Badge variant="outline" className="pulse-glow">
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <Badge variant="outline" className="pulse-glow text-xs">
             <FolderOpen className="w-3 h-3 mr-1" />
             {formatFileSize(stats.storageUsed)} Used
           </Badge>
@@ -34,7 +34,7 @@ export function FilesHeader() {
                 Upload
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md mx-4">
               <DialogHeader>
                 <DialogTitle>Upload Files</DialogTitle>
               </DialogHeader>
@@ -49,7 +49,7 @@ export function FilesHeader() {
         </div>
       </div>
 
-      <div className="flex items-center space-x-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -60,7 +60,7 @@ export function FilesHeader() {
           />
         </div>
 
-        <div className="flex items-center space-x-1 border rounded-lg p-1">
+        <div className="flex items-center space-x-1 border rounded-lg p-1 self-start sm:self-center">
           <Button variant="ghost" size="sm">
             <Grid className="w-4 h-4" />
           </Button>

@@ -51,10 +51,10 @@ export function DQSummary() {
 
   const summaryStats = completedFiles.reduce((acc, file) => {
     acc.totalFiles++
-    acc.totalRowsIn += file.rows_in || 0
-    acc.totalRowsOut += file.rows_out || 0
-    acc.totalQuarantined += file.rows_quarantined || 0
-    acc.avgDQScore += file.dq_score || 0
+    acc.totalRowsIn += Number(file.rows_in) || 0
+    acc.totalRowsOut += Number(file.rows_out) || 0
+    acc.totalQuarantined += Number(file.rows_quarantined) || 0
+    acc.avgDQScore += Number(file.dq_score) || 0
     return acc
   }, { totalFiles: 0, totalRowsIn: 0, totalRowsOut: 0, totalQuarantined: 0, avgDQScore: 0 })
 
@@ -76,44 +76,44 @@ export function DQSummary() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           <div className="text-center p-3 bg-muted/30 rounded-lg">
-            <div className="text-2xl font-bold text-primary mb-1">{summaryStats.totalFiles}</div>
+            <div className="text-xl sm:text-2xl font-bold text-primary mb-1">{summaryStats.totalFiles}</div>
             <div className="text-xs text-muted-foreground font-medium">Files Processed</div>
           </div>
 
           <div className="text-center p-3 bg-green-500/5 rounded-lg">
-            <div className="text-2xl font-bold text-green-600 mb-1">
+            <div className="text-xl sm:text-2xl font-bold text-green-600 mb-1">
               {formatNumber(summaryStats.totalRowsIn)}
             </div>
             <div className="text-xs text-muted-foreground font-medium">Total Rows</div>
           </div>
 
           <div className="text-center p-3 bg-blue-500/5 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600 mb-1">
+            <div className="text-xl sm:text-2xl font-bold text-blue-600 mb-1">
               {formatNumber(summaryStats.totalRowsOut)}
             </div>
             <div className="text-xs text-muted-foreground font-medium">Clean Rows</div>
           </div>
 
           <div className="text-center p-3 bg-orange-500/5 rounded-lg">
-            <div className="text-2xl font-bold text-orange-600 mb-1">
+            <div className="text-xl sm:text-2xl font-bold text-orange-600 mb-1">
               {formatNumber(summaryStats.totalQuarantined)}
             </div>
             <div className="text-xs text-muted-foreground font-medium">Quarantined</div>
           </div>
 
           <div className="text-center p-3 bg-purple-500/5 rounded-lg">
-            <div className="text-2xl font-bold text-purple-600 mb-1">
+            <div className="text-xl sm:text-2xl font-bold text-purple-600 mb-1">
               {dataRetentionRate.toFixed(1)}%
             </div>
             <div className="text-xs text-muted-foreground font-medium">Data Retention</div>
           </div>
 
-          <div className="text-center p-3 bg-gradient-to-br from-green-500/10 to-blue-500/10 rounded-lg border">
+          <div className="text-center p-3 bg-gradient-to-br from-green-500/10 to-blue-500/10 rounded-lg border col-span-2 sm:col-span-1">
             <div className="flex items-center justify-center space-x-1 mb-1">
               {getScoreIcon(summaryStats.avgDQScore)}
-              <span className="text-2xl font-bold text-green-600">
+              <span className="text-xl sm:text-2xl font-bold text-green-600">
                 {summaryStats.avgDQScore.toFixed(1)}%
               </span>
             </div>

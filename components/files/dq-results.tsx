@@ -16,7 +16,8 @@ export function DQResults() {
     downloadCleanData,
     downloadQuarantineData,
     downloadDQReport,
-    downloadFile
+    downloadFile,
+    downloadFileMultiFormat
   } = useFileManagerContext()
 
   const completedFiles = files.filter(f =>
@@ -123,9 +124,27 @@ export function DQResults() {
     }
   }
 
+  const handleDownloadMultiFormat = async (format: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine') => {
+    if (selectedFile) {
+      try {
+        await downloadFileMultiFormat(selectedFile.upload_id || selectedFile.id, format, dataType)
+        toast({
+          title: "Download started",
+          description: `${dataType.charAt(0).toUpperCase() + dataType.slice(1)} data download as ${format.toUpperCase()} has been initiated.`,
+        })
+      } catch (error) {
+        toast({
+          title: "Download failed",
+          description: `Failed to download ${dataType} data as ${format.toUpperCase()}. Please try again.`,
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
   if (completedFiles.length === 0) {
     return (
-      <Card className="hover:glow transition-all duration-300">
+      <Card className="hover:glow transition-all duration-300 h-[400px]">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <FileText className="w-5 h-5 text-blue-500" />
@@ -146,15 +165,16 @@ export function DQResults() {
   }
 
   return (
-    <Card className="hover:glow transition-all duration-300">
+    <Card className="hover:glow transition-all duration-300 h-[400px] sm:h-[500px] lg:h-[700px] flex flex-col overflow-y-auto">
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <FileText className="w-5 h-5 text-blue-500" />
           <span>Individual File Results</span>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
+      <CardContent className="flex-1 flex flex-col">
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-4 pr-2">
           {selectedFile ? (
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
@@ -209,24 +229,88 @@ export function DQResults() {
               </div>
 
               {/* Download Actions */}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <h5 className="text-sm font-medium text-muted-foreground">Download Options:</h5>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" size="sm" onClick={handleDownloadClean}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Clean Data
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleDownloadReport}>
-                    <Download className="w-4 h-4 mr-2" />
+
+                {/* Clean Data Downloads */}
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-green-700">Clean Data:</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDownloadMultiFormat('csv', 'clean')}
+                      className="text-xs"
+                    >
+                      <Download className="w-3 h-3 mr-1" />
+                      CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDownloadMultiFormat('excel', 'clean')}
+                      className="text-xs"
+                    >
+                      <Download className="w-3 h-3 mr-1" />
+                      Excel
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDownloadMultiFormat('json', 'clean')}
+                      className="text-xs"
+                    >
+                      <Download className="w-3 h-3 mr-1" />
+                      JSON
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Quarantine Data Downloads */}
+                {selectedFile.rows_quarantined && selectedFile.rows_quarantined > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-orange-700">Quarantine Data:</div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadMultiFormat('csv', 'quarantine')}
+                        className="text-xs"
+                      >
+                        <Download className="w-3 h-3 mr-1" />
+                        CSV
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadMultiFormat('excel', 'quarantine')}
+                        className="text-xs"
+                      >
+                        <Download className="w-3 h-3 mr-1" />
+                        Excel
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadMultiFormat('json', 'quarantine')}
+                        className="text-xs"
+                      >
+                        <Download className="w-3 h-3 mr-1" />
+                        JSON
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Other Downloads */}
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={handleDownloadReport} className="text-xs">
+                    <Download className="w-3 h-3 mr-1" />
                     DQ Report
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleDownloadQuarantine}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Quarantine
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleDownloadOriginal}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Original
+                  <Button variant="outline" size="sm" onClick={handleDownloadOriginal} className="text-xs">
+                    <Download className="w-3 h-3 mr-1" />
+                    Original File
                   </Button>
                 </div>
               </div>
@@ -264,6 +348,7 @@ export function DQResults() {
               </div>
             </div>
           )}
+        </div>
         </div>
       </CardContent>
     </Card>

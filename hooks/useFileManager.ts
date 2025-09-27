@@ -653,6 +653,67 @@ export function useFileManager() {
     }
   }, [idToken, toast])
 
+  const downloadFileMultiFormat = useCallback(async (uploadId: string, format: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine') => {
+    if (!idToken) {
+      throw new Error('Not authenticated')
+    }
+
+    try {
+      const downloadUrl = `${CONFIG.apiUrl}files/${uploadId}/export?type=${format}&data=${dataType}`
+
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${idToken}`
+        }
+      })
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          toast({
+            title: "No Data Available",
+            description: `No ${dataType} data available for this file`,
+            variant: "destructive",
+          })
+          return
+        }
+        throw new Error(`Failed to download ${dataType} data as ${format}: ${response.status}`)
+      }
+
+      const contentDisposition = response.headers.get('Content-Disposition')
+      let filename = `${dataType}_data.${format}`
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      toast({
+        title: "Download Started",
+        description: `Downloading ${dataType} data as ${format.toUpperCase()}: ${filename}`,
+      })
+    } catch (error) {
+      console.error(`${dataType} data download error:`, error)
+      toast({
+        title: "Download Failed",
+        description: error instanceof Error ? error.message : `Failed to download ${dataType} data as ${format}`,
+        variant: "destructive",
+      })
+      throw error
+    }
+  }, [idToken, toast])
+
   // Auto-refresh functionality
   const startAutoRefresh = useCallback(() => {
     setAutoRefreshEnabled(true)
@@ -759,6 +820,7 @@ export function useFileManager() {
     downloadCleanData,
     downloadQuarantineData,
     downloadDQReport,
+    downloadFileMultiFormat,
     startAutoRefresh,
     stopAutoRefresh,
     monitorProcessing

@@ -27,6 +27,7 @@ interface FileManagerContextType {
   downloadCleanData: ReturnType<typeof useFileManager>['downloadCleanData']
   downloadQuarantineData: ReturnType<typeof useFileManager>['downloadQuarantineData']
   downloadDQReport: ReturnType<typeof useFileManager>['downloadDQReport']
+  downloadFileMultiFormat: ReturnType<typeof useFileManager>['downloadFileMultiFormat']
   startAutoRefresh: ReturnType<typeof useFileManager>['startAutoRefresh']
   stopAutoRefresh: ReturnType<typeof useFileManager>['stopAutoRefresh']
   monitorProcessing: ReturnType<typeof useFileManager>['monitorProcessing']
