@@ -35,19 +35,11 @@ export function MetricsGrid() {
       icon: Users,
       color: "text-chart-3",
     },
-    {
-      title: "Processing Speed",
-      value: "847ms",
-      change: "-15.3%",
-      trend: "up" as const,
-      icon: Zap,
-      color: "text-chart-4",
-    },
   ]
 
   return (
     <motion.div
-      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6"
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6"
       variants={staggerContainer}
       initial="initial"
       animate="animate"
