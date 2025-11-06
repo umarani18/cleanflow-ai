@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { CognitoIdentityProvider, AuthFlowType } from '@aws-sdk/client-cognito-identity-provider'
+import { AWS_CONFIG } from '@/lib/aws-config'
 
 const CONFIG = {
-  userPoolId: 'ap-south-1_CMfo9cOwX',
-  clientId: '476inkko2vl462vk1pv5vurs7j',
-  region: 'ap-south-1'
+  userPoolId: AWS_CONFIG.COGNITO.USER_POOL_ID,
+  clientId: AWS_CONFIG.COGNITO.CLIENT_ID,
+  region: AWS_CONFIG.COGNITO.REGION
 }
 
 interface User {

@@ -1,5 +1,7 @@
+import { AWS_CONFIG } from '../aws-config'
+
 // AWS Configuration - Correct API Gateway
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://t322r7a4i0.execute-api.ap-south-1.amazonaws.com/prod"
+const API_BASE_URL = AWS_CONFIG.API_BASE_URL
 
 // API Endpoints - Based on actual backend API structure
 const ENDPOINTS = {
@@ -19,7 +21,7 @@ export interface FileUploadInitResponse {
 
 export interface FileStatusResponse {
   upload_id: string
-  status: 'QUEUED' | 'DQ_RUNNING' | 'DQ_FIXED' | 'FAILED' | 'COMPLETED' | 'UPLOADING' | 'NORMALIZING' | 'DQ_FAILED' | 'UPLOAD_FAILED' | 'UPLOADED'
+  status: 'QUEUED' | 'DQ_RUNNING' | 'DQ_FIXED' | 'FAILED' | 'COMPLETED' | 'UPLOADING' | 'NORMALIZING' | 'DQ_FAILED' | 'UPLOAD_FAILED' | 'UPLOADED' | 'VALIDATED' | 'REJECTED' | 'DQ_DISPATCHED'
   filename: string
   original_filename?: string
   created_at: string
@@ -33,6 +35,11 @@ export interface FileStatusResponse {
   execution_arn?: string
   processing_time?: number
   last_error?: string
+  detected_erp?: string
+  detected_entity?: string
+  engine?: string
+  ai_fallback?: boolean
+  completion_detected_by?: string
   file_data?: {
     headers: string[]
     rows: Record<string, any>[]
@@ -80,11 +87,15 @@ class FileManagementAPI {
     }
   }
 
-  async initUpload(filename: string, contentType: string, authToken: string): Promise<FileUploadInitResponse> {
-    console.log('🔄 Initializing upload:', filename)
+  async initUpload(filename: string, contentType: string, authToken: string, useAI: boolean = false): Promise<FileUploadInitResponse> {
+    console.log('🔄 Initializing upload:', filename, useAI ? '(AI Processing)' : '(Rules-Based)')
     return this.makeRequest(ENDPOINTS.UPLOADS, authToken, {
       method: "POST",
-      body: JSON.stringify({ filename, content_type: contentType })
+      body: JSON.stringify({ 
+        filename, 
+        content_type: contentType,
+        use_ai_processing: useAI
+      })
     })
   }
 
@@ -118,8 +129,14 @@ class FileManagementAPI {
     })
   }
 
-  async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine' | 'raw' | 'original', authToken: string): Promise<Blob> {
-    const endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}`
+  async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine' | 'raw' | 'original' | 'all', authToken: string, targetErp?: string): Promise<Blob> {
+    let endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}`
+    
+    // Add ERP transformation parameter if specified
+    if (targetErp) {
+      endpoint += `&erp=${encodeURIComponent(targetErp)}`
+    }
+    
     const url = `${this.baseURL}${endpoint}`
     
     const response = await fetch(url, {
@@ -127,6 +144,17 @@ class FileManagementAPI {
     })
 
     if (!response.ok) throw new Error(`Download failed: ${response.statusText}`)
+    
+    // Log transformation info if present
+    const erpTransformation = response.headers.get('X-ERP-Transformation')
+    if (erpTransformation === 'true') {
+      console.log('ERP Transformation applied:', {
+        source: response.headers.get('X-Source-ERP'),
+        target: response.headers.get('X-Target-ERP'),
+        entity: response.headers.get('X-Entity-Type')
+      })
+    }
+    
     return response.blob()
   }
 
@@ -247,7 +275,7 @@ class FileManagementAPI {
       const status = await this.getFileStatus(uploadId, authToken)
       onStatusUpdate(status)
 
-      const terminalStatuses = ['DQ_FIXED', 'FAILED', 'COMPLETED']
+      const terminalStatuses = ['DQ_FIXED', 'FAILED', 'COMPLETED', 'DQ_FAILED']
       if (terminalStatuses.includes(status.status)) {
         return status
       }
@@ -259,12 +287,108 @@ class FileManagementAPI {
     return poll()
   }
 
-  async uploadFileComplete(file: File, authToken: string, onProgress?: (progress: number) => void, onStatusUpdate?: (status: FileStatusResponse) => void): Promise<FileStatusResponse> {
+  // Enhanced smart polling with multiple fallback detection methods - 30 minute timeout
+  async pollFileStatusSmart(uploadId: string, authToken: string, onStatusUpdate: (status: FileStatusResponse) => void, maxAttempts: number = 180): Promise<FileStatusResponse> {
+    let attempts = 0
+    let consecutiveSameStatus = 0
+    let lastStatus: FileStatusResponse | null = null
+
+    const poll = async (): Promise<FileStatusResponse> => {
+      try {
+        attempts++
+        console.log(`🔄 Smart poll attempt ${attempts}/${maxAttempts} for ${uploadId}`)
+
+        const status = await this.getFileStatus(uploadId, authToken)
+
+        // Track if status is stuck
+        if (lastStatus && lastStatus.status === status.status) {
+          consecutiveSameStatus++
+        } else {
+          consecutiveSameStatus = 0
+        }
+        lastStatus = status
+
+        onStatusUpdate(status)
+
+        // Terminal statuses
+        if (['DQ_FIXED', 'COMPLETED', 'DQ_FAILED', 'FAILED'].includes(status.status)) {
+          console.log(`✅ Polling completed: ${status.status}`)
+          return status
+        }
+
+        // Smart completion detection after reasonable time
+        if (attempts > 20 && ['DQ_RUNNING', 'QUEUED'].includes(status.status)) {
+          const completionStatus = await this.detectCompletion(uploadId, authToken, status)
+          if (completionStatus) {
+            console.log('✨ Smart detection found completion')
+            onStatusUpdate(completionStatus)
+            return completionStatus
+          }
+        }
+
+        if (attempts >= maxAttempts) {
+          // Final attempt at smart detection
+          const finalStatus = await this.detectCompletion(uploadId, authToken, status)
+          if (finalStatus) {
+            onStatusUpdate(finalStatus)
+            return finalStatus
+          }
+          throw new Error(`Polling timeout after ${maxAttempts} attempts`)
+        }
+
+        // 10 second intervals
+        await new Promise((resolve) => setTimeout(resolve, 10000))
+        return await poll()
+      } catch (error) {
+        console.error(`❌ Polling error on attempt ${attempts}:`, error)
+
+        // Retry network errors with backoff
+        if (attempts < 5 && (error instanceof Error && (error.message.includes('fetch') || error.message.includes('network')))) {
+          const backoffTime = attempts * 2000
+          await new Promise((resolve) => setTimeout(resolve, backoffTime))
+          return await poll()
+        }
+
+        throw error
+      }
+    }
+
+    return await poll()
+  }
+
+  // Smart completion detection methods
+  private async detectCompletion(uploadId: string, authToken: string, currentStatus: FileStatusResponse): Promise<FileStatusResponse | null> {
+    // Try multiple detection methods
+    try {
+      // Method 1: Check files list
+      const response = await this.getUploads(authToken)
+      const fileRecord = response.items?.find((f) => f.upload_id === uploadId)
+      if (fileRecord && fileRecord.status === 'DQ_FIXED') {
+        return {
+          ...currentStatus,
+          ...fileRecord,
+          completion_detected_by: 'files_list_check'
+        } as FileStatusResponse
+      }
+    } catch (error) {
+      console.log('⚠️ Smart detection method failed:', error)
+    }
+
+    return null
+  }
+
+  async deleteUpload(uploadId: string, authToken: string): Promise<void> {
+    return this.makeRequest(`/uploads/${uploadId}`, authToken, {
+      method: 'DELETE'
+    })
+  }
+
+  async uploadFileComplete(file: File, authToken: string, useAI: boolean = false, onProgress?: (progress: number) => void, onStatusUpdate?: (status: FileStatusResponse) => void): Promise<FileStatusResponse> {
     try {
       if (onProgress) onProgress(0)
       
       // Step 1: Initialize upload - backend returns presigned URL
-      const initResponse = await this.initUpload(file.name, file.type || 'text/csv', authToken)
+      const initResponse = await this.initUpload(file.name, file.type || 'text/csv', authToken, useAI)
       console.log('📤 Upload initialized:', initResponse)
       if (onProgress) onProgress(10)
 
@@ -290,22 +414,26 @@ class FileManagementAPI {
         console.log('✅ Processing triggered')
         if (onProgress) onProgress(60)
 
-        // Step 4: Poll for status
-        const finalStatus = await this.pollFileStatus(initResponse.upload_id, authToken, (status) => {
+        // Step 4: Poll for status with smart detection
+        const finalStatus = await this.pollFileStatusSmart(initResponse.upload_id, authToken, (status) => {
           console.log('📊 Status update:', status.status)
           if (onStatusUpdate) onStatusUpdate(status)
           if (onProgress) {
             const statusProgress: Record<string, number> = {
               'UPLOADED': 70,
+              'VALIDATED': 72,
               'QUEUED': 75,
+              'DQ_DISPATCHED': 78,
               'DQ_RUNNING': 85,
+              'NORMALIZING': 90,
               'DQ_FIXED': 100,
               'FAILED': 100,
               'COMPLETED': 100,
+              'REJECTED': 100,
             }
             onProgress(statusProgress[status.status] || 60)
           }
-        }, 60, 2000)
+        }, 180) // 30 minute timeout
 
         return finalStatus
       } catch (processingError) {

@@ -15,6 +15,7 @@ import { fileManagementAPI, type FileStatusResponse } from '@/lib/api/file-manag
 import { UploadSection } from '@/components/files/upload-section'
 import { FilesSection } from '@/components/files/files-section'
 import { MonitoringSection } from '@/components/files/monitoring-section'
+import { ERPTransformationModal } from '@/components/files/erp-transformation-modal'
 
 // Parse CSV content into headers and rows
 const parseCSV = (csvText: string) => {
@@ -55,6 +56,9 @@ function FilesPageContent() {
   const [dragActive, setDragActive] = useState(false)
   const [activeTab, setActiveTab] = useState('upload')
   const [processing, setProcessing] = useState(false)
+  const [useAI, setUseAI] = useState(true) // AI processing toggle - Default to AI
+  const [showErpModal, setShowErpModal] = useState(false)
+  const [erpModalFile, setErpModalFile] = useState<{ file: FileStatusResponse; fileType: 'clean' | 'quarantine' | 'report' | 'original' } | null>(null)
   const { toast } = useToast()
   const { idToken } = useAuth()
 
@@ -132,6 +136,7 @@ function FilesPageContent() {
       const finalStatus = await fileManagementAPI.uploadFileComplete(
         file,
         idToken,
+        useAI, // AI processing preference
         (progress: number) => setUploadProgress(progress),
         (status: FileStatusResponse) => {
           // Update file in list as status changes, and include file_data
@@ -284,6 +289,37 @@ function FilesPageContent() {
     }
   }
 
+  // Handle file deletion
+  const handleDelete = async (file: FileStatusResponse) => {
+    if (!idToken) {
+      toast({
+        title: "Unable to Delete",
+        description: "Not authenticated",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await fileManagementAPI.deleteUpload(file.upload_id, idToken)
+      
+      toast({
+        title: "File Deleted",
+        description: `${file.original_filename || file.filename} has been removed`,
+      })
+
+      // Refresh files list
+      await loadFiles()
+    } catch (error) {
+      console.error('Delete failed:', error)
+      toast({
+        title: "Delete Failed",
+        description: "Sorry, unable to delete file. Please try again or contact support.",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -372,20 +408,21 @@ function FilesPageContent() {
 
   // Download file from API (gets processed file from S3)
   const handleDownload = async (file: FileStatusResponse, fileType: 'clean' | 'quarantine' | 'report' | 'original') => {
-    if (!idToken) {
-      toast({
-        title: "Error",
-        description: "Not authenticated",
-        variant: "destructive",
-      })
-      return
-    }
+    // Show ERP transformation modal for selection
+    setErpModalFile({ file, fileType })
+    setShowErpModal(true)
+  }
+
+  // Actual download with optional ERP transformation
+  const handleDownloadWithErp = async (targetErp: string | null) => {
+    if (!erpModalFile || !idToken) return
+
+    const { file, fileType } = erpModalFile
 
     setDownloading(`${file.upload_id}-${fileType}`)
+    setShowErpModal(false)
 
     try {
-      console.log(`Starting ${fileType} file download from API...`)
-
       // Map fileType to API parameters
       const dataTypeMap = {
         'clean': 'clean' as const,
@@ -395,18 +432,23 @@ function FilesPageContent() {
       }
       const dataType = dataTypeMap[fileType]
 
-      // Get the file blob from API
-      const blob = await fileManagementAPI.downloadFile(file.upload_id, 'csv', dataType, idToken)
-
-      console.log('File blob received:', { size: blob.size, type: blob.type })
+      // Get the file blob from API with optional ERP transformation
+      const blob = await fileManagementAPI.downloadFile(
+        file.upload_id,
+        'csv',
+        dataType,
+        idToken,
+        targetErp || undefined
+      )
 
       // Determine file extension based on type
       let extension = '.csv'
       if (fileType === 'report') extension = '.json'
 
-      // Create filename
+      // Create filename with ERP suffix if transformed
       const baseFilename = file.original_filename || file.filename
-      const filename = `${baseFilename.replace(/\.[^/.]+$/, '')}_${fileType}${extension}`
+      const erpSuffix = targetErp ? `_${targetErp.replace(/\s+/g, '_').toLowerCase()}` : ''
+      const filename = `${baseFilename.replace(/\.[^/.]+$/, '')}_${fileType}${erpSuffix}${extension}`
 
       // Trigger download
       const url = URL.createObjectURL(blob)
@@ -420,17 +462,20 @@ function FilesPageContent() {
 
       toast({
         title: "Success",
-        description: `${fileType} file downloaded successfully!`,
+        description: targetErp
+          ? `File downloaded with ${targetErp} transformation!`
+          : `${fileType} file downloaded successfully!`,
       })
     } catch (error) {
       console.error('Download error:', error)
       toast({
-        title: "Download failed",
-        description: error instanceof Error ? error.message : "Failed to download file",
+        title: "Download Failed",
+        description: "Sorry, unable to download file. Please try again or contact support.",
         variant: "destructive",
       })
     } finally {
       setDownloading(null)
+      setErpModalFile(null)
     }
   }
 
@@ -480,6 +525,8 @@ function FilesPageContent() {
             uploading={uploading}
             uploadProgress={uploadProgress}
             dragActive={dragActive}
+            useAI={useAI}
+            onUseAIChange={setUseAI}
             onDrag={handleDrag}
             onDrop={handleDrop}
             onFileInput={handleFileInput}
@@ -498,6 +545,7 @@ function FilesPageContent() {
             onPreview={handlePreview}
             onDownload={handleDownload}
             onProcess={handleProcess}
+            onDelete={handleDelete}
             onClosePreview={() => {
               setSelectedFile(null)
               setPreviewData(null)
@@ -510,6 +558,15 @@ function FilesPageContent() {
           <MonitoringSection files={files} />
         </TabsContent>
       </Tabs>
+
+      {/* ERP Transformation Modal */}
+      <ERPTransformationModal
+        open={showErpModal}
+        onOpenChange={setShowErpModal}
+        onDownload={handleDownloadWithErp}
+        downloading={downloading !== null}
+        filename={erpModalFile?.file.original_filename || erpModalFile?.file.filename || ''}
+      />
     </div>
   )
 }

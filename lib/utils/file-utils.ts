@@ -52,19 +52,34 @@ export function formatDate(dateString: string): string {
  */
 export function getStatusColor(status: string): string {
   switch (status) {
+    // Success states - Green
     case 'DQ_FIXED':
     case 'COMPLETED':
       return 'bg-green-500/20 text-green-400 border-green-500/30'
+    
+    // Active processing - Yellow
     case 'DQ_RUNNING':
     case 'NORMALIZING':
-    case 'QUEUED':
-    case 'UPLOADING':
       return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+    
+    // Queued/Dispatched - Orange
+    case 'DQ_DISPATCHED':
+    case 'QUEUED':
+      return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+    
+    // Initial states - Blue
+    case 'UPLOADED':
+    case 'VALIDATED':
+    case 'UPLOADING':
+      return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+    
+    // Error states - Red
     case 'DQ_FAILED':
     case 'FAILED':
+    case 'REJECTED':
       return 'bg-red-500/20 text-red-400 border-red-500/30'
-    case 'UPLOADED':
-      return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+    
+    // Unknown/Default - Gray
     default:
       return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
   }

@@ -2,17 +2,20 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Upload, FileText, CheckCircle, AlertCircle, Info, Database, Play, Archive } from 'lucide-react'
+import { Upload, FileText, CheckCircle, AlertCircle, Info, Database, Play, Archive, Shield, Layers } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
+import { cn } from '@/lib/utils'
 
 interface UploadSectionProps {
   uploading: boolean
   uploadProgress: number
   dragActive: boolean
+  useAI: boolean
+  onUseAIChange: (useAI: boolean) => void
   onDrag: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
   onFileInput: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -22,6 +25,8 @@ export function UploadSection({
   uploading,
   uploadProgress,
   dragActive,
+  useAI,
+  onUseAIChange,
   onDrag,
   onDrop,
   onFileInput
@@ -80,6 +85,92 @@ export function UploadSection({
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/* AI Processing Toggle */}
+          <div className="mb-6 bg-muted/30 border border-border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium">Processing Engine</h3>
+              <span className="text-xs text-muted-foreground">Select mode</span>
+            </div>
+            
+            <div className="space-y-2">
+              {/* AI-Powered Option */}
+              <label className={cn(
+                "flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all border",
+                useAI 
+                  ? "bg-gradient-to-r from-purple-600/20 to-pink-600/20 border-purple-500/50" 
+                  : "bg-muted/50 border-border hover:bg-muted"
+              )}>
+                <div className="flex items-center justify-center mt-0.5">
+                  <input
+                    type="radio"
+                    name="processing-engine"
+                    checked={useAI}
+                    onChange={() => onUseAIChange(true)}
+                    className="sr-only"
+                  />
+                  <div className={cn(
+                    "w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all",
+                    useAI ? "border-primary bg-primary" : "border-muted-foreground/30"
+                  )}>
+                    {useAI && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground"></div>}
+                  </div>
+                </div>
+                
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={cn("text-base font-medium", useAI ? "text-foreground" : "text-muted-foreground")}>
+                      AI-Powered
+                    </span>
+                    <Badge variant="outline" className="text-xs bg-purple-600/20 text-purple-300 border-purple-500/40">
+                      EXPERIMENTAL
+                    </Badge>
+                  </div>
+                  <p className={cn("text-sm", useAI ? "text-muted-foreground" : "text-muted-foreground/70")}>
+                    Advanced AI learns from data patterns for enhanced accuracy
+                  </p>
+                </div>
+              </label>
+
+              {/* Rules-Based Option */}
+              <label className={cn(
+                "flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all border",
+                !useAI 
+                  ? "bg-gradient-to-r from-emerald-600/20 to-green-600/20 border-emerald-500/50" 
+                  : "bg-muted/50 border-border hover:bg-muted"
+              )}>
+                <div className="flex items-center justify-center mt-0.5">
+                  <input
+                    type="radio"
+                    name="processing-engine"
+                    checked={!useAI}
+                    onChange={() => onUseAIChange(false)}
+                    className="sr-only"
+                  />
+                  <div className={cn(
+                    "w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all",
+                    !useAI ? "border-primary bg-primary" : "border-muted-foreground/30"
+                  )}>
+                    {!useAI && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground"></div>}
+                  </div>
+                </div>
+                
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={cn("text-base font-medium", !useAI ? "text-foreground" : "text-muted-foreground")}>
+                      Rules-Based
+                    </span>
+                    <Badge variant="outline" className="text-xs bg-emerald-600/20 text-emerald-300 border-emerald-500/40">
+                      STANDARD
+                    </Badge>
+                  </div>
+                  <p className={cn("text-sm", !useAI ? "text-muted-foreground" : "text-muted-foreground/70")}>
+                    Fast, deterministic processing with predefined rules
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+          
           <div
             className={`relative border-2 border-dashed rounded-lg p-4 sm:p-8 text-center transition-all ${
               dragActive

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { FileText, Eye, Download, RefreshCw, Loader2, X, FileSpreadsheet, FileJson, File, Play } from 'lucide-react'
+import { FileText, Eye, Download, RefreshCw, Loader2, X, FileSpreadsheet, FileJson, File, Play, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +25,7 @@ interface FilesSectionProps {
   onPreview: (file: FileStatusResponse) => void
   onDownload: (file: FileStatusResponse, fileType: 'clean' | 'quarantine' | 'report' | 'original') => void
   onProcess: (file: FileStatusResponse) => void
+  onDelete?: (file: FileStatusResponse) => void
   onClosePreview: () => void
   idToken?: string | null
 }
@@ -40,11 +41,15 @@ export function FilesSection({
   onPreview,
   onDownload,
   onProcess,
+  onDelete,
   onClosePreview,
   idToken
 }: FilesSectionProps) {
   const { toast } = useToast()
   const [selectedFileDetail, setSelectedFileDetail] = useState<FileStatusResponse | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [fileToDelete, setFileToDelete] = useState<FileStatusResponse | null>(null)
 
   const handleDownload = async (file: FileStatusResponse, fileType: 'clean' | 'quarantine' | 'report' | 'original') => {
     try {
@@ -56,6 +61,37 @@ export function FilesSection({
 
   const handleFileClick = (file: FileStatusResponse) => {
     setSelectedFileDetail(file)
+  }
+
+  const handleDeleteClick = (file: FileStatusResponse) => {
+    setFileToDelete(file)
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!fileToDelete || !idToken || !onDelete) return
+
+    setDeleting(fileToDelete.upload_id)
+    setShowDeleteModal(false)
+
+    try {
+      await fileManagementAPI.deleteUpload(fileToDelete.upload_id, idToken)
+      toast({
+        title: "File deleted successfully",
+        description: "The file and all associated data have been removed",
+      })
+      onRefresh()
+    } catch (error) {
+      console.error('Delete error:', error)
+      toast({
+        title: "Delete failed",
+        description: error instanceof Error ? error.message : "Failed to delete file",
+        variant: "destructive",
+      })
+    } finally {
+      setDeleting(null)
+      setFileToDelete(null)
+    }
   }
 
   const handleDownloadFormat = async (file: FileStatusResponse, format: 'csv' | 'excel' | 'json') => {
@@ -210,9 +246,28 @@ export function FilesSection({
                               Q: {file.rows_quarantined}
                             </span>
                           )}
-                          {file.dq_score !== null && (
+                          {file.dq_score !== null && file.dq_score !== undefined && (
                             <span className="text-green-600">
-                              DQ: {file.dq_score}%
+                              DQ: {Math.round(file.dq_score)}%
+                            </span>
+                          )}
+                          {file.detected_erp && (
+                            <span className="text-blue-400">
+                              ERP: {file.detected_erp}
+                            </span>
+                          )}
+                          {file.detected_entity && (
+                            <span className="text-purple-400">
+                              Entity: {file.detected_entity}
+                            </span>
+                          )}
+                          {file.engine && (
+                            <span className={file.engine === 'lambda_ai' ? 'text-purple-400 font-medium' : 'text-cyan-400 font-medium'}>
+                              {file.engine === 'lambda' && 'Pandas'}
+                              {file.engine === 'lambda_ai' && 'AI-LLM'}
+                              {file.engine === 'polars' && 'Polars'}
+                              {file.engine === 'spark' && 'Spark'}
+                              {!['lambda', 'lambda_ai', 'polars', 'spark'].includes(file.engine) && file.engine}
                             </span>
                           )}
                         </div>
@@ -235,6 +290,30 @@ export function FilesSection({
                       
                       {/* Action Buttons */}
                       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        {/* Delete Button */}
+                        {onDelete && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  onClick={() => handleDeleteClick(file)}
+                                  disabled={deleting === file.upload_id}
+                                  className="h-7 w-7 sm:h-8 sm:w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                >
+                                  {deleting === file.upload_id ? (
+                                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete File</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        
                         {/* Process Button - Only show for UPLOADED status */}
                         {file.status === 'UPLOADED' && (
                           <TooltipProvider>
@@ -607,6 +686,46 @@ export function FilesSection({
           </motion.div>
         </motion.div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete File</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete <span className="font-semibold text-foreground">{fileToDelete?.filename}</span>?
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={deleting !== null}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleting !== null}
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }
