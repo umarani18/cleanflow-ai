@@ -15,31 +15,54 @@ const ENDPOINTS = {
 // Response Types
 export interface FileUploadInitResponse {
   upload_id: string
-  url: string
-  fields?: Record<string, string>
+  original_filename: string
+  contentType: string
+  key: string
+  uploadUrl?: string  // Deprecated PUT method
+  url?: string        // For backwards compatibility
+  fields?: Record<string, string>  // For backwards compatibility
+  presignedPost?: {   // NEW: Proper POST method with fields
+    url: string
+    fields: Record<string, string>
+  }
+  usePost?: boolean   // Flag to indicate which upload method to use
 }
 
 export interface FileStatusResponse {
   upload_id: string
   status: 'QUEUED' | 'DQ_RUNNING' | 'DQ_FIXED' | 'FAILED' | 'COMPLETED' | 'UPLOADING' | 'NORMALIZING' | 'DQ_FAILED' | 'UPLOAD_FAILED' | 'UPLOADED' | 'VALIDATED' | 'REJECTED' | 'DQ_DISPATCHED'
-  filename: string
+  filename?: string
   original_filename?: string
-  created_at: string
+  content_type?: string
+  user_id?: string
+  created_at?: string
   uploaded_at?: string
+  updated_at?: string
+  status_timestamp?: string
   file_size?: number
+  input_size_bytes?: number
   rows_in?: number
   rows_out?: number
+  rows_clean?: number
+  rows_fixed?: number
   rows_quarantined?: number
   dq_score?: number | null
   dq_issues?: string[]
+  dq_report_s3?: string
+  dq_rules_version?: string
   execution_arn?: string
+  dispatch_id?: string
   processing_time?: number
+  reprocess_count?: number
   last_error?: string
   detected_erp?: string
   detected_entity?: string
   engine?: string
+  use_ai_processing?: boolean
   ai_fallback?: boolean
   completion_detected_by?: string
+  s3_raw_key?: string
+  s3_result_key?: string
   file_data?: {
     headers: string[]
     rows: Record<string, any>[]
@@ -47,7 +70,8 @@ export interface FileStatusResponse {
 }
 
 export interface FileListResponse {
-  items: FileStatusResponse[]  // GET /uploads returns items
+  items: FileStatusResponse[]
+  count: number
 }
 
 class FileManagementAPI {
@@ -100,16 +124,17 @@ class FileManagementAPI {
   }
 
   async getUploads(authToken: string): Promise<FileListResponse> {
-    console.log('📋 Fetching files list from /files endpoint')
+    console.log('📋 Fetching files list from /uploads endpoint')
     try {
-      const response = await this.makeRequest(ENDPOINTS.FILES, authToken, { method: 'GET' })
-      // /files endpoint returns { files: [...], count: N }
+      const response = await this.makeRequest(ENDPOINTS.UPLOADS, authToken, { method: 'GET' })
+      // /uploads endpoint returns { items: [...], count: N }
       return {
-        items: response.files || []
+        items: response.items || [],
+        count: response.count || 0
       }
     } catch (error) {
       console.error('❌ Failed to fetch files')
-      return { items: [] }
+      return { items: [], count: 0 }
     }
   }
 
@@ -392,20 +417,46 @@ class FileManagementAPI {
       console.log('📤 Upload initialized:', initResponse)
       if (onProgress) onProgress(10)
 
-      // Step 2: Upload to S3 using presigned URL
-      if (initResponse.url) {
-        console.log('📤 Uploading to S3...')
-        if (initResponse.fields) {
-          await this.uploadToS3Post(initResponse.url, initResponse.fields, file, (s3Progress) => {
+      // Step 2: Upload to S3 using presigned POST (preferred) or PUT (fallback)
+      console.log('📤 Uploading to S3...')
+      
+      // Check if backend wants us to use POST method (presignedPost with usePost flag)
+      if (initResponse.usePost && initResponse.presignedPost) {
+        console.log('� Using presigned POST method')
+        await this.uploadToS3Post(
+          initResponse.presignedPost.url, 
+          initResponse.presignedPost.fields, 
+          file, 
+          (s3Progress) => {
             if (onProgress) onProgress(10 + (s3Progress * 0.4))
-          })
-        } else {
-          await this.uploadToS3(initResponse.url, file, (s3Progress) => {
-            if (onProgress) onProgress(10 + (s3Progress * 0.4))
-          })
-        }
-        console.log('✅ S3 upload complete')
+          }
+        )
       }
+      // Fallback: Check for direct fields (backwards compatibility)
+      else if (initResponse.fields && initResponse.url) {
+        console.log('🟡 Using fields-based POST method (legacy)')
+        await this.uploadToS3Post(initResponse.url, initResponse.fields, file, (s3Progress) => {
+          if (onProgress) onProgress(10 + (s3Progress * 0.4))
+        })
+      }
+      // Fallback: Use PUT method with uploadUrl
+      else if (initResponse.uploadUrl) {
+        console.log('🟠 Using PUT method (deprecated)')
+        await this.uploadToS3(initResponse.uploadUrl, file, (s3Progress) => {
+          if (onProgress) onProgress(10 + (s3Progress * 0.4))
+        })
+      }
+      // Last resort: Use url field with PUT
+      else if (initResponse.url) {
+        console.log('🔴 Using url field with PUT (last resort)')
+        await this.uploadToS3(initResponse.url, file, (s3Progress) => {
+          if (onProgress) onProgress(10 + (s3Progress * 0.4))
+        })
+      } else {
+        throw new Error('No valid upload method provided by backend')
+      }
+      
+      console.log('✅ S3 upload complete')
       if (onProgress) onProgress(50)
 
       // Step 3: Trigger processing using POST /files/{upload_id}/process

@@ -446,7 +446,7 @@ function FilesPageContent() {
       if (fileType === 'report') extension = '.json'
 
       // Create filename with ERP suffix if transformed
-      const baseFilename = file.original_filename || file.filename
+      const baseFilename = file.original_filename || file.filename || 'file'
       const erpSuffix = targetErp ? `_${targetErp.replace(/\s+/g, '_').toLowerCase()}` : ''
       const filename = `${baseFilename.replace(/\.[^/.]+$/, '')}_${fileType}${erpSuffix}${extension}`
 

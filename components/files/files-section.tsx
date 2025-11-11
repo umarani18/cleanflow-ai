@@ -13,6 +13,9 @@ import { useToast } from '@/hooks/use-toast'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { fileManagementAPI, type FileStatusResponse } from '@/lib/api/file-management-api'
 import { formatFileSize, formatDate, getStatusColor } from '@/lib/utils/file-utils'
+import { AWS_CONFIG } from '@/lib/aws-config'
+import { ERPTransformationModal } from './erp-transformation-modal'
+import { DownloadFormatModal } from './download-format-modal'
 
 interface FilesSectionProps {
   files: FileStatusResponse[]
@@ -50,6 +53,11 @@ export function FilesSection({
   const [deleting, setDeleting] = useState<string | null>(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [fileToDelete, setFileToDelete] = useState<FileStatusResponse | null>(null)
+  const [downloadingFormat, setDownloadingFormat] = useState<string | null>(null) // Track format downloads
+  const [showErpModal, setShowErpModal] = useState(false)
+  const [erpModalConfig, setErpModalConfig] = useState<{ file: FileStatusResponse; format: 'csv' | 'excel' | 'json' } | null>(null)
+  const [showDownloadModal, setShowDownloadModal] = useState(false)
+  const [downloadModalFile, setDownloadModalFile] = useState<FileStatusResponse | null>(null)
 
   const handleDownload = async (file: FileStatusResponse, fileType: 'clean' | 'quarantine' | 'report' | 'original') => {
     try {
@@ -95,55 +103,141 @@ export function FilesSection({
   }
 
   const handleDownloadFormat = async (file: FileStatusResponse, format: 'csv' | 'excel' | 'json') => {
-    if (!file.file_data) {
-      toast({
-        title: "Error",
-        description: "No file data available for download",
-        variant: "destructive",
-      })
-      return
+    // Show ERP transformation modal
+    setErpModalConfig({ file, format })
+    setShowErpModal(true)
+  }
+
+  const handleDownloadClick = (file: FileStatusResponse) => {
+    setDownloadModalFile(file)
+    setShowDownloadModal(true)
+  }
+
+  const handleFormatSelected = (format: 'csv' | 'excel' | 'json', dataType: 'original' | 'clean') => {
+    if (downloadModalFile) {
+      setShowDownloadModal(false)
+      
+      // If clean data selected, show ERP transformation modal
+      if (dataType === 'clean') {
+        handleDownloadFormat(downloadModalFile, format)
+      } else {
+        // Direct download of original data without ERP transformation
+        handleDirectDownload(downloadModalFile, format, dataType)
+      }
     }
+  }
+
+  const handleDirectDownload = async (file: FileStatusResponse, format: 'csv' | 'excel' | 'json', dataType: 'original' | 'clean') => {
+    if (!idToken) return
+
+    setDownloadingFormat(`${file.upload_id}-${format}`)
 
     try {
-      const baseFilename = (file.original_filename || file.filename || 'file').replace('.csv', '')
-      let content: string
-      let mimeType: string
-      let extension: string
+      const typeParam = format === 'excel' ? 'excel' : format === 'json' ? 'json' : 'csv'
+      const downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=${dataType}`
+      
+      const response = await fetch(downloadUrl, {
+        headers: {
+          'Authorization': `Bearer ${idToken}`
+        }
+      })
 
-      switch (format) {
-        case 'csv':
-          content = convertToCSV(file.file_data)
-          mimeType = 'text/csv'
-          extension = '.csv'
-          break
-        case 'json':
-          content = convertToJSON(file.file_data)
-          mimeType = 'application/json'
-          extension = '.json'
-          break
-        case 'excel':
-          // For Excel, we'll download as CSV with .xlsx extension
-          content = convertToCSV(file.file_data)
-          mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-          extension = '.xlsx'
-          break
-        default:
-          throw new Error('Unsupported format')
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.statusText}`)
       }
 
-      downloadFile(content, `${baseFilename}_processed${extension}`, mimeType)
+      const blob = await response.blob()
+      const baseFilename = (file.original_filename || file.filename || 'file').replace('.csv', '')
+      const extension = format === 'excel' ? '.xlsx' : format === 'json' ? '.json' : '.csv'
+      const dataSuffix = dataType === 'original' ? '_original' : '_clean'
+      const filename = `${baseFilename}${dataSuffix}${extension}`
+
+      // Trigger download
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
 
       toast({
         title: "Success",
-        description: `${format.toUpperCase()} file downloaded successfully!`,
+        description: `${dataType === 'original' ? 'Original' : 'Cleaned'} ${format.toUpperCase()} file downloaded successfully!`,
       })
     } catch (error) {
       console.error('Download error:', error)
       toast({
-        title: "Download failed",
-        description: error instanceof Error ? error.message : "Failed to download file",
+        title: "Download Failed",
+        description: "Sorry, unable to download file. Please try again or contact support.",
         variant: "destructive",
       })
+    } finally {
+      setDownloadingFormat(null)
+    }
+  }
+
+  const handleDownloadWithErp = async (targetErp: string | null) => {
+    if (!erpModalConfig || !idToken) return
+
+    const { file, format } = erpModalConfig
+
+    setDownloadingFormat(`${file.upload_id}-${format}`)
+    setShowErpModal(false)
+
+    try {
+      // Use API endpoint to download directly with optional ERP transformation
+      const typeParam = format === 'excel' ? 'excel' : format === 'json' ? 'json' : 'csv'
+      let downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=clean`
+      
+      // Add ERP parameter if transformation is requested
+      if (targetErp) {
+        downloadUrl += `&erp=${encodeURIComponent(targetErp)}`
+      }
+      
+      const response = await fetch(downloadUrl, {
+        headers: {
+          'Authorization': `Bearer ${idToken}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.statusText}`)
+      }
+
+      const blob = await response.blob()
+      const baseFilename = (file.original_filename || file.filename || 'file').replace('.csv', '')
+      const extension = format === 'excel' ? '.xlsx' : format === 'json' ? '.json' : '.csv'
+      const erpSuffix = targetErp ? `_${targetErp.replace(/\s+/g, '_').toLowerCase()}` : ''
+      const filename = `${baseFilename}_clean${erpSuffix}${extension}`
+
+      // Trigger download
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      toast({
+        title: "Success",
+        description: targetErp 
+          ? `${format.toUpperCase()} file downloaded with ${targetErp} transformation!`
+          : `${format.toUpperCase()} file downloaded successfully!`,
+      })
+    } catch (error) {
+      console.error('Download error:', error)
+      toast({
+        title: "Download Failed",
+        description: "Sorry, unable to download file. Please try again or contact support.",
+        variant: "destructive",
+      })
+    } finally {
+      setDownloadingFormat(null)
+      setErpModalConfig(null)
     }
   }
 
@@ -233,7 +327,7 @@ export function FilesSection({
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-sm sm:text-base text-foreground mb-1 truncate">{file.original_filename || file.filename}</h3>
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs sm:text-sm text-muted-foreground mb-2">
-                          <span className="truncate">Uploaded: {formatDate(file.uploaded_at || file.created_at)}</span>
+                          <span className="truncate">Uploaded: {formatDate(file.uploaded_at || file.created_at || '')}</span>
                           {file.file_size && <span className="hidden sm:inline">Size: {formatFileSize(file.file_size)}</span>}
                           {file.processing_time && <span className="hidden sm:inline">Processed in: {file.processing_time.toFixed(1)}s</span>}
                         </div>
@@ -314,51 +408,7 @@ export function FilesSection({
                           </TooltipProvider>
                         )}
                         
-                        {/* Process Button - Only show for UPLOADED status */}
-                        {file.status === 'UPLOADED' && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  size="icon"
-                                  variant="outline"
-                                  onClick={() => onProcess(file)}
-                                  disabled={processing}
-                                  className="h-7 w-7 sm:h-8 sm:w-8"
-                                >
-                                  <Play className="h-3 w-3 sm:h-4 sm:w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {processing ? "Another file is being processed" : "Start Processing"}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                        
-                        {/* Download Original Button */}
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                onClick={() => onDownload(file, 'original')}
-                                disabled={downloading === `${file.upload_id}-original`}
-                                className="h-7 w-7 sm:h-8 sm:w-8"
-                              >
-                                {downloading === `${file.upload_id}-original` ? (
-                                  <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                                ) : (
-                                  <Download className="h-3 w-3 sm:h-4 sm:w-4" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Download Original File</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        
-                        {/* Download Clean Button - Only if processed */}
+                        {/* Download Button - Only if processed */}
                         {(file.status === 'DQ_FIXED' || file.status === 'COMPLETED') && (
                           <TooltipProvider>
                             <Tooltip>
@@ -366,18 +416,18 @@ export function FilesSection({
                                 <Button
                                   size="icon"
                                   variant="outline"
-                                  onClick={() => onDownload(file, 'clean')}
-                                  disabled={downloading === `${file.upload_id}-clean`}
-                                  className="h-7 w-7 sm:h-8 sm:w-8 text-green-600"
+                                  onClick={() => handleDownloadClick(file)}
+                                  disabled={downloadingFormat?.startsWith(file.upload_id)}
+                                  className="h-7 w-7 sm:h-8 sm:w-8"
                                 >
-                                  {downloading === `${file.upload_id}-clean` ? (
+                                  {downloadingFormat?.startsWith(file.upload_id) ? (
                                     <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                                   ) : (
-                                    <FileSpreadsheet className="h-3 w-3 sm:h-4 sm:w-4" />
+                                    <Download className="h-3 w-3 sm:h-4 sm:w-4" />
                                   )}
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Download Cleaned Data</TooltipContent>
+                              <TooltipContent>Download File</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         )}
@@ -416,7 +466,7 @@ export function FilesSection({
                 </div>
                 <div>
                   <div className="text-muted-foreground">Uploaded At</div>
-                  <div>{formatDate(selectedFileDetail.uploaded_at || selectedFileDetail.created_at)}</div>
+                  <div>{formatDate(selectedFileDetail.uploaded_at || selectedFileDetail.created_at || '')}</div>
                 </div>
                 {selectedFileDetail.processing_time && (
                   <div>
@@ -463,7 +513,7 @@ export function FilesSection({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Uploaded:</span>
-                      <span>{formatDate(selectedFileDetail.uploaded_at || selectedFileDetail.created_at)}</span>
+                      <span>{formatDate(selectedFileDetail.uploaded_at || selectedFileDetail.created_at || '')}</span>
                     </div>
                     {selectedFileDetail.processing_time && (
                       <div className="flex justify-between">
@@ -726,6 +776,24 @@ export function FilesSection({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ERP Transformation Modal */}
+      <ERPTransformationModal
+        open={showErpModal}
+        onOpenChange={setShowErpModal}
+        onDownload={handleDownloadWithErp}
+        downloading={downloadingFormat !== null}
+        filename={erpModalConfig?.file.original_filename || erpModalConfig?.file.filename || ''}
+      />
+
+      {/* Download Format Selection Modal */}
+      <DownloadFormatModal
+        open={showDownloadModal}
+        onOpenChange={setShowDownloadModal}
+        file={downloadModalFile}
+        onDownload={handleFormatSelected}
+        downloading={downloadingFormat !== null}
+      />
     </motion.div>
   )
 }

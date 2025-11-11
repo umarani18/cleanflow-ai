@@ -1,14 +1,15 @@
 "use client"
 
-import { useState } from 'react'
-import { motion } from 'framer-motion'
-import { Upload, FileText, CheckCircle, AlertCircle, Info, Database, Play, Archive, Shield, Layers } from 'lucide-react'
+import { AlertCircle, Archive, CheckCircle, Database, FileText, Info, Layers, Play, Shield, Upload } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { Badge } from '@/components/ui/badge'
-import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { motion } from 'framer-motion'
+import { useState } from 'react'
+import { useToast } from '@/hooks/use-toast'
 
 interface UploadSectionProps {
   uploading: boolean
@@ -121,9 +122,6 @@ export function UploadSection({
                     <span className={cn("text-base font-medium", useAI ? "text-foreground" : "text-muted-foreground")}>
                       AI-Powered
                     </span>
-                    <Badge variant="outline" className="text-xs bg-purple-600/20 text-purple-300 border-purple-500/40">
-                      EXPERIMENTAL
-                    </Badge>
                   </div>
                   <p className={cn("text-sm", useAI ? "text-muted-foreground" : "text-muted-foreground/70")}>
                     Advanced AI learns from data patterns for enhanced accuracy
@@ -157,11 +155,8 @@ export function UploadSection({
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className={cn("text-base font-medium", !useAI ? "text-foreground" : "text-muted-foreground")}>
-                      Rules-Based
+                     Standard Rules-Based
                     </span>
-                    <Badge variant="outline" className="text-xs bg-emerald-600/20 text-emerald-300 border-emerald-500/40">
-                      STANDARD
-                    </Badge>
                   </div>
                   <p className={cn("text-sm", !useAI ? "text-muted-foreground" : "text-muted-foreground/70")}>
                     Fast, deterministic processing with predefined rules
@@ -229,7 +224,7 @@ export function UploadSection({
       </Card>
 
       {/* Processing Pipeline Info */}
-      <Card>
+      {/* <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-foreground text-base sm:text-lg">
             <Info className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -256,7 +251,7 @@ export function UploadSection({
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
     </motion.div>
   )
 }

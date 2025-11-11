@@ -18,12 +18,12 @@ const navigation = [
 		icon: BarChart3,
 		description: "View your transformation analytics",
 	},
-	{
-		name: "Transform Data",
-		href: "/data-tools",
-		icon: Zap,
-		description: "Upload and transform your files",
-	},
+	// {
+	// 	name: "Transform Data",
+	// 	href: "/data-tools",
+	// 	icon: Zap,
+	// 	description: "Upload and transform your files",
+	// },
 	{
 		name: "File Manager",
 		href: "/files",
