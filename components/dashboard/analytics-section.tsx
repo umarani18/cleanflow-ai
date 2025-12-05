@@ -71,19 +71,19 @@ export function AnalyticsSection({ files }: AnalyticsSectionProps) {
             color: 'text-orange-400'
           }
         ].map((stat) => (
-          <div key={stat.title}>
-            <Card>
+          <div key={stat.title} className="h-full">
+            <Card className="h-full">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center space-x-2">
                   <stat.icon className={`w-5 h-5 ${stat.color}`} />
                   <span>{stat.title}</span>
                 </CardTitle>
-                <Badge
+                {/* <Badge
                   variant="default"
                   className="text-[10px] font-medium bg-green-500/20 text-green-400 hover:bg-green-500/30"
                 >
                   {stat.change}
-                </Badge>
+                </Badge> */}
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold mb-1">{stat.value}</div>
@@ -184,12 +184,7 @@ export function AnalyticsSection({ files }: AnalyticsSectionProps) {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Avg Processing Time</span>
-                  <span>
-                    {completedFiles.length > 0
-                      ? `${(completedFiles.reduce((sum, f) => sum + (f.processing_time || 0), 0) / completedFiles.length).toFixed(1)}s`
-                      : '0s'
-                    }
-                  </span>
+                  <span>N/A</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total Files Processed</span>

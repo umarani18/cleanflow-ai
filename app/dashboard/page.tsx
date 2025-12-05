@@ -61,7 +61,7 @@ export default function DashboardPage() {
       .sort((a, b) => {
         const timeA = a.uploaded_at || a.created_at
         const timeB = b.uploaded_at || b.created_at
-        return new Date(timeB).getTime() - new Date(timeA).getTime()
+        return new Date(timeB || 0).getTime() - new Date(timeA || 0).getTime()
       })
       .slice(0, 3)
 
@@ -77,7 +77,7 @@ export default function DashboardPage() {
           id: activityId,
           type: activityType,
           status: file.status === 'DQ_FIXED' ? 'success' : file.status.includes('FAILED') ? 'error' : 'success',
-          timestamp: file.uploaded_at || file.created_at,
+          timestamp: file.uploaded_at || file.created_at || new Date().toISOString(),
           details: `${file.original_filename || file.filename} - ${file.status.replace(/_/g, ' ')}`,
         }),
       )

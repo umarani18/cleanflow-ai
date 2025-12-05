@@ -459,39 +459,39 @@ function FilesPageContent() {
     <TooltipProvider>
       <div className="space-y-4 p-3 sm:p-0">
         {/* Segmented Tab Navigation */}
-        <div className="flex items-center justify-between">
-          <div className="inline-flex rounded-lg border bg-muted p-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="inline-flex rounded-lg border bg-muted p-1 flex-1 sm:flex-none">
             <button
               onClick={() => setActiveSection("upload")}
               className={cn(
-                "inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all",
+                "inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-md px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all flex-1 sm:flex-none",
                 activeSection === "upload"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
               <Upload className="h-4 w-4" />
-              File Upload
+              <span className="hidden xs:inline">File</span> Upload
             </button>
             <button
               onClick={() => setActiveSection("explorer")}
               className={cn(
-                "inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all",
+                "inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-md px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all flex-1 sm:flex-none",
                 activeSection === "explorer"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
               <FileText className="h-4 w-4" />
-              File Explorer
+              <span className="hidden xs:inline">File</span> Explorer
               {files.length > 0 && (
-                <span className="ml-1 rounded-full bg-muted-foreground/20 px-2 py-0.5 text-xs">
+                <span className="ml-1 rounded-full bg-muted-foreground/20 px-1.5 sm:px-2 py-0.5 text-xs">
                   {files.length}
                 </span>
               )}
             </button>
           </div>
-          <Button variant="ghost" size="icon" onClick={loadFiles} disabled={loading}>
+          <Button variant="ghost" size="icon" onClick={loadFiles} disabled={loading} className="shrink-0">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           </Button>
         </div>
@@ -500,11 +500,11 @@ function FilesPageContent() {
         {activeSection === "upload" && (
           <div className="space-y-4">
             {/* Header Row: Source selector + AI toggle */}
-            <div className="flex items-center justify-between border-b pb-3">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">Source:</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Source:</span>
                 <Select value={selectedSource} onValueChange={setSelectedSource}>
-                  <SelectTrigger className="w-[200px] h-9">
+                  <SelectTrigger className="w-full sm:w-[200px] h-9">
                     <SelectValue placeholder="Select source" />
                   </SelectTrigger>
                   <SelectContent>
@@ -518,7 +518,7 @@ function FilesPageContent() {
               </div>
               {selectedSource === "file" && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">AI Processing:</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground shrink-0">AI Processing:</span>
                   <div className="inline-flex rounded-md border">
                     <button
                       onClick={() => setUseAI(true)}
@@ -549,7 +549,7 @@ function FilesPageContent() {
             {selectedSource === "file" ? (
               <div
                 className={cn(
-                  "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[500px] p-20 transition-all cursor-pointer",
+                  "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
                   dragActive 
                     ? "border-primary bg-primary/5 scale-[1.01]" 
                     : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50"
@@ -561,24 +561,24 @@ function FilesPageContent() {
                 onClick={() => !uploading && fileInputRef.current?.click()}
               >
                 {uploading ? (
-                  <div className="flex flex-col items-center gap-8">
-                    <Loader2 className="h-20 w-20 animate-spin text-primary" />
+                  <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
+                    <Loader2 className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 animate-spin text-primary" />
                     <div className="text-center">
-                      <p className="text-lg font-medium">Uploading...</p>
-                      <p className="text-4xl font-bold text-primary mt-2">{uploadProgress}%</p>
+                      <p className="text-base sm:text-lg font-medium">Uploading...</p>
+                      <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">{uploadProgress}%</p>
                     </div>
-                    <Progress value={uploadProgress} className="w-72 h-3" />
+                    <Progress value={uploadProgress} className="w-48 sm:w-60 lg:w-72 h-2 sm:h-3" />
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center gap-6 text-center">
-                    <div className="rounded-full bg-primary/10 p-8">
-                      <Upload className="h-16 w-16 text-primary" />
+                  <div className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6 text-center">
+                    <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8">
+                      <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-xl font-medium">Drop your file here</p>
-                      <p className="text-lg text-muted-foreground">or click to browse</p>
+                    <div className="space-y-1 sm:space-y-2">
+                      <p className="text-base sm:text-lg lg:text-xl font-medium">Drop your file here</p>
+                      <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">or click to browse</p>
                     </div>
-                    <p className="text-base text-muted-foreground mt-4">Supports CSV, XLSX, XLS</p>
+                    <p className="text-xs sm:text-sm lg:text-base text-muted-foreground mt-2 sm:mt-4">Supports CSV, XLSX, XLS</p>
                   </div>
                 )}
                 <input
@@ -590,7 +590,7 @@ function FilesPageContent() {
                 />
               </div>
             ) : selectedSource === "quickbooks" ? (
-              <div className="min-h-[500px]">
+              <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
                 <QuickBooksImport
                   onImportComplete={handleQuickBooksImportComplete}
                   onNotification={(message, type) => {
@@ -603,17 +603,17 @@ function FilesPageContent() {
                 />
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center min-h-[500px] p-20 border-2 border-dashed rounded-xl bg-muted/5">
-                <div className="rounded-full bg-muted p-8 mb-8">
-                  <Network className="h-16 w-16 text-muted-foreground" />
+              <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
+                <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
+                  <Network className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-muted-foreground" />
                 </div>
-                <h3 className="text-2xl font-medium mb-4">
+                <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
                   {SOURCE_OPTIONS.find((e) => e.value === selectedSource)?.label}
                 </h3>
-                <p className="text-lg text-muted-foreground mb-10 max-w-lg text-center">
+                <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
                   Securely import your financial data directly from your ERP system.
                 </p>
-                <Button disabled size="lg" className="px-8 py-6 text-base">Connect</Button>
+                <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
               </div>
             )}
           </div>
@@ -624,38 +624,40 @@ function FilesPageContent() {
           <div className="space-y-4">
             {/* Search and Filter Bar */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <div className="relative">
+              <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 xs:flex-none">
                   <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search..."
-                    className="h-9 w-48 pl-8 text-sm"
+                    className="h-9 w-full sm:w-48 pl-8 text-sm"
                   />
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-9 w-36 text-sm">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {(searchQuery || statusFilter !== "all") && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 px-2"
-                    onClick={() => { setSearchQuery(""); setStatusFilter("all") }}
-                  >
-                    <Filter className="h-4 w-4" />
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-9 flex-1 sm:w-36 text-sm">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(searchQuery || statusFilter !== "all") && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 px-2 shrink-0"
+                      onClick={() => { setSearchQuery(""); setStatusFilter("all") }}
+                    >
+                      <Filter className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {filteredFiles.length} file{filteredFiles.length !== 1 ? "s" : ""}
               </p>
             </div>
@@ -695,10 +697,10 @@ function FilesPageContent() {
                       <TableRow key={file.upload_id} className="hover:bg-muted/50">
                         <TableCell>
                           <div>
-                            <p className="text-sm font-medium truncate max-w-[200px]">
+                            <p className="text-xs sm:text-sm font-medium truncate max-w-[100px] sm:max-w-[200px]">
                               {file.original_filename || file.filename || "Untitled"}
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-[10px] sm:text-xs text-muted-foreground">
                               {formatBytes(file.input_size_bytes || file.file_size || 0)}
                             </p>
                           </div>
@@ -714,7 +716,7 @@ function FilesPageContent() {
                           {file.rows_clean || file.rows_in || 0}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={cn("text-xs font-normal", getStatusBadgeColor(file.status))}>
+                          <Badge variant="outline" className={cn("text-[10px] sm:text-xs font-normal whitespace-nowrap", getStatusBadgeColor(file.status))}>
                             {file.status || "UNKNOWN"}
                           </Badge>
                         </TableCell>
@@ -725,17 +727,17 @@ function FilesPageContent() {
                           {formatToIST(file.updated_at || file.status_timestamp)}
                         </TableCell>
                         <TableCell>
-                          <div className="flex justify-end gap-1">
+                          <div className="flex justify-end gap-0.5 sm:gap-1">
                             {(file.status === "UPLOADED" || file.status === "DQ_FAILED" || file.status === "FAILED" || file.status === "UPLOAD_FAILED") && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                                    className="h-7 w-7 sm:h-8 sm:w-8 text-primary hover:text-primary hover:bg-primary/10"
                                     onClick={() => handleStartProcessing(file)}
                                   >
-                                    <Play className="h-4 w-4" />
+                                    <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Start Processing</TooltipContent>
@@ -743,8 +745,8 @@ function FilesPageContent() {
                             )}
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(file)}>
-                                  <Eye className="h-4 w-4" />
+                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => handleViewDetails(file)}>
+                                  <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>Details</TooltipContent>
@@ -754,14 +756,14 @@ function FilesPageContent() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8"
+                                  className="h-7 w-7 sm:h-8 sm:w-8"
                                   onClick={() => handleDownloadClick(file)}
                                   disabled={downloading === file.upload_id}
                                 >
                                   {downloading === file.upload_id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
                                   ) : (
-                                    <Download className="h-4 w-4" />
+                                    <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                   )}
                                 </Button>
                               </TooltipTrigger>
@@ -773,10 +775,10 @@ function FilesPageContent() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    className="h-7 w-7 sm:h-8 sm:w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
                                     onClick={() => handlePushToQuickBooks(file)}
                                   >
-                                    <CloudUpload className="h-4 w-4" />
+                                    <CloudUpload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Push to QuickBooks</TooltipContent>
@@ -787,14 +789,14 @@ function FilesPageContent() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8"
+                                  className="h-7 w-7 sm:h-8 sm:w-8"
                                   onClick={() => handleDeleteClick(file)}
                                   disabled={deleting === file.upload_id}
                                 >
                                   {deleting === file.upload_id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
                                   ) : (
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                   )}
                                 </Button>
                               </TooltipTrigger>
