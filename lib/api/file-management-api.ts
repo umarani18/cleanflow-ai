@@ -63,6 +63,61 @@ export interface FileListResponse {
   count: number
 }
 
+// DQ Report for individual file (matches actual backend response)
+export interface DqReportResponse {
+  rules_version?: string
+  script_version?: string
+  timestamp_utc?: string
+  user_id?: string
+  upload_id?: string
+  rows_in?: number
+  rows_clean?: number
+  rows_fixed?: number
+  rows_quarantined?: number
+  dq_score?: number
+  artifact?: string
+  mode?: string
+  detected_erp?: string | null
+  detected_entity?: string
+  ai_actions?: number
+  hybrid_summary?: HybridSummary
+}
+
+export interface HybridSummary {
+  total_rows?: number
+  clean_rows?: number
+  fixed_rows?: number
+  quarantined_rows?: number
+  ai_actions?: number
+  ai_planner?: string
+  outstanding_issues?: OutstandingIssue[]
+  status?: string
+}
+
+export interface OutstandingIssue {
+  row: number
+  column: string
+  violation: string
+  value: any
+}
+
+// Overall DQ Report (per-user aggregated)
+export interface OverallDqReportResponse {
+  user_id: string
+  generated_at_utc: string
+  months: Record<string, MonthlyDqStats>
+}
+
+export interface MonthlyDqStats {
+  files_processed: number
+  files_deleted: number
+  total_processing_time_seconds: number
+  rows_in: number
+  rows_out: number
+  rows_fixed: number
+  rows_quarantined: number
+}
+
 class FileManagementAPI {
   private baseURL: string
 
@@ -494,6 +549,117 @@ class FileManagementAPI {
       console.error('❌ Upload workflow failed:', error)
       throw error
     }
+  }
+
+  // Download DQ report JSON for a processed file
+  async downloadDqReport(uploadId: string, authToken: string): Promise<DqReportResponse> {
+    const url = `${this.baseURL}/files/${uploadId}/download?type=report`
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`DQ report download failed: ${response.statusText}`)
+    }
+
+    const text = await response.text()
+
+    // Helper: try to base64-decode a string, return null on failure
+    const tryDecodeBase64 = (s: string): string | null => {
+      try {
+        const trimmed = (s || '').trim()
+        if (!trimmed) return null
+        const binary = atob(trimmed)
+        return binary
+      } catch (e) {
+        return null
+      }
+    }
+
+    // Case 1: JSON envelope
+    try {
+      const payload = JSON.parse(text)
+      const base64Body = payload.body || payload.data || ''
+      if (base64Body) {
+        const decoded = tryDecodeBase64(base64Body)
+        if (decoded) return JSON.parse(decoded)
+      }
+      // If there's no body field, treat payload itself as report JSON
+      return payload as DqReportResponse
+    } catch {
+      // Not JSON – fall through
+    }
+
+    // Case 2: plain base64 string
+    const decoded = tryDecodeBase64(text)
+    if (decoded) {
+      try {
+        return JSON.parse(decoded)
+      } catch {
+        // Fall through
+      }
+    }
+
+    // Case 3: already plain JSON string
+    return JSON.parse(text)
+  }
+
+  // Download per-user overall DQ summary JSON
+  async downloadOverallDqReport(authToken: string): Promise<OverallDqReportResponse> {
+    const url = `${this.baseURL}/files/overall/dq-report`
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Overall DQ report download failed: ${response.statusText}`)
+    }
+
+    const text = await response.text()
+
+    // Helper: try to base64-decode a string, return null on failure
+    const tryDecodeBase64 = (s: string): string | null => {
+      try {
+        const trimmed = (s || '').trim()
+        if (!trimmed) return null
+        const binary = atob(trimmed)
+        return binary
+      } catch (e) {
+        return null
+      }
+    }
+
+    // Case 1: JSON envelope
+    try {
+      const payload = JSON.parse(text)
+      const base64Body = payload.body || payload.data || ''
+      if (base64Body) {
+        const decoded = tryDecodeBase64(base64Body)
+        if (decoded) return JSON.parse(decoded)
+      }
+      return payload as OverallDqReportResponse
+    } catch {
+      // Not JSON – fall through
+    }
+
+    // Case 2: plain base64
+    const decoded = tryDecodeBase64(text)
+    if (decoded) {
+      try {
+        return JSON.parse(decoded)
+      } catch {
+        // Fall through
+      }
+    }
+
+    // Case 3: already plain JSON
+    return JSON.parse(text)
   }
 }
 

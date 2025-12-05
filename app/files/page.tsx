@@ -63,7 +63,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import QuickBooksImport from "@/components/quickbooks/quickbooks-import"
-import { PushToQuickBooksModal } from "@/components/quickbooks/push-to-quickbooks-modal"
+import { PushToERPModal } from "@/components/files/push-to-erp-modal"
 
 const STATUS_OPTIONS = [
   { label: "All", value: "all" },
@@ -624,8 +624,8 @@ function FilesPageContent() {
           <div className="space-y-4">
             {/* Search and Filter Bar */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2 w-full sm:w-auto">
-                <div className="relative flex-1 xs:flex-none">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:flex-none">
                   <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     value={searchQuery}
@@ -634,28 +634,26 @@ function FilesPageContent() {
                     className="h-9 w-full sm:w-48 pl-8 text-sm"
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="h-9 flex-1 sm:w-36 text-sm">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUS_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {(searchQuery || statusFilter !== "all") && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-9 px-2 shrink-0"
-                      onClick={() => { setSearchQuery(""); setStatusFilter("all") }}
-                    >
-                      <Filter className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-9 w-32 sm:w-36 text-sm">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(searchQuery || statusFilter !== "all") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2 shrink-0"
+                    onClick={() => { setSearchQuery(""); setStatusFilter("all") }}
+                  >
+                    <Filter className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 {filteredFiles.length} file{filteredFiles.length !== 1 ? "s" : ""}
@@ -781,7 +779,7 @@ function FilesPageContent() {
                                     <CloudUpload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Push to QuickBooks</TooltipContent>
+                                <TooltipContent>Push to ERP</TooltipContent>
                               </Tooltip>
                             )}
                             <Tooltip>
@@ -861,14 +859,14 @@ function FilesPageContent() {
           }
         />
 
-        <PushToQuickBooksModal
+        <PushToERPModal
           open={pushQBModalOpen}
           onOpenChange={setPushQBModalOpen}
           file={fileToPush}
           onSuccess={() => {
             toast({
               title: "Success",
-              description: "Data pushed to QuickBooks successfully",
+              description: "Data pushed to ERP successfully",
             })
             setPushQBModalOpen(false)
             setFileToPush(null)

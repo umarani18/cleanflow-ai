@@ -1,0 +1,99 @@
+{
+  "rules_version": "unknown",
+  "script_version": "lambda_hybrid_guarded_v1.0_2025-11-06",
+  "timestamp_utc": "2025-11-11T14:27:09.876074",
+  "user_id": "b1c3dd8a-1031-7037-20bc-c5d849c6c5d0",
+  "upload_id": "7f0f2c48-7784-49c7-b000-07e7096dc17e",
+  "rows_in": 3,
+  "rows_clean": 0,
+  "rows_fixed": 0,
+  "rows_quarantined": 3,
+  "dq_score": 0,
+  "artifact": "s3://base-cleanflowaidatalake9697f7f3-2hy7aq4aajii/data/b1c3dd8a-1031-7037-20bc-c5d849c6c5d0/7f0f2c48-7784-49c7-b000-07e7096dc17e/result.parquet",
+  "mode": "hybrid",
+  "detected_erp": null,
+  "detected_entity": "sales_orders",
+  "ai_actions": 0,
+  "hybrid_summary": {
+    "total_rows": 3,
+    "clean_rows": 0,
+    "fixed_rows": 0,
+    "quarantined_rows": 3,
+    "ai_actions": 0,
+    "ai_planner": "groq_hybrid_v1",
+    "outstanding_issues": [
+      {
+        "row": 0,
+        "column": "customer_id",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 0,
+        "column": "item_id",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 0,
+        "column": "order_date",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 0,
+        "column": "order_id",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 1,
+        "column": "customer_id",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 1,
+        "column": "item_id",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 1,
+        "column": "order_date",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 1,
+        "column": "order_id",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 2,
+        "column": "customer_id",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 2,
+        "column": "item_id",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 2,
+        "column": "order_date",
+        "violation": "missing_required",
+        "value": null
+      },
+      {
+        "row": 2,
+        "column": "order_id",
+        "violation": "missing_required",
+        "value": null
+      }
+    ]
+  }
+}
