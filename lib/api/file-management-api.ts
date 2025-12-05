@@ -175,7 +175,7 @@ class FileManagementAPI {
   async getFilePreviewFromS3(uploadId: string, authToken: string, maxRows: number = 20): Promise<{ headers: string[], sample_data: any[], total_rows: number }> {
     try {
       // Download the original file from S3 via export endpoint
-      const blob = await this.downloadFile(uploadId, 'csv', 'raw', authToken)
+      const blob = await this.downloadFile(uploadId, 'csv', 'all', authToken)
       const text = await blob.text()
       
       // Parse CSV

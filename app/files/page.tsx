@@ -390,7 +390,7 @@ function FilesPageContent() {
 
     try {
       const typeParam = format === "excel" ? "excel" : format === "json" ? "json" : "csv"
-      let downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=clean`
+      let downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=all`
       if (targetErp) downloadUrl += `&erp=${encodeURIComponent(targetErp)}`
 
       const response = await fetch(downloadUrl, {

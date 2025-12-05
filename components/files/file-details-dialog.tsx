@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react"
 import {
   Activity,
   AlertTriangle,
@@ -7,10 +6,10 @@ import {
   Database,
   FileText,
   Hash,
-  Server,
-  XCircle,
-  Table as TableIcon,
   Loader2,
+  Server,
+  Table as TableIcon,
+  XCircle,
 } from "lucide-react"
 import {
   Dialog,
@@ -18,12 +17,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { formatBytes, formatToIST, cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 import { FileStatusResponse, fileManagementAPI } from "@/lib/api/file-management-api"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { cn, formatBytes, formatToIST } from "@/lib/utils"
+import { useEffect, useState } from "react"
+
+import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 interface FileDetailsDialogProps {
   file: FileStatusResponse | null
@@ -234,7 +235,8 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                     </div>
                     <div className="bg-muted/30 p-3 rounded border">
                       <span className="text-xs text-muted-foreground block mb-1">Engine</span>
-                      <span className="text-sm font-medium">{file.engine || 'Standard'}</span>
+                      {/* <span className="text-sm font-medium">{file.engine || 'Standard'}</span> */}
+                      <span className="text-sm font-medium">CleanAI 1.0</span>
                     </div>
                   </div>
                 </div>

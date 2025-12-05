@@ -26,14 +26,14 @@ export default function LoginPage() {
             <div className="relative w-12 h-12">
               <Image
                 src="/images/infiniqon-logo-light.png"
-                alt="Infiniqon"
+                alt="CleanFlowAI"
                 width={48}
                 height={48}
                 className="rounded-xl object-contain"
               />
             </div>
             <div>
-              <span className="font-bold text-xl text-slate-900 dark:text-white">Infiniqon</span>
+              <span className="font-bold text-xl text-slate-900 dark:text-white">CleanFlowAI</span>
               <p className="text-xs text-slate-500 dark:text-white/60">Data Platform</p>
             </div>
           </div>

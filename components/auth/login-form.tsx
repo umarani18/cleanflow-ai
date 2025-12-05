@@ -61,7 +61,7 @@ export function LoginForm() {
           <div className="relative w-16 h-16">
             <Image
               src="/images/infiniqon-logo-light.png"
-              alt="Infiniqon"
+              alt="CleanFlowAI"
               width={64}
               height={64}
               className="rounded-xl object-contain"

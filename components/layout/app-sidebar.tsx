@@ -132,14 +132,14 @@ export function AppSidebar() {
 							<div className="relative w-10 h-10">
 								<Image
 									src="/images/infiniqon-logo-light.png"
-									alt="Infiniqon"
+									alt="CleanFlowAI"
 									width={40}
 									height={40}
 									className="rounded-lg object-contain"
 								/>
 							</div>
 							<div>
-								<span className="font-playfair font-bold text-xl">Infiniqon</span>
+								<span className="font-playfair font-bold text-xl">CleanFlowAI</span>
 								{/* <p className="text-xs text-muted-foreground mt-0.5">Data Platform</p> */}
 							</div>
 						</div>
@@ -210,7 +210,7 @@ export function AppSidebar() {
 								</Button>
 							)}
 							<div className="text-xs text-muted-foreground text-center">
-								<div className="font-medium">Infiniqon Platform</div>
+								<div className="font-medium">CleanFlowAI Platform</div>
 								<div className="mt-1">Data Transformation</div>
 							</div>
 						</div>

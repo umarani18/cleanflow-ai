@@ -25,7 +25,7 @@ const playfairDisplay = Playfair_Display({
 })
 
 export const metadata: Metadata = {
-  title: "Infiniqon - Data Transformation Platform",
+  title: "CleanFlowAI - Data Transformation Platform",
   description: "Transform your ERP data seamlessly with our professional data transformation platform",
   generator: 'v0.app',
   icons: {

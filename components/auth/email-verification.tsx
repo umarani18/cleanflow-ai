@@ -1,14 +1,15 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ArrowLeft, CheckCircle, Mail, RotateCcw, Shield, Timer } from 'lucide-react'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { useEffect, useState } from 'react'
+
 import { Button } from '@/components/ui/button'
+import Image from 'next/image'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useAuth } from '@/hooks/useAuth'
-import { Mail, ArrowLeft, Shield, CheckCircle, Timer, RotateCcw } from 'lucide-react'
-import Image from 'next/image'
 
 interface EmailVerificationProps {
   email: string
@@ -85,7 +86,7 @@ export function EmailVerification({ email, onVerified, onBack }: EmailVerificati
             <div className="relative w-16 h-16">
               <Image
                 src="/images/infiniqon-logo-light.png"
-                alt="Infiniqon"
+                alt="CleanFlowAI"
                 width={64}
                 height={64}
                 className="rounded-xl object-contain"
