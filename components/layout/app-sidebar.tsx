@@ -1,7 +1,8 @@
 "use client"
 
-import { BarChart3, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, Settings, X } from "lucide-react"
+import { BarChart3, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useTheme } from "next-themes"
 
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
@@ -9,6 +10,7 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/providers/auth-provider"
 import { usePathname } from "next/navigation"
+import { ChatDrawer } from "@/components/chat/chat-drawer"
 
 const navigation = [
 	{
@@ -41,8 +43,10 @@ export function AppSidebar() {
 	const [collapsed, setCollapsed] = useState(false)
 	const [isMobile, setIsMobile] = useState(false)
 	const [mobileOpen, setMobileOpen] = useState(false)
+	const [chatOpen, setChatOpen] = useState(false)
 	const pathname = usePathname()
 	const { logout, isAuthenticated, user } = useAuth()
+	const { theme, setTheme } = useTheme()
 
 	const navContainer = {
 		hidden: {},
@@ -184,21 +188,28 @@ export function AppSidebar() {
 				<div className="p-4 border-t border-sidebar-border/60">
 					{!collapsed && (
 						<div className="space-y-3">
-							{isAuthenticated && (
-								<div className="px-4 py-2">
-									<div className="text-xs text-muted-foreground mb-2">Signed in as</div>
-									<div className="text-sm font-medium truncate">
-										{user?.email || 'User'}
-									</div>
+						{isAuthenticated && (
+							<div className="px-4 py-2">
+								<div className="text-xs text-muted-foreground mb-2">Signed in as</div>
+								<div className="text-sm font-medium truncate">
+									{user?.email || 'User'}
 								</div>
-							)}
-							<Link
-								href="/help"
-								className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-							>
-								<HelpCircle className="w-4 h-4" />
-								<span className="text-sm">Help & Support</span>
-							</Link>
+							</div>
+						)}
+						<button
+							onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+							className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
+						>
+							{theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+							<span className="text-sm">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+						</button>
+						<button
+							onClick={() => setChatOpen(true)}
+							className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
+						>
+							<HelpCircle className="w-4 h-4" />
+							<span className="text-sm">Help & Support</span>
+						</button>
 							{isAuthenticated && (
 								<Button
 									onClick={handleLogout}
@@ -230,6 +241,9 @@ export function AppSidebar() {
 					)}
 				</div>
 			</aside>
+
+			{/* Chat Drawer */}
+			<ChatDrawer isOpen={chatOpen} onClose={() => setChatOpen(false)} />
 		</div>
 	)
 }

@@ -612,6 +612,7 @@ class FileManagementAPI {
     const url = `${this.baseURL}/files/overall/dq-report`
 
     const response = await fetch(url, {
+      method: 'GET',
       headers: {
         Authorization: `Bearer ${authToken}`,
       },

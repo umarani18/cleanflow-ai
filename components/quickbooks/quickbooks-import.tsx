@@ -159,10 +159,14 @@ export default function QuickBooksImport({
         filters.date_to = importConfig.dateTo
       }
 
+      console.log('Importing from QuickBooks with filters:', filters)
       const result = await quickBooksAPI.importData(importConfig.entity, filters)
+      console.log('QuickBooks import result:', result)
 
       setImportResult(result)
       onNotification?.(`Successfully imported ${result.records_imported} records!`, 'success')
+      
+      // Call parent's onImportComplete to trigger auto-processing
       onImportComplete?.(result.upload_id)
     } catch (err) {
       console.error('Error importing data:', err)

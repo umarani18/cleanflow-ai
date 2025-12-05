@@ -2,7 +2,6 @@ import "./globals.css"
 
 import { Inter, Playfair_Display } from "next/font/google"
 
-import AppThemeToggle from "@/components/ui/app-theme-toggle"
 import { AuthProvider } from "@/components/providers/auth-provider"
 import type { Metadata } from "next"
 import type React from "react"
@@ -57,7 +56,6 @@ export default function RootLayout({
           <AuthProvider>
             <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
               {children}
-              <AppThemeToggle />
             </ThemeProvider>
           </AuthProvider>
         </ReduxProvider>

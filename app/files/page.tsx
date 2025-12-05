@@ -67,6 +67,7 @@ import { PushToERPModal } from "@/components/files/push-to-erp-modal"
 
 const STATUS_OPTIONS = [
   { label: "All", value: "all" },
+  { label: "Uploaded", value: "UPLOADED" },
   { label: "Processed", value: "DQ_FIXED" },
   { label: "Processing", value: "DQ_RUNNING" },
   { label: "Queued", value: "QUEUED" },
@@ -258,8 +259,25 @@ function FilesPageContent() {
     setPushQBModalOpen(true)
   }
 
-  const handleQuickBooksImportComplete = (uploadId: string) => {
-    // Refresh file list when import completes
+  const handleQuickBooksImportComplete = async (uploadId: string) => {
+    // Auto-start processing immediately after QuickBooks import
+    if (idToken && uploadId) {
+      try {
+        await fileManagementAPI.startProcessing(uploadId, idToken)
+        toast({
+          title: "Processing Started",
+          description: "Data quality processing started automatically",
+        })
+      } catch (error) {
+        console.error("Auto-processing failed:", error)
+        toast({
+          title: "Auto-Processing Failed",
+          description: "Import successful, but auto-processing failed to start",
+          variant: "destructive",
+        })
+      }
+    }
+    // Refresh file list
     loadFiles()
   }
 
