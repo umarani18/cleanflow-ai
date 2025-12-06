@@ -2,15 +2,15 @@
 
 import { BarChart3, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useTheme } from "next-themes"
 
 import { Button } from "@/components/ui/button"
+import { ChatDrawer } from "@/components/chat/chat-drawer"
 import Image from "next/image"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/providers/auth-provider"
 import { usePathname } from "next/navigation"
-import { ChatDrawer } from "@/components/chat/chat-drawer"
+import { useTheme } from "next-themes"
 
 const navigation = [
 	{
@@ -190,9 +190,11 @@ export function AppSidebar() {
 						<div className="space-y-3">
 						{isAuthenticated && (
 							<div className="px-4 py-2">
-								<div className="text-xs text-muted-foreground mb-2">Signed in as</div>
 								<div className="text-sm font-medium truncate">
-									{user?.email || 'User'}
+									{user?.name || 'User'}
+								</div>
+								<div className="text-xs text-muted-foreground truncate">
+									{user?.email}
 								</div>
 							</div>
 						)}

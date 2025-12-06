@@ -57,29 +57,32 @@ const INITIAL_SERVICES_SETTINGS = {
 
 // Initial members data
 const INITIAL_MEMBERS = [
-  { id: 1, name: "Alice Johnson", email: "alice@acme.com", role: "Owner", status: "Active", avatar: "", joinedAt: "Jan 15, 2024" },
-  { id: 2, name: "Bob Smith", email: "bob@acme.com", role: "Admin", status: "Active", avatar: "", joinedAt: "Feb 20, 2024" },
-  { id: 3, name: "Clark Davis", email: "clark@acme.com", role: "Editor", status: "Active", avatar: "", joinedAt: "Mar 10, 2024" },
-  { id: 4, name: "Diana Wilson", email: "diana@acme.com", role: "Viewer", status: "Active", avatar: "", joinedAt: "Apr 5, 2024" },
-  { id: 5, name: "Edward Brown", email: "edward@acme.com", role: "Editor", status: "Pending", avatar: "", joinedAt: "Nov 28, 2024" },
-  { id: 6, name: "Fiona Martinez", email: "fiona@acme.com", role: "Viewer", status: "Inactive", avatar: "", joinedAt: "May 12, 2024" },
+  { id: 1, name: "Umashankar Sudarsan", email: "usudarsan@infiniqon.com", role: "Owner", status: "Active", avatar: "", joinedAt: "Jan 15, 2024", lastLogin: "Dec 6, 2024, 9:32 AM" },
+  { id: 2, name: "Aashish Sankar", email: "asankar@infiniqon.com", role: "Admin", status: "Active", avatar: "", joinedAt: "Jan 20, 2024", lastLogin: "Dec 6, 2024, 10:15 AM" },
+  { id: 3, name: "Sakthi Mahendran", email: "smahendran@infiniqon.com", role: "Admin", status: "Active", avatar: "", joinedAt: "Feb 5, 2024", lastLogin: "Online Now" },
+  { id: 4, name: "Kiran Parthiban", email: "kparthiban@infiniqon.com", role: "Super Admin", status: "Active", avatar: "", joinedAt: "Feb 10, 2024", lastLogin: "15 mins ago" },
+  { id: 5, name: "Priya Venkatesh", email: "pvenkatesh@infiniqon.com", role: "Editor", status: "Active", avatar: "", joinedAt: "Mar 15, 2024", lastLogin: "Dec 4, 2024, 2:30 PM" },
+  { id: 6, name: "Rahul Krishnan", email: "rkrishnan@infiniqon.com", role: "Viewer", status: "Active", avatar: "", joinedAt: "Apr 1, 2024", lastLogin: "Dec 3, 2024, 11:00 AM" },
+  { id: 7, name: "Ananya Sharma", email: "asharma@infiniqon.com", role: "Editor", status: "Pending", avatar: "", joinedAt: "Nov 28, 2024", lastLogin: "Never" },
+  { id: 8, name: "Vikram Nair", email: "vnair@infiniqon.com", role: "Viewer", status: "Inactive", avatar: "", joinedAt: "May 12, 2024", lastLogin: "Oct 15, 2024, 3:00 PM" },
 ]
 
 // Initial permissions configuration
 const INITIAL_PERMISSIONS = [
-  { id: "files", name: "File Management", description: "Upload, download, and manage files", owner: true, admin: true, editor: true, viewer: false },
-  { id: "transform", name: "Data Transformation", description: "Run and configure data transformations", owner: true, admin: true, editor: true, viewer: false },
-  { id: "export", name: "Export Data", description: "Export transformed data to various formats", owner: true, admin: true, editor: true, viewer: true },
-  { id: "members", name: "Manage Members", description: "Invite, remove, and manage team members", owner: true, admin: true, editor: false, viewer: false },
-  { id: "billing", name: "Billing & Subscription", description: "View and manage billing information", owner: true, admin: false, editor: false, viewer: false },
-  { id: "settings", name: "Organization Settings", description: "Modify organization details and preferences", owner: true, admin: true, editor: false, viewer: false },
-  { id: "api", name: "API Access", description: "Generate and manage API keys", owner: true, admin: true, editor: false, viewer: false },
-  { id: "audit", name: "Audit Logs", description: "View activity and audit logs", owner: true, admin: true, editor: false, viewer: false },
+  { id: "files", name: "File Management", description: "Upload, download, and manage files", owner: true, superadmin: true, admin: true, editor: true, viewer: false },
+  { id: "transform", name: "Data Transformation", description: "Run and configure data transformations", owner: true, superadmin: true, admin: true, editor: true, viewer: false },
+  { id: "export", name: "Export Data", description: "Export transformed data to various formats", owner: true, superadmin: true, admin: true, editor: true, viewer: true },
+  { id: "members", name: "Manage Members", description: "Invite, remove, and manage team members", owner: true, superadmin: true, admin: true, editor: false, viewer: false },
+  { id: "billing", name: "Billing & Subscription", description: "View and manage billing information", owner: true, superadmin: true, admin: false, editor: false, viewer: false },
+  { id: "settings", name: "Organization Settings", description: "Modify organization details and preferences", owner: true, superadmin: true, admin: true, editor: false, viewer: false },
+  { id: "api", name: "API Access", description: "Generate and manage API keys", owner: true, superadmin: true, admin: true, editor: false, viewer: false },
+  { id: "audit", name: "Audit Logs", description: "View activity and audit logs", owner: true, superadmin: true, admin: true, editor: false, viewer: false },
 ]
 
 const getRoleBadgeVariant = (role: string) => {
   switch (role) {
     case "Owner": return "default"
+    case "Super Admin": return "destructive"
     case "Admin": return "secondary"
     case "Editor": return "outline"
     default: return "outline"
@@ -132,7 +135,7 @@ export function OrganizationSettings() {
   }
 
   // Toggle permission
-  const togglePermission = (permissionId: string, role: 'admin' | 'editor' | 'viewer') => {
+  const togglePermission = (permissionId: string, role: 'superadmin' | 'admin' | 'editor' | 'viewer') => {
     setPermissions(prev => prev.map(p => 
       p.id === permissionId ? { ...p, [role]: !p[role] } : p
     ))
@@ -376,6 +379,7 @@ export function OrganizationSettings() {
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Joined</TableHead>
+                  <TableHead>Last Login</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -415,6 +419,9 @@ export function OrganizationSettings() {
                     <TableCell className="text-muted-foreground">
                       {member.joinedAt}
                     </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {member.lastLogin}
+                    </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -425,6 +432,9 @@ export function OrganizationSettings() {
                         <DropdownMenuContent align="end">
                           {member.role !== "Owner" && (
                             <>
+                              <DropdownMenuItem onClick={() => updateMemberRole(member.id, "Super Admin")}>
+                                Make Super Admin
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => updateMemberRole(member.id, "Admin")}>
                                 Make Admin
                               </DropdownMenuItem>
@@ -478,6 +488,7 @@ export function OrganizationSettings() {
                 <TableRow>
                   <TableHead className="w-[300px]">Permission</TableHead>
                   <TableHead className="text-center">Owner</TableHead>
+                  <TableHead className="text-center">Super Admin</TableHead>
                   <TableHead className="text-center">Admin</TableHead>
                   <TableHead className="text-center">Editor</TableHead>
                   <TableHead className="text-center">Viewer</TableHead>
@@ -497,6 +508,24 @@ export function OrganizationSettings() {
                         <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center cursor-not-allowed opacity-70">
                           <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => togglePermission(permission.id, 'superadmin')}
+                          className="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                          {permission.superadmin ? (
+                            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                              <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                              <X className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                          )}
+                        </button>
                       </div>
                     </TableCell>
                     <TableCell className="text-center">

@@ -14,6 +14,9 @@ import {
   CloudUpload,
   Network,
   Play,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -76,8 +79,12 @@ const STATUS_OPTIONS = [
 ]
 
 const SOURCE_OPTIONS = [
-  { label: "Local File", value: "file" },
+  { label: "Local Directory", value: "local" },
   { label: "Unified Bridge", value: "unified-bridge" },
+  { label: "ERP", value: "erp" },
+]
+
+const ERP_OPTIONS = [
   { label: "QuickBooks Online", value: "quickbooks" },
   { label: "Oracle Fusion", value: "oracle" },
   { label: "SAP ERP", value: "sap" },
@@ -128,7 +135,10 @@ function FilesPageContent() {
   const [pushQBModalOpen, setPushQBModalOpen] = useState(false)
   const [fileToPush, setFileToPush] = useState<FileStatusResponse | null>(null)
   const [activeSection, setActiveSection] = useState<"upload" | "explorer">("upload")
-  const [selectedSource, setSelectedSource] = useState("file")
+  const [selectedSource, setSelectedSource] = useState("local")
+  const [selectedErp, setSelectedErp] = useState("quickbooks")
+  const [sortField, setSortField] = useState<"name" | "score" | "status" | "uploaded" | "updated">("uploaded")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
@@ -156,12 +166,58 @@ function FilesPageContent() {
     loadFiles()
   }, [loadFiles])
 
-  const filteredFiles = files.filter((file) => {
-    const name = (file.original_filename || file.filename || "").toLowerCase()
-    const matchesSearch = name.includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "all" || file.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  const filteredFiles = files
+    .filter((file) => {
+      const name = (file.original_filename || file.filename || "").toLowerCase()
+      const matchesSearch = name.includes(searchQuery.toLowerCase())
+      const matchesStatus = statusFilter === "all" || file.status === statusFilter
+      return matchesSearch && matchesStatus
+    })
+    .sort((a, b) => {
+      let comparison = 0
+      switch (sortField) {
+        case "name":
+          const nameA = (a.original_filename || a.filename || "").toLowerCase()
+          const nameB = (b.original_filename || b.filename || "").toLowerCase()
+          comparison = nameA.localeCompare(nameB)
+          break
+        case "score":
+          const scoreA = a.dq_score ?? -1
+          const scoreB = b.dq_score ?? -1
+          comparison = scoreA - scoreB
+          break
+        case "status":
+          comparison = (a.status || "").localeCompare(b.status || "")
+          break
+        case "uploaded":
+          const uploadedA = new Date(a.uploaded_at || a.created_at || 0).getTime()
+          const uploadedB = new Date(b.uploaded_at || b.created_at || 0).getTime()
+          comparison = uploadedA - uploadedB
+          break
+        case "updated":
+          const updatedA = new Date(a.updated_at || a.status_timestamp || 0).getTime()
+          const updatedB = new Date(b.updated_at || b.status_timestamp || 0).getTime()
+          comparison = updatedA - updatedB
+          break
+      }
+      return sortDirection === "asc" ? comparison : -comparison
+    })
+
+  const handleSort = (field: "name" | "score" | "status" | "uploaded" | "updated") => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+    } else {
+      setSortField(field)
+      setSortDirection("desc")
+    }
+  }
+
+  const SortIcon = ({ field }: { field: "name" | "score" | "status" | "uploaded" | "updated" }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />
+    return sortDirection === "asc" 
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />
+  }
 
   const handleFileUpload = async (file: File) => {
     if (!idToken) {
@@ -519,12 +575,12 @@ function FilesPageContent() {
         {/* File Upload Section */}
         {activeSection === "upload" && (
           <div className="space-y-4">
-            {/* Header Row: Source selector + AI toggle */}
+            {/* Header Row: Source selector + ERP dropdown */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
               <div className="flex items-center gap-2 sm:gap-3">
                 <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Source:</span>
                 <Select value={selectedSource} onValueChange={setSelectedSource}>
-                  <SelectTrigger className="w-full sm:w-[200px] h-9">
+                  <SelectTrigger className="w-full sm:w-[180px] h-9">
                     <SelectValue placeholder="Select source" />
                   </SelectTrigger>
                   <SelectContent>
@@ -535,38 +591,25 @@ function FilesPageContent() {
                     ))}
                   </SelectContent>
                 </Select>
+                {selectedSource === "erp" && (
+                  <Select value={selectedErp} onValueChange={setSelectedErp}>
+                    <SelectTrigger className="w-full sm:w-[180px] h-9">
+                      <SelectValue placeholder="Select ERP" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ERP_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
-              {selectedSource === "file" && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs sm:text-sm text-muted-foreground shrink-0">AI Processing:</span>
-                  <div className="inline-flex rounded-md border">
-                    <button
-                      onClick={() => setUseAI(true)}
-                      disabled={uploading}
-                      className={cn(
-                        "px-3 py-1 text-xs font-medium transition-colors rounded-l-md",
-                        useAI ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                      )}
-                    >
-                      On
-                    </button>
-                    <button
-                      onClick={() => setUseAI(false)}
-                      disabled={uploading}
-                      className={cn(
-                        "px-3 py-1 text-xs font-medium transition-colors rounded-r-md border-l",
-                        !useAI ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                      )}
-                    >
-                      Off
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Content Area */}
-            {selectedSource === "file" ? (
+            {selectedSource === "local" ? (
               <div
                 className={cn(
                   "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
@@ -595,21 +638,20 @@ function FilesPageContent() {
                       <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
                     </div>
                     <div className="space-y-1 sm:space-y-2">
-                      <p className="text-base sm:text-lg lg:text-xl font-medium">Drop your file here</p>
-                      <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">or click to browse</p>
+                      <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your ERP data for transformation</p>
+                      <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">Drag & drop or click to browse</p>
                     </div>
-                    <p className="text-xs sm:text-sm lg:text-base text-muted-foreground mt-2 sm:mt-4">Supports CSV, XLSX, XLS</p>
                   </div>
                 )}
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.xlsx,.xls"
+                  accept=".csv,.xlsx,.xls,.json,.sql"
                   className="hidden"
                   onChange={handleFileInput}
                 />
               </div>
-            ) : selectedSource === "quickbooks" ? (
+            ) : selectedSource === "erp" && selectedErp === "quickbooks" ? (
               <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
                 <QuickBooksImport
                   onImportComplete={handleQuickBooksImportComplete}
@@ -635,20 +677,20 @@ function FilesPageContent() {
                   }}
                 />
               </div>
-            ) : (
+            ) : selectedSource === "erp" ? (
               <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
                 <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
                   <Network className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
-                  {SOURCE_OPTIONS.find((e) => e.value === selectedSource)?.label}
+                  {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label}
                 </h3>
                 <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
-                  Securely import your financial data directly from your ERP system.
+                  Connect your {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label} account to import data directly.
                 </p>
                 <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
               </div>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -699,12 +741,37 @@ function FilesPageContent() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="text-xs">File</TableHead>
-                      <TableHead className="text-xs hidden xl:table-cell">Score</TableHead>
+                      <TableHead 
+                        className="text-xs cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort("name")}
+                      >
+                        <span className="flex items-center">File<SortIcon field="name" /></span>
+                      </TableHead>
+                      <TableHead 
+                        className="text-xs hidden xl:table-cell cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort("score")}
+                      >
+                        <span className="flex items-center">Score<SortIcon field="score" /></span>
+                      </TableHead>
                       <TableHead className="text-xs hidden md:table-cell">Rows</TableHead>
-                      <TableHead className="text-xs">Status</TableHead>
-                      <TableHead className="text-xs hidden lg:table-cell">Uploaded</TableHead>
-                      <TableHead className="text-xs hidden lg:table-cell">Updated</TableHead>
+                      <TableHead 
+                        className="text-xs cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort("status")}
+                      >
+                        <span className="flex items-center">Status<SortIcon field="status" /></span>
+                      </TableHead>
+                      <TableHead 
+                        className="text-xs hidden lg:table-cell cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort("uploaded")}
+                      >
+                        <span className="flex items-center">Uploaded<SortIcon field="uploaded" /></span>
+                      </TableHead>
+                      <TableHead 
+                        className="text-xs hidden lg:table-cell cursor-pointer hover:text-foreground transition-colors"
+                        onClick={() => handleSort("updated")}
+                      >
+                        <span className="flex items-center">Updated<SortIcon field="updated" /></span>
+                      </TableHead>
                       <TableHead className="text-xs text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>

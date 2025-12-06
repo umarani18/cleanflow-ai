@@ -293,7 +293,7 @@ export default function QuickBooksImport({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">From Date</Label>
+                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">From Date <span className="text-muted-foreground font-normal">(Optional)</span></Label>
                 <Input
                   type="date"
                   value={importConfig.dateFrom}
@@ -302,7 +302,7 @@ export default function QuickBooksImport({
                 />
               </div>
               <div>
-                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">To Date</Label>
+                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">To Date <span className="text-muted-foreground font-normal">(Optional)</span></Label>
                 <Input
                   type="date"
                   value={importConfig.dateTo}

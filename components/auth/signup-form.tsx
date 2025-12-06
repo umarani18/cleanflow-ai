@@ -2,7 +2,7 @@
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Eye, EyeOff, Lock, Mail } from "lucide-react"
+import { Eye, EyeOff, Lock, Mail, User } from "lucide-react"
 import { useEffect, useState } from 'react'
 
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import Link from "next/link"
 import { useAuth } from "@/components/providers/auth-provider"
 
 export function SignUpForm() {
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -37,7 +38,7 @@ export function SignUpForm() {
     setSuccess('')
 
     try {
-      const result = await signup(email, password, confirmPassword)
+      const result = await signup(email, password, confirmPassword, fullName || undefined)
       setSuccess(result.message)
       if (!result.confirmed) {
         setShowVerification(true)
@@ -138,6 +139,25 @@ export function SignUpForm() {
       <Card className="w-full border-0 shadow-none bg-transparent">
         <CardContent className="space-y-6 p-0">
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Full Name Field */}
+            <div className="space-y-2">
+              <Label htmlFor="fullName" className="text-sm font-medium text-muted-foreground">
+                Full Name
+              </Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  id="fullName"
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  className="pl-10 h-12 border-input focus:border-primary focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            </div>
+
             {/* Email Field */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium text-muted-foreground">

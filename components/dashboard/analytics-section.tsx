@@ -17,8 +17,9 @@ export function AnalyticsSection({ files }: AnalyticsSectionProps) {
   const avgDqScore = completedFiles.length > 0
     ? completedFiles.reduce((sum, f) => sum + (f.dq_score || 0), 0) / completedFiles.length
     : 0
-  const totalRowsProcessed = completedFiles.reduce((sum, f) => sum + (f.rows_out || 0), 0)
+  const totalRowsIn = completedFiles.reduce((sum, f) => sum + (f.rows_in || 0), 0)
   const totalQuarantined = completedFiles.reduce((sum, f) => sum + (f.rows_quarantined || 0), 0)
+  const totalRowsProcessed = totalRowsIn - totalQuarantined
 
   // Collect all DQ issues from completed files
   const allIssues = completedFiles.flatMap(f => f.dq_issues || [])

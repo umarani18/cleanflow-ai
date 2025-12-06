@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { CognitoIdentityProvider, AuthFlowType } from '@aws-sdk/client-cognito-identity-provider'
+import { AuthFlowType, CognitoIdentityProvider } from '@aws-sdk/client-cognito-identity-provider'
+import { useEffect, useState } from 'react'
+
 import { AWS_CONFIG } from '@/lib/aws-config'
 
 const CONFIG = {
@@ -12,6 +13,7 @@ interface User {
   email: string
   sub: string
   username: string
+  name: string
 }
 
 interface AuthState {
@@ -42,12 +44,14 @@ export function useAuth() {
       try {
         const { idToken, accessToken } = JSON.parse(storedTokens)
         const payload = parseJWT(idToken)
+        console.log('Parsed JWT payload:', payload)
         if (payload && payload.exp > Date.now() / 1000) {
           setAuthState({
             user: {
               email: payload.email,
               sub: payload.sub,
-              username: payload['cognito:username']
+              username: payload['cognito:username'],
+              name: payload.name || payload.email.split('@')[0]
             },
             isLoading: false,
             isAuthenticated: true,
@@ -81,7 +85,7 @@ export function useAuth() {
     }
   }
 
-  const signup = async (email: string, password: string, confirmPassword: string) => {
+  const signup = async (email: string, password: string, confirmPassword: string, name?: string) => {
     if (!email || !password || !confirmPassword) {
       throw new Error('Please fill in all fields')
     }
@@ -95,16 +99,25 @@ export function useAuth() {
     }
 
     try {
+      const userAttributes = [
+        {
+          Name: 'email',
+          Value: email
+        }
+      ]
+      
+      if (name) {
+        userAttributes.push({
+          Name: 'name',
+          Value: name
+        })
+      }
+
       const params = {
         ClientId: CONFIG.clientId,
         Username: email,
         Password: password,
-        UserAttributes: [
-          {
-            Name: 'email',
-            Value: email
-          }
-        ]
+        UserAttributes: userAttributes
       }
 
       const result = await cognitoClient.signUp(params)
@@ -163,7 +176,8 @@ export function useAuth() {
           const user = {
             email: payload.email,
             sub: payload.sub,
-            username: payload['cognito:username']
+            username: payload['cognito:username'],
+            name: payload.name || payload.email.split('@')[0]
           }
 
           localStorage.setItem('authTokens', JSON.stringify({ idToken, accessToken }))

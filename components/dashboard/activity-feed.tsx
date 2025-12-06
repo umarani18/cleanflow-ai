@@ -1,127 +1,161 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, Clock, Download, FileText, Upload, XCircle } from "lucide-react"
+import { CheckCircle, Clock, Download, FileText, Upload, XCircle, AlertCircle } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useAppSelector } from "@/lib/store"
+import { FileStatusResponse } from "@/lib/api/file-management-api"
 
-export function ActivityFeed() {
-  const { recentActivity } = useAppSelector((state) => state.dashboard)
+interface ActivityFeedProps {
+  files: FileStatusResponse[]
+}
 
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "transform":
-        return FileText
-      case "upload":
+export function ActivityFeed({ files }: ActivityFeedProps) {
+  const getActivityIcon = (status: string) => {
+    switch (status) {
+      case "DQ_FIXED":
+      case "EXPORTED":
+        return CheckCircle
+      case "DQ_FAILED":
+      case "UPLOAD_FAILED":
+        return XCircle
+      case "DQ_RUNNING":
+      case "NORMALIZING":
+      case "QUEUED":
+        return Clock
+      case "UPLOADING":
         return Upload
-      case "download":
-        return Download
       default:
         return FileText
     }
   }
 
-  const getStatusIcon = (status: string) => {
+  const getActivityLabel = (status: string) => {
     switch (status) {
-      case "success":
-        return CheckCircle
-      case "error":
-        return XCircle
-      case "pending":
+      case "DQ_FIXED":
+        return "Processed"
+      case "EXPORTED":
+        return "Exported"
+      case "DQ_FAILED":
+        return "Failed"
+      case "UPLOAD_FAILED":
+        return "Upload Failed"
+      case "DQ_RUNNING":
+        return "Processing"
+      case "NORMALIZING":
+        return "Normalizing"
+      case "QUEUED":
+        return "Queued"
+      case "UPLOADING":
+        return "Uploading"
       default:
-        return Clock
+        return status
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "success":
+      case "DQ_FIXED":
+      case "EXPORTED":
         return "text-green-500"
-      case "error":
+      case "DQ_FAILED":
+      case "UPLOAD_FAILED":
         return "text-red-500"
-      case "pending":
-        return "text-yellow-500"
+      case "DQ_RUNNING":
+      case "NORMALIZING":
+      case "QUEUED":
+      case "UPLOADING":
+        return "text-amber-500"
       default:
         return "text-gray-500"
+    }
+  }
+
+  const getStatusBg = (status: string) => {
+    switch (status) {
+      case "DQ_FIXED":
+      case "EXPORTED":
+        return "bg-green-500/10"
+      case "DQ_FAILED":
+      case "UPLOAD_FAILED":
+        return "bg-red-500/10"
+      case "DQ_RUNNING":
+      case "NORMALIZING":
+      case "QUEUED":
+      case "UPLOADING":
+        return "bg-amber-500/10"
+      default:
+        return "bg-muted"
     }
   }
 
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp)
     const now = new Date()
-    
-    // Get current time in IST
-    const nowIST = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
-    // Get target date in IST
-    const dateIST = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
-    
-    const diff = nowIST.getTime() - dateIST.getTime()
+    const diff = now.getTime() - date.getTime()
     const minutes = Math.floor(diff / 60000)
 
     if (minutes < 1) return "Just now"
-    if (minutes < 60) return `${minutes}m ago`
+    if (minutes < 60) return `${minutes}m`
     const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    return date.toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    })
+    if (hours < 24) return `${hours}h`
+    const days = Math.floor(hours / 24)
+    return `${days}d`
   }
 
-  return (
-    <div>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle>Recent Activity</CardTitle>
-          {recentActivity.length > 0 && (
-            <span className="text-xs font-medium text-muted-foreground">{recentActivity.length} updates</span>
-          )}
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-64 sm:h-80 pr-1">
-            {recentActivity.length === 0 ? (
-              <div key="empty" className="text-center text-muted-foreground py-8">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No recent activity</p>
-              </div>
-            ) : (
-              <ul className="space-y-4">
-                {recentActivity.map((activity) => {
-                  const ActivityIcon = getActivityIcon(activity.type)
-                  const StatusIcon = getStatusIcon(activity.status)
+  // Sort files by updated_at descending and take top 10
+  const recentFiles = [...files]
+    .sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime())
+    .slice(0, 10)
 
-                  return (
-                    <li
-                      key={activity.id}
-                      className="p-4 border rounded-lg bg-background/40 backdrop-blur"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-full bg-primary/10 p-2 mt-1 text-primary">
-                          <ActivityIcon className="h-5 w-5" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-foreground capitalize">{activity.type}</span>
-                            <StatusIcon className={`h-4 w-4 ${getStatusColor(activity.status)}`} />
-                          </div>
-                          <p className="text-sm text-muted-foreground">{activity.details}</p>
-                          <p className="text-xs text-muted-foreground/80">{formatTime(activity.timestamp)}</p>
-                        </div>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </ScrollArea>
-        </CardContent>
-      </Card>
-    </div>
+  return (
+    <Card className="h-fit">
+      <CardHeader className="py-2 px-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
+          <span className="text-xs text-muted-foreground">{recentFiles.length}</span>
+        </div>
+      </CardHeader>
+      <CardContent className="px-3 pt-0 pr-4">
+        <ScrollArea className="h-[240px] pr-2">
+          {recentFiles.length === 0 ? (
+            <div className="text-center text-muted-foreground py-6">
+              <FileText className="w-6 h-6 mx-auto mb-2 opacity-50" />
+              <p className="text-xs">No recent activity</p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {recentFiles.map((file) => {
+                const ActivityIcon = getActivityIcon(file.status)
+                const filename = file.original_filename || file.filename || 'File'
+
+                return (
+                  <div
+                    key={file.upload_id}
+                    className="flex items-center gap-2.5 py-2 px-2.5 rounded-md hover:bg-muted/50 transition-colors"
+                  >
+                    <div className={`rounded-md p-1.5 ${getStatusBg(file.status)}`}>
+                      <ActivityIcon className={`h-3.5 w-3.5 ${getStatusColor(file.status)}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate" title={filename}>
+                        {filename.length > 20 ? filename.slice(0, 20) + '...' : filename}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {getActivityLabel(file.status)}
+                        {file.dq_score ? ` • ${file.dq_score}%` : ''}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                          {(file.updated_at || file.created_at) ? formatTime(file.updated_at ?? file.created_at ?? '') : ''}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </ScrollArea>
+      </CardContent>
+    </Card>
   )
 }

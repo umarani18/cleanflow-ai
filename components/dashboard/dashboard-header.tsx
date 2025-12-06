@@ -9,10 +9,36 @@ import { useAuth } from "@/components/providers/auth-provider"
 import { fileManagementAPI } from "@/lib/api/file-management-api"
 import { useToast } from "@/hooks/use-toast"
 
-export function DashboardHeader() {
+interface DashboardHeaderProps {
+  onRefresh?: () => Promise<void>
+}
+
+export function DashboardHeader({ onRefresh }: DashboardHeaderProps) {
   const { user, logout, isAuthenticated, idToken } = useAuth()
   const [exporting, setExporting] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const { toast } = useToast()
+
+  const handleRefresh = async () => {
+    if (!onRefresh) return
+    
+    setRefreshing(true)
+    try {
+      await onRefresh()
+      toast({
+        title: "Refreshed",
+        description: "Dashboard data updated successfully",
+      })
+    } catch (error) {
+      toast({
+        title: "Refresh failed",
+        description: "Failed to refresh dashboard data",
+        variant: "destructive",
+      })
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const handleLogout = () => {
     logout()
@@ -64,7 +90,7 @@ export function DashboardHeader() {
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Analytics Dashboard</h1>
         <p className="text-muted-foreground text-sm sm:text-base">
-          {isAuthenticated && user ? `Welcome back, ${user.email}` : 'Real-time insights into your ERP data transformation pipeline'}
+          {isAuthenticated && user ? `Welcome back, ${user.name || user.email}` : 'Real-time insights into your ERP data transformation pipeline'}
         </p>
       </div>
 
@@ -74,8 +100,12 @@ export function DashboardHeader() {
           Live Data
         </Badge>
 
-        <Button variant="outline" size="sm">
-          <RefreshCw className="w-4 h-4 mr-2" />
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+          {refreshing ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="w-4 h-4 mr-2" />
+          )}
           Refresh
         </Button>
 

@@ -9,7 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   idToken: string | null;
   accessToken: string | null;
-  signup: (email: string, password: string, confirmPassword: string) => Promise<any>;
+  signup: (email: string, password: string, confirmPassword: string, name?: string) => Promise<any>;
   confirmSignup: (email: string, code: string) => Promise<any>;
   login: (email: string, password: string) => Promise<any>;
   logout: () => void;

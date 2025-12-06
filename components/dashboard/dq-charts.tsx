@@ -13,16 +13,24 @@ interface DqChartsProps {
   files: FileStatusResponse[]
 }
 
-// Color palette - visible on both light and dark themes
+// Color palette - softer colors for charts (easy on the eyes)
 const CHART_COLORS = {
-  green: '#22C55E',      // Green - clean/success
-  yellow: '#EAB308',     // Yellow - fixed/warning
-  red: '#EF4444',        // Red - quarantined/failed
-  blue: '#3B82F6',       // Blue - processing/info
-  purple: '#8B5CF6',     // Purple - rows in
-  pink: '#EC4899',       // Pink - accent
-  teal: '#14B8A6',       // Teal - rows out
-  orange: '#F97316',     // Orange - secondary
+  // Solid colors for strokes/borders
+  green: '#22C55E',
+  yellow: '#EAB308',
+  red: '#EF4444',
+  blue: '#3B82F6',
+  purple: '#8B5CF6',
+  pink: '#EC4899',
+  teal: '#14B8A6',
+  orange: '#F97316',
+  // Softer fill colors with transparency - brighter for pie/bar charts
+  greenSoft: 'rgba(34, 197, 94, 0.75)',     // green-500/75
+  yellowSoft: 'rgba(234, 179, 8, 0.75)',    // yellow-500/75
+  redSoft: 'rgba(239, 68, 68, 0.7)',        // red-500/70
+  blueSoft: 'rgba(59, 130, 246, 0.65)',     // blue-500/65
+  purpleSoft: 'rgba(139, 92, 246, 0.4)',    // purple-500/40
+  tealSoft: 'rgba(20, 184, 166, 0.4)',      // teal-500/40
 }
 
 const chartConfig = {
@@ -91,9 +99,9 @@ export function DqCharts({ files }: DqChartsProps) {
   const failedFiles = files.filter(f => ['DQ_FAILED', 'UPLOAD_FAILED'].includes(f.status))
 
   const totalRowsIn = completedFiles.reduce((sum, f) => sum + (f.rows_in || 0), 0)
-  const totalRowsOut = completedFiles.reduce((sum, f) => sum + (f.rows_out || f.rows_clean || 0), 0)
   const totalRowsFixed = completedFiles.reduce((sum, f) => sum + (f.rows_fixed || 0), 0)
   const totalRowsQuarantined = completedFiles.reduce((sum, f) => sum + (f.rows_quarantined || 0), 0)
+  const totalRowsOut = totalRowsIn - totalRowsQuarantined
   const avgDqScore = completedFiles.length > 0
     ? completedFiles.reduce((sum, f) => sum + (f.dq_score || 0), 0) / completedFiles.length
     : 0
@@ -106,8 +114,7 @@ export function DqCharts({ files }: DqChartsProps) {
           filesProcessed: stats.files_processed,
           filesDeleted: stats.files_deleted,
           rowsIn: stats.rows_in,
-          rowsOut: stats.rows_out,
-          rowsFixed: stats.rows_fixed,
+          cleanRows: stats.rows_in - stats.rows_quarantined,
           rowsQuarantined: stats.rows_quarantined,
           processingTime: stats.total_processing_time_seconds,
         }))
@@ -120,16 +127,16 @@ export function DqCharts({ files }: DqChartsProps) {
 
   // Data quality distribution pie chart data
   const dqDistributionData = [
-    { name: 'Clean', value: totalRowsOut - totalRowsFixed, fill: CHART_COLORS.green },
-    { name: 'Fixed', value: totalRowsFixed, fill: CHART_COLORS.yellow },
-    { name: 'Quarantined', value: totalRowsQuarantined, fill: CHART_COLORS.red },
+    { name: 'Clean', value: totalRowsOut - totalRowsFixed, fill: CHART_COLORS.greenSoft },
+    { name: 'Fixed', value: totalRowsFixed, fill: CHART_COLORS.yellowSoft },
+    { name: 'Quarantined', value: totalRowsQuarantined, fill: CHART_COLORS.redSoft },
   ].filter(d => d.value > 0)
 
   // File status distribution
   const fileStatusData = [
-    { name: 'Completed', value: completedFiles.length, fill: CHART_COLORS.green },
-    { name: 'Processing', value: processingFiles.length, fill: CHART_COLORS.blue },
-    { name: 'Failed', value: failedFiles.length, fill: CHART_COLORS.red },
+    { name: 'Completed', value: completedFiles.length, fill: CHART_COLORS.greenSoft },
+    { name: 'Processing', value: processingFiles.length, fill: CHART_COLORS.blueSoft },
+    { name: 'Failed', value: failedFiles.length, fill: CHART_COLORS.redSoft },
   ].filter(d => d.value > 0)
 
   // Per-file DQ scores for bar chart
@@ -138,7 +145,7 @@ export function DqCharts({ files }: DqChartsProps) {
     .map(f => ({
       name: (f.original_filename || f.filename || 'File').slice(0, 15) + ((f.original_filename || f.filename || '').length > 15 ? '...' : ''),
       score: f.dq_score || 0,
-      fill: (f.dq_score || 0) >= 90 ? CHART_COLORS.green : (f.dq_score || 0) >= 70 ? CHART_COLORS.yellow : CHART_COLORS.red
+      fill: (f.dq_score || 0) >= 90 ? CHART_COLORS.greenSoft : (f.dq_score || 0) >= 70 ? CHART_COLORS.yellowSoft : CHART_COLORS.redSoft
     }))
 
   if (loading) {
@@ -150,71 +157,81 @@ export function DqCharts({ files }: DqChartsProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Key Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
               <FileText className="h-4 w-4 text-blue-500" />
               <span className="text-sm text-muted-foreground">Total Files</span>
             </div>
-            <div className="text-3xl font-bold">{files.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">{completedFiles.length} processed</p>
+            <div className="text-2xl font-bold">{files.length}</div>
+            <p className="text-xs text-muted-foreground">{completedFiles.length} processed</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
               <TrendingUp className="h-4 w-4 text-green-500" />
               <span className="text-sm text-muted-foreground">Avg DQ Score</span>
             </div>
-            <div className="text-3xl font-bold">{avgDqScore.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <div className="text-2xl font-bold">{avgDqScore.toFixed(1)}%</div>
+            <Badge 
+              variant="secondary" 
+              className={`text-[10px] px-2 py-0.5 ${
+                avgDqScore >= 90 
+                  ? 'bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/30' 
+                  : avgDqScore >= 70 
+                      ? 'bg-yellow-500/10 text-yellow dark:text-yellow-400 hover:bg-yellow-500/30' 
+                    : 'bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/30'
+              }`}
+            >
               {avgDqScore >= 90 ? 'Excellent' : avgDqScore >= 70 ? 'Good' : 'Needs attention'}
-            </p>
+            </Badge>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
               <CheckCircle className="h-4 w-4 text-green-500" />
               <span className="text-sm text-muted-foreground">Rows Processed</span>
             </div>
-            <div className="text-3xl font-bold">{totalRowsIn.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">{totalRowsOut.toLocaleString()} clean output</p>
+            <div className="text-2xl font-bold">{totalRowsIn.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{totalRowsOut.toLocaleString()} clean output</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
               <span className="text-sm text-muted-foreground">Issues Fixed</span>
             </div>
-            <div className="text-3xl font-bold">{totalRowsFixed.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">{totalRowsQuarantined.toLocaleString()} quarantined</p>
+            <div className="text-2xl font-bold">{totalRowsFixed.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{totalRowsQuarantined.toLocaleString()} quarantined</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Charts Row: DQ Score Distribution (1/2) + Data Quality Distribution (1/2) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
         {/* Data Quality Distribution */}
         <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">Data Quality Distribution</CardTitle>
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-sm font-semibold">Data Quality Distribution</CardTitle>
             <CardDescription className="text-xs">Breakdown of processed rows by status</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3 pt-1">
             {dqDistributionData.length > 0 ? (
-              <ChartContainer config={chartConfig} className="h-[250px] w-full">
+              <ChartContainer config={chartConfig} className="h-[220px] w-full">
                 <PieChart>
                   <Pie
                     data={dqDistributionData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
+                    innerRadius={50}
+                    outerRadius={80}
                     paddingAngle={3}
                     dataKey="value"
                     label={({ name, percent }) => `${name} ${((percent as number) * 100).toFixed(0)}%`}
@@ -229,7 +246,7 @@ export function DqCharts({ files }: DqChartsProps) {
                 </PieChart>
               </ChartContainer>
             ) : (
-              <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
+              <div className="h-[220px] flex items-center justify-center text-muted-foreground text-xs">
                 No data available
               </div>
             )}
@@ -238,36 +255,35 @@ export function DqCharts({ files }: DqChartsProps) {
 
         {/* DQ Score Distribution */}
         <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold">DQ Score Distribution</CardTitle>
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-sm font-semibold">DQ Score Distribution</CardTitle>
             <CardDescription className="text-xs">Files grouped by quality score range</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-3 pt-1">
             {completedFiles.length > 0 ? (
               (() => {
-                // Group files by score ranges
                 const excellent = completedFiles.filter(f => (f.dq_score || 0) >= 90).length
                 const good = completedFiles.filter(f => (f.dq_score || 0) >= 70 && (f.dq_score || 0) < 90).length
-                const needsWork = completedFiles.filter(f => (f.dq_score || 0) < 70).length
+                const bad = completedFiles.filter(f => (f.dq_score || 0) < 70).length
                 
                 const scoreDistData = [
-                  { name: 'Excellent (90-100%)', value: excellent, fill: CHART_COLORS.green },
-                  { name: 'Good (70-89%)', value: good, fill: CHART_COLORS.yellow },
-                  { name: 'Needs Work (<70%)', value: needsWork, fill: CHART_COLORS.red },
+                  { name: 'Excellent (90-100%)', value: excellent, fill: CHART_COLORS.greenSoft },
+                  { name: 'Good (70-89%)', value: good, fill: CHART_COLORS.yellowSoft },
+                  { name: 'Bad (<70%)', value: bad, fill: CHART_COLORS.redSoft },
                 ].filter(d => d.value > 0)
 
                 return (
-                  <div className="space-y-4">
+                  <div className="flex flex-col gap-3">
                     <ChartContainer config={chartConfig} className="h-[180px] w-full">
-                      <BarChart data={scoreDistData} layout="vertical" margin={{ left: 0, right: 20 }}>
+                      <BarChart data={scoreDistData} layout="vertical" margin={{ left: 0, right: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E5E7EB" />
-                        <XAxis type="number" stroke="#9CA3AF" fontSize={11} />
-                        <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} stroke="#9CA3AF" />
+                        <XAxis type="number" stroke="#9CA3AF" fontSize={10} />
+                        <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10 }} stroke="#9CA3AF" />
                         <ChartTooltip 
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                               return (
-                                <div className="bg-background border rounded-lg shadow-md p-2.5 text-sm">
+                                <div className="bg-background border rounded-lg shadow-md p-2 text-xs">
                                   <p className="font-medium">{payload[0].payload.name}</p>
                                   <p className="text-muted-foreground">{payload[0].value} files</p>
                                 </div>
@@ -283,25 +299,25 @@ export function DqCharts({ files }: DqChartsProps) {
                         </Bar>
                       </BarChart>
                     </ChartContainer>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="p-2 rounded-lg bg-green-500/10">
+                    <div className="flex gap-2 justify-center">
+                      <div className="p-2 rounded-lg bg-green-500/10 text-center flex-1">
                         <p className="text-lg font-bold text-green-600 dark:text-green-400">{excellent}</p>
                         <p className="text-xs text-muted-foreground">Excellent</p>
                       </div>
-                      <div className="p-2 rounded-lg bg-yellow-500/10">
+                      <div className="p-2 rounded-lg bg-yellow-500/10 text-center flex-1">
                         <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{good}</p>
                         <p className="text-xs text-muted-foreground">Good</p>
                       </div>
-                      <div className="p-2 rounded-lg bg-red-500/10">
-                        <p className="text-lg font-bold text-red-600 dark:text-red-400">{needsWork}</p>
-                        <p className="text-xs text-muted-foreground">Needs Work</p>
+                      <div className="p-2 rounded-lg bg-red-500/10 text-center flex-1">
+                        <p className="text-lg font-bold text-red-600 dark:text-red-400">{bad}</p>
+                        <p className="text-xs text-muted-foreground">Bad</p>
                       </div>
                     </div>
                   </div>
                 )
               })()
             ) : (
-              <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
+              <div className="h-[220px] flex items-center justify-center text-muted-foreground text-xs">
                 No processed files yet
               </div>
             )}
@@ -309,58 +325,197 @@ export function DqCharts({ files }: DqChartsProps) {
         </Card>
       </div>
 
-      {/* Monthly Trends - Only show if we have overall report data */}
-      {monthlyData.length > 0 && (
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-              Monthly Processing Trends
-            </CardTitle>
-            <CardDescription className="text-xs">Files processed and rows handled over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-[280px] w-full">
-              <AreaChart data={monthlyData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#9CA3AF" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#9CA3AF" />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Area
-                  type="monotone"
-                  dataKey="rowsIn"
-                  stackId="1"
-                  stroke={CHART_COLORS.purple}
-                  fill={CHART_COLORS.purple}
-                  fillOpacity={0.5}
-                  name="Rows In"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="rowsFixed"
-                  stackId="2"
-                  stroke={CHART_COLORS.yellow}
-                  fill={CHART_COLORS.yellow}
-                  fillOpacity={0.5}
-                  name="Rows Fixed"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="rowsQuarantined"
-                  stackId="3"
-                  stroke={CHART_COLORS.red}
-                  fill={CHART_COLORS.red}
-                  fillOpacity={0.5}
-                  name="Quarantined"
-                />
-                <Legend wrapperStyle={{ fontSize: '12px' }} formatter={(value) => <span className="text-foreground">{value}</span>} />
-              </AreaChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      )}
-
+      {/* Monthly Trends - Full width with comprehensive data */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-1 pt-3 px-4">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            Monthly Trends
+          </CardTitle>
+          <CardDescription className="text-xs">Row statistics over time</CardDescription>
+        </CardHeader>
+        <CardContent className="px-4 pb-3 pt-1">
+          {monthlyData.length > 0 ? (
+            <div className="h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthlyData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{ fontSize: 11 }} 
+                    stroke="#9CA3AF" 
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 10 }} 
+                    stroke="#9CA3AF" 
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}
+                  />
+                  <ChartTooltip 
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-background border rounded-lg shadow-md p-3 text-xs">
+                            <p className="font-medium mb-2">{label}</p>
+                            {payload.map((entry, index) => (
+                              <div key={index} className="flex justify-between gap-4">
+                                <span style={{ color: entry.color }}>{entry.name}:</span>
+                                <span className="font-medium">{Number(entry.value).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }
+                      return null
+                    }} 
+                  />
+                  <Legend 
+                    wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                    iconType="circle"
+                    iconSize={8}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="rowsIn" 
+                    name="Rows In" 
+                    stroke={CHART_COLORS.purple} 
+                    fill={CHART_COLORS.purpleSoft}
+                    fillOpacity={0.5}
+                    strokeWidth={2}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="cleanRows" 
+                    name="Clean Rows" 
+                    stroke={CHART_COLORS.green} 
+                    fill={CHART_COLORS.greenSoft}
+                    fillOpacity={0.5}
+                    strokeWidth={2}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="rowsQuarantined" 
+                    name="Quarantined" 
+                    stroke={CHART_COLORS.red} 
+                    fill={CHART_COLORS.redSoft}
+                    fillOpacity={0.5}
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-[280px] flex items-center justify-center text-muted-foreground text-xs">
+              No monthly data available
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
+  )
+}
+
+// Compact Monthly Trends for sidebar
+export function MonthlyTrendsCompact({ files }: DqChartsProps) {
+  const { idToken } = useAuth()
+  const [overallReport, setOverallReport] = useState<OverallDqReportResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadOverallReport = async () => {
+      if (!idToken) return
+      try {
+        const report = await fileManagementAPI.downloadOverallDqReport(idToken)
+        setOverallReport(report)
+      } catch (error) {
+        console.error('Error loading overall DQ report:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadOverallReport()
+  }, [idToken])
+
+  const monthlyData = overallReport?.months
+    ? Object.entries(overallReport.months)
+        .map(([month, stats]) => ({
+          month: month.split('/')[0],
+          rows: stats.rows_in,
+          fixed: stats.rows_fixed,
+        }))
+        .sort((a, b) => {
+          const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+          return months.indexOf(a.month) - months.indexOf(b.month)
+        })
+        .slice(-6)
+    : []
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="p-4 flex items-center justify-center h-[140px]">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (monthlyData.length === 0) {
+    return null
+  }
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+  return (
+    <Card>
+      <CardHeader className="py-3 px-4 pb-1">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+          Monthly Trends
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 pb-4 pt-2">
+        <div className="h-[100px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={monthlyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <XAxis 
+                dataKey="month" 
+                tick={{ fontSize: 9 }} 
+                stroke="#9CA3AF" 
+                tickFormatter={(val) => monthNames[parseInt(val) - 1] || val}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis hide />
+              <ChartTooltip 
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="bg-background border rounded-md shadow-sm p-2 text-xs">
+                        <p className="font-medium">{monthNames[parseInt(payload[0].payload.month) - 1]}</p>
+                        <p className="text-muted-foreground">{payload[0].value?.toLocaleString()} rows</p>
+                      </div>
+                    )
+                  }
+                  return null
+                }} 
+              />
+              <Area
+                type="monotone"
+                dataKey="rows"
+                stroke={CHART_COLORS.purple}
+                fill={CHART_COLORS.purpleSoft}
+                fillOpacity={0.5}
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -368,9 +523,9 @@ export function DqCharts({ files }: DqChartsProps) {
 export function ProcessingSummary({ files }: DqChartsProps) {
   const completedFiles = files.filter(f => f.status === 'DQ_FIXED')
   const totalRowsIn = completedFiles.reduce((sum, f) => sum + (f.rows_in || 0), 0)
-  const totalRowsOut = completedFiles.reduce((sum, f) => sum + (f.rows_out || f.rows_clean || 0), 0)
   const totalRowsFixed = completedFiles.reduce((sum, f) => sum + (f.rows_fixed || 0), 0)
   const totalRowsQuarantined = completedFiles.reduce((sum, f) => sum + (f.rows_quarantined || 0), 0)
+  const totalRowsOut = totalRowsIn - totalRowsQuarantined
 
   return (
     <Card>
