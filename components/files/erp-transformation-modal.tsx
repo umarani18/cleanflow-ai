@@ -31,6 +31,7 @@ const SUPPORTED_ERPS = [
   "QAD ERP",
   "IFS Cloud",
   "Sage Intacct",
+  "Custom ERP"
 ]
 
 export function ERPTransformationModal({
