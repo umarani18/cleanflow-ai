@@ -3,7 +3,7 @@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AnimatePresence, motion } from "framer-motion"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { CheckCircle, Eye, EyeOff, Lock, Mail } from "lucide-react"
+import { CheckCircle, Eye, EyeOff, Lock, Mail, Shield } from "lucide-react"
 import { LoadingDots, LoadingSpinner } from "@/components/ui/loading"
 import { useEffect, useState } from 'react'
 
@@ -13,6 +13,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useAuth } from "@/components/providers/auth-provider"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export function LoginForm() {
   const [email, setEmail] = useState('')
@@ -23,11 +30,34 @@ export function LoginForm() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [mounted, setMounted] = useState(false)
+  const [showMfaModal, setShowMfaModal] = useState(false)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaError, setMfaError] = useState('')
+  const [isSendingCode, setIsSendingCode] = useState(false)
+  const [isVerifyingMfa, setIsVerifyingMfa] = useState(false)
   const { login } = useAuth()
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Function to mask email - show first 2 chars, last char, and mask the middle
+  const maskEmail = (email: string): string => {
+    const [localPart, domain] = email.split('@')
+    if (!localPart || !domain) return email
+    
+    if (localPart.length <= 3) {
+      return `${localPart[0]}***@${domain}`
+    }
+    
+    // Show first 2 characters, mask middle, show last character
+    const firstPart = localPart.substring(0, 2)
+    const lastChar = localPart[localPart.length - 1]
+    const middleLength = localPart.length - 3
+    const masked = '*'.repeat(Math.max(middleLength, 4))
+    
+    return `${firstPart}${masked}${lastChar}@${domain}`
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,18 +67,49 @@ export function LoginForm() {
 
     try {
       const result = await login(email, password)
-      setSuccess(result.message)
-      setIsVerifying(true)
-
-      // Add a small delay for verification animation
+      
+      // Show MFA modal immediately without success message
       setTimeout(() => {
-        window.location.href = '/dashboard'
-      }, 2000)
+        setShowMfaModal(true)
+        setIsLoading(false)
+      }, 1000)
     } catch (err: any) {
       setError(err.message)
-    } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleSendCode = () => {
+    setIsSendingCode(true)
+    setMfaError('')
+    
+    // Simulate sending code
+    setTimeout(() => {
+      setIsSendingCode(false)
+      setSuccess('Verification code sent to your email!')
+      setTimeout(() => setSuccess(''), 3000)
+    }, 1000)
+  }
+
+  const handleVerifyMfa = () => {
+    setMfaError('')
+    
+    // Check if code is 6 digits
+    if (mfaCode.length !== 6 || !/^\d{6}$/.test(mfaCode)) {
+      setMfaError('Please enter a valid 6-digit code')
+      return
+    }
+
+    setIsVerifyingMfa(true)
+    
+    // Simulate verification (any 6-digit code works)
+    setTimeout(() => {
+      setIsVerifyingMfa(false)
+      setIsVerifying(true)
+      setTimeout(() => {
+        window.location.href = '/dashboard'
+      }, 1500)
+    }, 1000)
   }
 
   if (!mounted) return null
@@ -252,6 +313,95 @@ export function LoginForm() {
           </p>
         </CardContent>
       </Card>
+
+      {/* MFA Modal */}
+      <Dialog open={showMfaModal} onOpenChange={setShowMfaModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-center mb-4">
+              <div className="rounded-full bg-primary/10 p-3">
+                <Shield className="w-8 h-8 text-primary" />
+              </div>
+            </div>
+            <DialogTitle className="text-center text-2xl">Two-Factor Authentication</DialogTitle>
+            <DialogDescription className="text-center">
+              We've sent a verification code to{' '}
+              <span className="font-medium text-foreground">{maskEmail(email)}</span>
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-6">
+            {/* MFA Code Input */}
+            <div className="space-y-3">
+              <Label htmlFor="mfa-code" className="text-sm font-medium">
+                Enter 6-digit code
+              </Label>
+              <Input
+                id="mfa-code"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                placeholder="000000"
+                value={mfaCode}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '')
+                  setMfaCode(value)
+                }}
+                className="h-12 text-center text-2xl tracking-widest font-mono mt-2"
+                disabled={isVerifyingMfa || isVerifying}
+              />
+            </div>
+
+            {/* MFA Error */}
+            {mfaError && (
+              <Alert variant="destructive" className="bg-red-50 border-red-200">
+                <AlertDescription className="text-red-700">{mfaError}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Verify Button */}
+            <Button
+              onClick={handleVerifyMfa}
+              className="w-full h-12"
+              disabled={mfaCode.length !== 6 || isVerifyingMfa || isVerifying}
+            >
+              {isVerifyingMfa ? (
+                <div className="flex items-center space-x-2">
+                  <LoadingSpinner size="sm" />
+                  <span>Verifying...</span>
+                </div>
+              ) : isVerifying ? (
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Verified! Redirecting...</span>
+                </div>
+              ) : (
+                'Verify Code'
+              )}
+            </Button>
+
+            {/* Send Code Button */}
+            <div className="text-center">
+              <Button
+                variant="link"
+                onClick={handleSendCode}
+                disabled={isSendingCode}
+                className="text-sm"
+              >
+                {isSendingCode ? (
+                  <div className="flex items-center space-x-2">
+                    <LoadingSpinner size="sm" />
+                    <span>Sending...</span>
+                  </div>
+                ) : (
+                  "Didn't receive code? Resend"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -55,7 +55,8 @@ export function AnalyticsSection({ files }: AnalyticsSectionProps) {
             value: `${avgDqScore.toFixed(1)}%`,
             change: avgDqScore > 90 ? '+5%' : avgDqScore > 70 ? '+2%' : '0%',
             icon: Gauge,
-            color: 'text-green-400'
+            color: 'text-green-400',
+            valueColor: avgDqScore >= 90 ? 'text-green-500' : avgDqScore >= 70 ? 'text-yellow-500' : 'text-red-500'
           },
           {
             title: 'Rows Processed',
@@ -87,7 +88,7 @@ export function AnalyticsSection({ files }: AnalyticsSectionProps) {
                 </Badge> */}
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold mb-1">{stat.value}</div>
+                <div className={`text-3xl font-bold mb-1 ${(stat as any).valueColor || ''}`}>{stat.value}</div>
                 <p className="text-xs text-muted-foreground">vs last period</p>
               </CardContent>
             </Card>

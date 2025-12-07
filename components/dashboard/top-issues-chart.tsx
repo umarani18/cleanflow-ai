@@ -70,9 +70,9 @@ export function TopIssuesChart() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pt-2 pb-4">
+      <CardContent className="pt-2 pb-3 max-h-[280px] overflow-y-auto">
         {/* Compact treemap-style visualization */}
-        <div className="grid grid-cols-12 gap-1 h-20 mb-4">
+        <div className="grid grid-cols-12 gap-1 h-14 mb-2">
           {TOP_ISSUES.map((issue, index) => (
             <div
               key={issue.id}

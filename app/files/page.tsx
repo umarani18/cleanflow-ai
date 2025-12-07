@@ -54,6 +54,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   Table,
   TableBody,
   TableCell,
@@ -72,12 +81,16 @@ import UnifiedBridgeImport from "@/components/unified-bridge/unified-bridge-impo
 import { PushToERPModal } from "@/components/files/push-to-erp-modal"
 
 const STATUS_OPTIONS = [
-  { label: "All", value: "all" },
-  { label: "Uploaded", value: "UPLOADED" },
-  { label: "Processed", value: "DQ_FIXED" },
-  { label: "Processing", value: "DQ_RUNNING" },
-  { label: "Queued", value: "QUEUED" },
-  { label: "Failed", value: "FAILED" },
+  { label: "All", value: "all", type: "status" },
+  { label: "Uploaded", value: "UPLOADED", type: "status" },
+  { label: "Processed", value: "DQ_FIXED", type: "status" },
+  { label: "Processing", value: "DQ_RUNNING", type: "status" },
+  { label: "Queued", value: "QUEUED", type: "status" },
+  { label: "Failed", value: "FAILED", type: "status" },
+  { label: "separator", value: "separator", type: "separator" },
+  { label: "Excellent (90-100%)", value: "excellent", type: "quality" },
+  { label: "Good (70-90%)", value: "good", type: "quality" },
+  { label: "Bad (<70%)", value: "bad", type: "quality" },
 ]
 
 const SOURCE_OPTIONS = [
@@ -170,12 +183,42 @@ function FilesPageContent() {
     loadFiles()
   }, [loadFiles])
 
+  const getDqQuality = (score: number | null | undefined): "excellent" | "good" | "bad" | null => {
+    if (typeof score !== "number") return null
+    if (score >= 90) return "excellent"
+    if (score >= 70) return "good"
+    return "bad"
+  }
+
+  const getDqQualityLabel = (score: number | null | undefined): string => {
+    const quality = getDqQuality(score)
+    if (!quality) return "—"
+    if (quality === "excellent") return "Excellent"
+    if (quality === "good") return "Good"
+    return "Bad"
+  }
+
   const filteredFiles = files
     .filter((file) => {
       const name = (file.original_filename || file.filename || "").toLowerCase()
       const matchesSearch = name.includes(searchQuery.toLowerCase())
-      const matchesStatus = statusFilter === "all" || file.status === statusFilter
-      return matchesSearch && matchesStatus
+      
+      // Check if statusFilter is a status or quality filter
+      const filterOption = STATUS_OPTIONS.find(opt => opt.value === statusFilter)
+      if (!filterOption || filterOption.value === "all") {
+        return matchesSearch
+      }
+      
+      if (filterOption.type === "status") {
+        return matchesSearch && file.status === statusFilter
+      }
+      
+      if (filterOption.type === "quality") {
+        const fileQuality = getDqQuality(file.dq_score)
+        return matchesSearch && fileQuality === statusFilter
+      }
+      
+      return matchesSearch
     })
     .sort((a, b) => {
       let comparison = 0
@@ -624,9 +667,6 @@ function FilesPageContent() {
                       Use custom rules (LLM)
                     </Label>
                   </div>
-                  <span className="text-xs text-muted-foreground hidden sm:block">
-                    Applied after deterministic + hybrid checks
-                  </span>
                 </div>
                 <Textarea
                   className="min-h-[80px] text-sm resize-none"
@@ -739,16 +779,30 @@ function FilesPageContent() {
                     className="h-9 w-full sm:w-48 pl-8 text-sm"
                   />
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-9 w-32 sm:w-36 text-sm">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-9 w-32 sm:w-36 text-sm justify-between">
+                      <span className="truncate">{STATUS_OPTIONS.find(opt => opt.value === statusFilter)?.label || "Filter"}</span>
+                      <Filter className="h-3.5 w-3.5 ml-2 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    <DropdownMenuItem onClick={() => setStatusFilter("all")}>All</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusFilter("UPLOADED")}>Uploaded</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusFilter("DQ_FIXED")}>Processed</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusFilter("DQ_RUNNING")}>Processing</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusFilter("QUEUED")}>Queued</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusFilter("FAILED")}>Failed</DropdownMenuItem>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>Quality</DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuItem onClick={() => setStatusFilter("excellent")}>Excellent</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setStatusFilter("good")}>Good</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setStatusFilter("bad")}>Bad</DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 {(searchQuery || statusFilter !== "all") && (
                   <Button
                     variant="ghost"
@@ -783,6 +837,7 @@ function FilesPageContent() {
                       >
                         <span className="flex items-center">Score<SortIcon field="score" /></span>
                       </TableHead>
+                      <TableHead className="text-xs hidden 2xl:table-cell">DQ Quality</TableHead>
                       <TableHead className="text-xs hidden md:table-cell">Rows</TableHead>
                       <TableHead 
                         className="text-xs cursor-pointer hover:text-foreground transition-colors"
@@ -840,6 +895,18 @@ function FilesPageContent() {
                               getScoreBadgeColor(file.dq_score)
                             )}>
                               {file.dq_score.toFixed(1)}%
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden 2xl:table-cell">
+                          {typeof file.dq_score === "number" ? (
+                            <Badge variant="outline" className={cn(
+                              "w-20 justify-center text-xs font-medium",
+                              getScoreBadgeColor(file.dq_score)
+                            )}>
+                              {getDqQualityLabel(file.dq_score)}
                             </Badge>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
@@ -922,7 +989,7 @@ function FilesPageContent() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 sm:h-8 sm:w-8"
+                                  className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                                   onClick={() => handleDeleteClick(file)}
                                   disabled={deleting === file.upload_id}
                                 >
@@ -1018,4 +1085,3 @@ function FilesPageContent() {
     </TooltipProvider>
   )
 }
-
