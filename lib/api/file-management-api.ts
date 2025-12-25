@@ -9,6 +9,7 @@ const ENDPOINTS = {
   FILES: '/files',                                        // GET - list all files
   FILES_PROCESS: (id: string) => `/files/${id}/process`, // POST - start processing
   FILES_STATUS: (id: string) => `/files/${id}/status`,   // GET - check status
+  FILES_COLUMNS: (id: string) => `/files/${id}/columns`, // GET - discover columns
   FILES_EXPORT: (id: string) => `/files/${id}/export`,   // GET - download files
 }
 
@@ -198,24 +199,40 @@ class FileManagementAPI {
     return this.getFilePreviewFromS3(uploadId, authToken, 20)
   }
 
-  async startProcessing(uploadId: string, authToken: string, options?: { use_custom_rules?: boolean; custom_rule_prompt?: string | null }): Promise<any> {
-    console.log('▶️ Starting processing:', uploadId, options?.use_custom_rules ? '(with custom rules)' : '')
+  async startProcessing(
+    uploadId: string,
+    authToken: string,
+    options?: { use_custom_rules?: boolean; custom_rule_prompt?: string | null; selected_columns?: string[] }
+  ): Promise<any> {
+    console.log('Starting processing:', uploadId, options?.use_custom_rules ? '(with custom rules)' : '')
     const payload: Record<string, any> = {}
-    
+
     if (options?.use_custom_rules) {
       payload.use_custom_rules = true
       if (options.custom_rule_prompt) {
         payload.custom_rule_prompt = options.custom_rule_prompt
       }
     }
-    
-    return this.makeRequest(ENDPOINTS.FILES_PROCESS(uploadId), authToken, { 
+
+    if (options?.selected_columns && Array.isArray(options.selected_columns)) {
+      const filtered = options.selected_columns
+        .map(c => (c ?? '').toString().trim())
+        .filter(c => c.length > 0)
+      if (filtered.length > 0) {
+        payload.selected_columns = filtered
+      }
+    }
+
+    return this.makeRequest(ENDPOINTS.FILES_PROCESS(uploadId), authToken, {
       method: "POST",
       body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined
     })
   }
 
-  async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine' | 'raw' | 'original' | 'all', authToken: string, targetErp?: string): Promise<Blob> {
+  async getFileColumns(uploadId: string, authToken: string): Promise<{ columns: string[] }> {
+    return this.makeRequest(ENDPOINTS.FILES_COLUMNS(uploadId), authToken, { method: 'GET' })
+  }
+async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine' | 'raw' | 'original' | 'all', authToken: string, targetErp?: string): Promise<Blob> {
     let endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}`
     
     // Add ERP transformation parameter if specified

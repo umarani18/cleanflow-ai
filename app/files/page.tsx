@@ -156,6 +156,12 @@ function FilesPageContent() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [useCustomRules, setUseCustomRules] = useState(false)
   const [customRulePrompt, setCustomRulePrompt] = useState("")
+  const [columnModalOpen, setColumnModalOpen] = useState(false)
+  const [columnModalFile, setColumnModalFile] = useState<FileStatusResponse | null>(null)
+  const [availableColumns, setAvailableColumns] = useState<string[]>([])
+  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
+  const [columnsLoading, setColumnsLoading] = useState(false)
+  const [columnsError, setColumnsError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
@@ -371,13 +377,14 @@ function FilesPageContent() {
     })
   }
 
-  const handleStartProcessing = async (file: FileStatusResponse) => {
+  const doStartProcessing = async (file: FileStatusResponse, cols?: string[]) => {
     if (!idToken) return
 
     try {
       await fileManagementAPI.startProcessing(file.upload_id, idToken, {
         use_custom_rules: useCustomRules,
         custom_rule_prompt: useCustomRules ? customRulePrompt.trim() || null : null,
+        selected_columns: cols,
       })
       toast({
         title: "Processing Started",
@@ -392,6 +399,78 @@ function FilesPageContent() {
         variant: "destructive",
       })
     }
+  }
+
+  const handleStartProcessing = async (file: FileStatusResponse) => {
+    if (!idToken) return
+
+    setColumnModalFile(file)
+    setColumnModalOpen(true)
+    setColumnsLoading(true)
+    setColumnsError(null)
+
+    try {
+      const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
+      const cols = resp.columns || []
+      setAvailableColumns(cols)
+      setSelectedColumns(new Set(cols))
+      if (cols.length === 0) {
+        setColumnsError("No columns detected for this file. You can still proceed to process all columns.")
+      }
+    } catch (error) {
+      console.error("Failed to fetch columns:", error)
+      setAvailableColumns([])
+      setSelectedColumns(new Set())
+      setColumnsError("Unable to fetch columns. You can proceed to process all columns or cancel.")
+    } finally {
+      setColumnsLoading(false)
+    }
+  }
+
+  const handleColumnConfirm = async () => {
+    if (!columnModalFile || !idToken) return
+
+    const cols =
+      availableColumns.length === 0 ? undefined : Array.from(selectedColumns.values())
+
+    if (availableColumns.length > 0 && (!cols || cols.length === 0)) {
+      toast({
+        title: "Select at least one column",
+        description: "Choose the columns to process or cancel.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setColumnModalOpen(false)
+    await doStartProcessing(columnModalFile, cols)
+    setColumnModalFile(null)
+    setSelectedColumns(new Set())
+    setAvailableColumns([])
+  }
+
+  const handleColumnCancel = () => {
+    setColumnModalOpen(false)
+    setColumnModalFile(null)
+    setSelectedColumns(new Set())
+    setAvailableColumns([])
+    setColumnsError(null)
+  }
+
+  const handleToggleColumn = (col: string, checked: boolean) => {
+    setSelectedColumns((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(col)
+      } else {
+        next.delete(col)
+      }
+      return next
+    })
+  }
+
+  const handleToggleAllColumns = (checked: boolean) => {
+    setSelectedColumns(checked ? new Set(availableColumns) : new Set())
   }
 
   const handleDeleteClick = (file: FileStatusResponse) => {
@@ -1019,6 +1098,67 @@ function FilesPageContent() {
         )}
 
         {/* Modals */}
+        <AlertDialog open={columnModalOpen} onOpenChange={setColumnModalOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Select columns to process</AlertDialogTitle>
+              <AlertDialogDescription>
+                Choose which columns should be included for this run. All columns are selected by default.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-3">
+              {columnsLoading ? (
+                <div className="flex items-center space-x-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading columns...</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="select-all-columns"
+                      checked={
+                        availableColumns.length > 0 &&
+                        selectedColumns.size === availableColumns.length
+                      }
+                      onCheckedChange={(checked) => handleToggleAllColumns(Boolean(checked))}
+                    />
+                    <Label htmlFor="select-all-columns" className="text-sm">
+                      Select all
+                    </Label>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                    {availableColumns.map((col) => (
+                      <div key={col} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`col-${col}`}
+                          checked={selectedColumns.has(col)}
+                          onCheckedChange={(checked) => handleToggleColumn(col, Boolean(checked))}
+                        />
+                        <Label htmlFor={`col-${col}`} className="text-sm">
+                          {col}
+                        </Label>
+                      </div>
+                    ))}
+                    {availableColumns.length === 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        Columns could not be detected automatically. You can still proceed to process all columns.
+                      </p>
+                    )}
+                  </div>
+                  {columnsError && <p className="text-sm text-destructive">{columnsError}</p>}
+                </>
+              )}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleColumnCancel}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleColumnConfirm} disabled={columnsLoading}>
+                Proceed
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <AlertDialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
           <AlertDialogContent>
             <AlertDialogHeader>
