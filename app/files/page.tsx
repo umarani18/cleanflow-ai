@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import * as XLSX from "xlsx"
 import {
   Upload,
   FileText,
@@ -162,8 +163,10 @@ function FilesPageContent() {
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
   const [columnsLoading, setColumnsLoading] = useState(false)
   const [columnsError, setColumnsError] = useState<string | null>(null)
+  const [selectionFileError, setSelectionFileError] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const selectionFileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const { idToken } = useAuth()
 
@@ -408,6 +411,7 @@ function FilesPageContent() {
     setColumnModalOpen(true)
     setColumnsLoading(true)
     setColumnsError(null)
+    setSelectionFileError(null)
 
     try {
       const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
@@ -447,6 +451,7 @@ function FilesPageContent() {
     setColumnModalFile(null)
     setSelectedColumns(new Set())
     setAvailableColumns([])
+    setSelectionFileError(null)
   }
 
   const handleColumnCancel = () => {
@@ -455,6 +460,7 @@ function FilesPageContent() {
     setSelectedColumns(new Set())
     setAvailableColumns([])
     setColumnsError(null)
+    setSelectionFileError(null)
   }
 
   const handleToggleColumn = (col: string, checked: boolean) => {
@@ -471,6 +477,121 @@ function FilesPageContent() {
 
   const handleToggleAllColumns = (checked: boolean) => {
     setSelectedColumns(checked ? new Set(availableColumns) : new Set())
+  }
+
+  const normalizeColumnName = (name: string) => name.trim()
+
+  const applySelection = (mode: "include" | "exclude", cols: string[]) => {
+    if (!availableColumns.length) return
+
+    const normalizedSet = new Set(cols.map(normalizeColumnName).filter(Boolean))
+    let next: Set<string>
+
+    if (mode === "include") {
+      next = new Set(availableColumns.filter((c) => normalizedSet.has(normalizeColumnName(c))))
+    } else {
+      next = new Set(availableColumns.filter((c) => !normalizedSet.has(normalizeColumnName(c))))
+    }
+
+    if (next.size === 0) {
+      setSelectionFileError("Selection file resulted in zero columns. Please adjust and try again.")
+      return
+    }
+
+    setSelectionFileError(null)
+    setSelectedColumns(next)
+    toast({
+      title: "Selection applied",
+      description: `${mode === "include" ? "Included" : "Excluded"} ${next.size} column(s) based on file.`,
+    })
+  }
+
+  const parseSelectionJson = (text: string): { mode: "include" | "exclude"; columns: string[] } | null => {
+    try {
+      const obj = JSON.parse(text)
+      if (Array.isArray(obj?.columns)) {
+        const mode = obj.mode === "exclude" ? "exclude" : "include"
+        return { mode, columns: obj.columns.map((c: any) => String(c.name ?? c.column ?? c).trim()) }
+      }
+      if (Array.isArray(obj)) {
+        return { mode: "include", columns: obj.map((c: any) => String(c).trim()) }
+      }
+    } catch (e) {
+      console.error("Failed to parse JSON selection file", e)
+    }
+    return null
+  }
+
+  const parseSelectionRows = (rows: any[][]): { mode: "include" | "exclude"; columns: string[] } | null => {
+    if (!rows.length) return null
+    const header = rows[0].map((h: any) => String(h || "").toLowerCase().trim())
+    const nameIdx = header.findIndex((h: string) => ["name", "column", "column_name"].includes(h))
+    const includeIdx = header.findIndex((h: string) => ["include", "selected", "select"].includes(h))
+    if (nameIdx === -1 || includeIdx === -1) return null
+
+    const truthy = new Set(["true", "1", "yes", "y", "include"])
+    const selected: string[] = []
+    rows.slice(1).forEach((row) => {
+      const colName = String(row[nameIdx] ?? "").trim()
+      if (!colName) return
+      const includeVal = String(row[includeIdx] ?? "").toLowerCase().trim()
+      if (truthy.has(includeVal)) selected.push(colName)
+    })
+    return { mode: "include", columns: selected }
+  }
+
+  const handleSelectionFile = async (file: File) => {
+    setSelectionFileError(null)
+    if (!file) return
+
+    const ext = file.name.split(".").pop()?.toLowerCase() || ""
+    try {
+      if (ext === "json") {
+        const text = await file.text()
+        const parsed = parseSelectionJson(text)
+        if (parsed) {
+          applySelection(parsed.mode, parsed.columns)
+          return
+        }
+      } else if (ext === "csv") {
+        const text = await file.text()
+        const rows = text
+          .split(/\r?\n/)
+          .filter((line) => line.trim() !== "")
+          .map((line) => line.split(","))
+        const parsed = parseSelectionRows(rows)
+        if (parsed) {
+          applySelection(parsed.mode, parsed.columns)
+          return
+        }
+      } else if (ext === "xlsx" || ext === "xls") {
+        const data = await file.arrayBuffer()
+        const workbook = XLSX.read(data, { type: "array" })
+        const sheetName = workbook.SheetNames[0]
+        const sheet = workbook.Sheets[sheetName]
+        const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 })
+        const parsed = parseSelectionRows(rows)
+        if (parsed) {
+          applySelection(parsed.mode, parsed.columns)
+          return
+        }
+      }
+      setSelectionFileError("Could not understand selection file. Use columns with 'name' and 'include'.")
+    } catch (error) {
+      console.error("Failed to apply selection file", error)
+      setSelectionFileError("Unable to apply selection file. Please check the format and try again.")
+    }
+  }
+
+  const handleSelectionFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      handleSelectionFile(file)
+    }
+    // reset so same file can be re-selected
+    if (selectionFileInputRef.current) {
+      selectionFileInputRef.current.value = ""
+    }
   }
 
   const handleDeleteClick = (file: FileStatusResponse) => {
@@ -1114,18 +1235,42 @@ function FilesPageContent() {
                 </div>
               ) : (
                 <>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="select-all-columns"
+                        checked={
+                          availableColumns.length > 0 &&
+                          selectedColumns.size === availableColumns.length
+                        }
+                        onCheckedChange={(checked) => handleToggleAllColumns(Boolean(checked))}
+                      />
+                      <Label htmlFor="select-all-columns" className="text-sm">
+                        Select all
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={selectionFileInputRef}
+                        type="file"
+                        accept=".json,.csv,.xlsx,.xls"
+                        className="hidden"
+                        onChange={handleSelectionFileInput}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => selectionFileInputRef.current?.click()}
+                      >
+                        Upload selection
+                      </Button>
+                    </div>
+                  </div>
                   <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="select-all-columns"
-                      checked={
-                        availableColumns.length > 0 &&
-                        selectedColumns.size === availableColumns.length
-                      }
-                      onCheckedChange={(checked) => handleToggleAllColumns(Boolean(checked))}
-                    />
-                    <Label htmlFor="select-all-columns" className="text-sm">
-                      Select all
-                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Tip: upload a CSV / Excel / JSON with columns: <code>name</code> and <code>include</code> (true/false)
+                      to quickly apply selections.
+                    </p>
                   </div>
                   <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
                     {availableColumns.map((col) => (
@@ -1147,6 +1292,7 @@ function FilesPageContent() {
                     )}
                   </div>
                   {columnsError && <p className="text-sm text-destructive">{columnsError}</p>}
+                  {selectionFileError && <p className="text-sm text-destructive">{selectionFileError}</p>}
                 </>
               )}
             </div>
