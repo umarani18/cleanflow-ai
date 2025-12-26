@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface FileDetailsDialogProps {
   file: FileStatusResponse | null
@@ -46,6 +47,7 @@ interface FileDetailsDialogProps {
 }
 
 export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialogProps) {
+  const ISSUES_PAGE_SIZE = 50
   const [activeTab, setActiveTab] = useState<'details' | 'preview' | 'dq-report'>('details')
   const [previewData, setPreviewData] = useState<{ headers: string[], sample_data: any[], total_rows: number } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -54,6 +56,12 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
   const [dqReportLoading, setDqReportLoading] = useState(false)
   const [dqReportError, setDqReportError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [issues, setIssues] = useState<{ row: number; column: string; violation: string; value: any }[]>([])
+  const [issuesTotal, setIssuesTotal] = useState<number | null>(null)
+  const [issuesNextOffset, setIssuesNextOffset] = useState<number | null>(null)
+  const [issuesLoading, setIssuesLoading] = useState(false)
+  const [availableViolations, setAvailableViolations] = useState<Record<string, number>>({})
+  const [selectedViolations, setSelectedViolations] = useState<Set<string>>(new Set())
   const { toast } = useToast()
 
   useEffect(() => {
@@ -72,6 +80,11 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
       setPreviewError(null)
       setDqReport(null)
       setDqReportError(null)
+      setIssues([])
+      setIssuesTotal(null)
+      setIssuesNextOffset(null)
+      setAvailableViolations({})
+      setSelectedViolations(new Set())
     }
   }, [open])
 
@@ -102,10 +115,55 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
       if (!token) throw new Error('Not authenticated')
       const report = await fileManagementAPI.downloadDqReport(file.upload_id, token)
       setDqReport(report)
+      const sampleIssues = report?.hybrid_summary?.outstanding_issues || []
+      // Always cap initial render to a single page to avoid loading thousands of rows at once.
+      const initialIssues = sampleIssues.slice(0, ISSUES_PAGE_SIZE)
+      setIssues(initialIssues)
+      const totalIssues = report?.hybrid_summary?.outstanding_issues_total ?? sampleIssues.length
+      setIssuesTotal(totalIssues)
+      const hasMore = totalIssues > initialIssues.length
+      const sampleSize = report?.hybrid_summary?.outstanding_issues_sample_size ?? sampleIssues.length
+      // If we have more than the first page, start the cursor at the page size (or sample size if smaller).
+      const nextOffset = hasMore ? Math.min(sampleSize, ISSUES_PAGE_SIZE) : null
+      setIssuesNextOffset(nextOffset)
+      setAvailableViolations(report?.violation_counts || {})
     } catch (err: any) {
       setDqReportError(err.message || 'Failed to load DQ report')
     } finally {
       setDqReportLoading(false)
+    }
+  }
+
+  const fetchIssues = async (reset: boolean = false) => {
+    if (!file) return
+    if (!reset && issuesNextOffset === null) return
+    setIssuesLoading(true)
+    try {
+      const authTokens = JSON.parse(localStorage.getItem('authTokens') || '{}')
+      const token = authTokens.idToken
+      if (!token) throw new Error('Not authenticated')
+      const resp = await fileManagementAPI.getFileIssues(
+        file.upload_id,
+        token,
+        {
+          offset: reset ? 0 : issuesNextOffset || 0,
+          violations: Array.from(selectedViolations),
+        }
+      )
+      if (reset) {
+        setIssues(resp.issues || [])
+      } else {
+        setIssues(prev => [...prev, ...(resp.issues || [])])
+      }
+      setIssuesTotal(resp.total ?? (resp.issues ? resp.issues.length : 0))
+      setIssuesNextOffset(resp.next_offset === undefined ? null : resp.next_offset)
+      if (resp.available_violations) {
+        setAvailableViolations(resp.available_violations)
+      }
+    } catch (err: any) {
+      setDqReportError(err.message || 'Failed to load issues')
+    } finally {
+      setIssuesLoading(false)
     }
   }
 
@@ -618,12 +676,69 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                       })()}
 
                       {/* Row-wise Outstanding Issues */}
-                      {dqReport?.hybrid_summary?.outstanding_issues && dqReport.hybrid_summary.outstanding_issues.length > 0 && (
-                        <RowWiseIssues
-                          issues={dqReport.hybrid_summary.outstanding_issues}
-                          total={dqReport.hybrid_summary.outstanding_issues_total}
-                          hasMore={dqReport.hybrid_summary.outstanding_issues_has_more}
-                        />
+                      {issues && issues.length > 0 && (
+                        <div className="space-y-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-sm font-medium flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4" />
+                                Outstanding Issues
+                              </h4>
+                              <Badge variant="secondary">
+                                Showing {issues.length.toLocaleString()} of {(issuesTotal ?? issues.length).toLocaleString()}
+                              </Badge>
+                              {issuesNextOffset !== null && (
+                                <Badge variant="outline">More available</Badge>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-2 items-center">
+                              {Object.keys(availableViolations).length > 0 && (
+                                <div className="flex flex-wrap gap-2 items-center">
+                                  {Object.entries(availableViolations).map(([code, count]) => (
+                                    <label key={code} className="flex items-center gap-1 text-xs">
+                                      <Checkbox
+                                        checked={selectedViolations.has(code)}
+                                        onCheckedChange={(checked) => {
+                                          const next = new Set(selectedViolations)
+                                          if (checked) next.add(code); else next.delete(code)
+                                          setSelectedViolations(next)
+                                        }}
+                                      />
+                                      <span className="truncate max-w-[140px]" title={code}>{code}</span>
+                                      <Badge variant="outline" className="text-[10px]">{count}</Badge>
+                                    </label>
+                                  ))}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs"
+                                    onClick={() => fetchIssues(true)}
+                                    disabled={issuesLoading}
+                                  >
+                                    {issuesLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply filters'}
+                                  </Button>
+                                </div>
+                              )}
+                              {issuesNextOffset !== null && (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  className="h-7 text-xs"
+                                  onClick={() => fetchIssues(false)}
+                                  disabled={issuesLoading}
+                                >
+                                  {issuesLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Load more'}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          <RowWiseIssues
+                            issues={issues}
+                            total={issuesTotal || undefined}
+                            hasMore={issuesNextOffset !== null}
+                          />
+                        </div>
                       )}
                     </>
                   )}

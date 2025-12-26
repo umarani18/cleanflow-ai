@@ -11,6 +11,7 @@ const ENDPOINTS = {
   FILES_STATUS: (id: string) => `/files/${id}/status`,   // GET - check status
   FILES_COLUMNS: (id: string) => `/files/${id}/columns`, // GET - discover columns
   FILES_EXPORT: (id: string) => `/files/${id}/export`,   // GET - download files
+  FILES_ISSUES: (id: string) => `/files/${id}/issues`,   // GET - paged outstanding issues
 }
 
 // Response Types
@@ -105,6 +106,14 @@ export interface OutstandingIssue {
   column: string
   violation: string
   value: any
+}
+
+export interface IssuesResponse {
+  issues: OutstandingIssue[]
+  total: number
+  next_offset?: number | null
+  available_violations?: Record<string, number>
+  applied_filters?: string[]
 }
 
 // Overall DQ Report (per-user aggregated)
@@ -299,6 +308,21 @@ async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataTyp
       console.error('❌ Failed to fetch file preview from S3:', error)
       return { headers: [], sample_data: [], total_rows: 0 }
     }
+  }
+
+  async getFileIssues(
+    uploadId: string,
+    authToken: string,
+    params?: { offset?: number; limit?: number; violations?: string[] }
+  ): Promise<IssuesResponse> {
+    const searchParams = new URLSearchParams()
+    if (params?.offset !== undefined) searchParams.set('offset', String(params.offset))
+    if (params?.limit !== undefined) searchParams.set('limit', String(params.limit))
+    if (params?.violations && params.violations.length > 0) {
+      searchParams.set('violations', params.violations.join(','))
+    }
+    const qs = searchParams.toString() ? `?${searchParams.toString()}` : ''
+    return this.makeRequest(`${ENDPOINTS.FILES_ISSUES(uploadId)}${qs}`, authToken, { method: 'GET' })
   }
 
   async uploadToS3(presignedUrl: string, file: File, onProgress?: (progress: number) => void): Promise<void> {
