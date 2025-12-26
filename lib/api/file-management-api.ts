@@ -82,6 +82,8 @@ export interface DqReportResponse {
   detected_entity?: string
   ai_actions?: number
   hybrid_summary?: HybridSummary
+  violation_counts?: Record<string, number>
+  top_violations?: TopIssue[]
 }
 
 export interface HybridSummary {
@@ -92,6 +94,9 @@ export interface HybridSummary {
   ai_actions?: number
   ai_planner?: string
   outstanding_issues?: OutstandingIssue[]
+  outstanding_issues_total?: number
+  outstanding_issues_has_more?: boolean
+  outstanding_issues_sample_size?: number
   status?: string
 }
 

@@ -585,9 +585,45 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                         })()}
                       </div>
 
+                      {/* Top Violations */}
+                      {(() => {
+                        const topViolations = dqReport?.top_violations
+                          ?? (dqReport?.violation_counts
+                            ? Object.entries(dqReport.violation_counts)
+                                .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+                                .slice(0, 5)
+                                .map(([violation, count]) => ({ violation, count }))
+                            : [])
+
+                        if (!topViolations || topViolations.length === 0) return null
+
+                        return (
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-medium flex items-center gap-2">
+                              <AlertTriangle className="w-4 h-4" />
+                              Top Violations
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                              {topViolations.map((item) => (
+                                <div key={item.violation} className="p-3 rounded-lg border bg-muted/40 flex items-center justify-between">
+                                  <span className="text-sm truncate" title={item.violation}>
+                                    {item.violation.replace(/_/g, ' ')}
+                                  </span>
+                                  <Badge variant="secondary">{item.count.toLocaleString()}</Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })()}
+
                       {/* Row-wise Outstanding Issues */}
                       {dqReport?.hybrid_summary?.outstanding_issues && dqReport.hybrid_summary.outstanding_issues.length > 0 && (
-                        <RowWiseIssues issues={dqReport.hybrid_summary.outstanding_issues} />
+                        <RowWiseIssues
+                          issues={dqReport.hybrid_summary.outstanding_issues}
+                          total={dqReport.hybrid_summary.outstanding_issues_total}
+                          hasMore={dqReport.hybrid_summary.outstanding_issues_has_more}
+                        />
                       )}
                     </>
                   )}
@@ -602,7 +638,15 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
 }
 
 // Row-wise Issues Component with smart grouping and expandable view
-function RowWiseIssues({ issues }: { issues: { row: number; column: string; violation: string; value: any }[] }) {
+function RowWiseIssues({
+  issues,
+  total,
+  hasMore,
+}: {
+  issues: { row: number; column: string; violation: string; value: any }[]
+  total?: number
+  hasMore?: boolean
+}) {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
 
   // Group issues by row
@@ -667,6 +711,14 @@ function RowWiseIssues({ issues }: { issues: { row: number; column: string; viol
           </Button>
         </div>
       </div>
+
+      {/* Sampling note */}
+      {(hasMore || (total && total > issues.length)) && (
+        <div className="text-xs text-muted-foreground">
+          Showing {issues.length.toLocaleString()} of {(total ?? issues.length).toLocaleString()} issues. 
+          {hasMore ? " Load more from backend to see full list." : ""}
+        </div>
+      )}
 
       {/* Issue Type Summary */}
       <div className="flex flex-wrap gap-2">
