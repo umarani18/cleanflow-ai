@@ -26,7 +26,7 @@ const navigation = [
 	// 	description: "Upload and transform your files",
 	// },
 	{
-		name: "File Manager",
+		name: "Catalog Items",
 		href: "/files",
 		icon: FileText,
 		description: "Manage file uploads, processing workflows, and exports",

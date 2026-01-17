@@ -118,12 +118,12 @@ export function DashboardHeader({ onRefresh }: DashboardHeaderProps) {
           Export
         </Button>
 
-        {isAuthenticated && (
+        {/* {isAuthenticated && (
           <Button variant="outline" size="sm" onClick={handleLogout} className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/50">
             <LogOut className="w-4 h-4 mr-2" />
             Logout
           </Button>
-        )}
+        )} */}
       </div>
     </div>
   )
