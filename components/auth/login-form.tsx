@@ -1,0 +1,407 @@
+"use client"
+
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AnimatePresence, motion } from "framer-motion"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { CheckCircle, Eye, EyeOff, Lock, Mail, Shield } from "lucide-react"
+import { LoadingDots, LoadingSpinner } from "@/components/ui/loading"
+import { useEffect, useState } from 'react'
+
+import { Button } from "@/components/ui/button"
+import Image from "next/image"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import Link from "next/link"
+import { useAuth } from "@/components/providers/auth-provider"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+
+export function LoginForm() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [mounted, setMounted] = useState(false)
+  const [showMfaModal, setShowMfaModal] = useState(false)
+  const [mfaCode, setMfaCode] = useState('')
+  const [mfaError, setMfaError] = useState('')
+  const [isSendingCode, setIsSendingCode] = useState(false)
+  const [isVerifyingMfa, setIsVerifyingMfa] = useState(false)
+  const { login } = useAuth()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Function to mask email - show first 2 chars, last char, and mask the middle
+  const maskEmail = (email: string): string => {
+    const [localPart, domain] = email.split('@')
+    if (!localPart || !domain) return email
+    
+    if (localPart.length <= 3) {
+      return `${localPart[0]}***@${domain}`
+    }
+    
+    // Show first 2 characters, mask middle, show last character
+    const firstPart = localPart.substring(0, 2)
+    const lastChar = localPart[localPart.length - 1]
+    const middleLength = localPart.length - 3
+    const masked = '*'.repeat(Math.max(middleLength, 4))
+    
+    return `${firstPart}${masked}${lastChar}@${domain}`
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const result = await login(email, password)
+      
+      // Show MFA modal immediately without success message
+      setTimeout(() => {
+        setShowMfaModal(true)
+        setIsLoading(false)
+      }, 1000)
+    } catch (err: any) {
+      setError(err.message)
+      setIsLoading(false)
+    }
+  }
+
+  const handleSendCode = () => {
+    setIsSendingCode(true)
+    setMfaError('')
+    
+    // Simulate sending code
+    setTimeout(() => {
+      setIsSendingCode(false)
+      setSuccess('Verification code sent to your email!')
+      setTimeout(() => setSuccess(''), 3000)
+    }, 1000)
+  }
+
+  const handleVerifyMfa = () => {
+    setMfaError('')
+    
+    // Check if code is 6 digits
+    if (mfaCode.length !== 6 || !/^\d{6}$/.test(mfaCode)) {
+      setMfaError('Please enter a valid 6-digit code')
+      return
+    }
+
+    setIsVerifyingMfa(true)
+    
+    // Simulate verification (any 6-digit code works)
+    setTimeout(() => {
+      setIsVerifyingMfa(false)
+      setIsVerifying(true)
+      setTimeout(() => {
+        window.location.href = '/dashboard'
+      }, 1500)
+    }, 1000)
+  }
+
+  if (!mounted) return null
+
+  return (
+    <div className="w-full">
+      {/* Header Section with Logo */}
+      <div className="text-center mb-8">
+        <div className="flex justify-center mb-6">
+          <div className="relative w-16 h-16">
+            <Image
+              src="/images/infiniqon-logo-light.png"
+              alt="CleanFlowAI"
+              width={64}
+              height={64}
+              className="rounded-xl object-contain"
+            />
+          </div>
+        </div>
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          Welcome back
+        </h1>
+        <p className="text-muted-foreground">
+          Enter your credentials to access your account
+        </p>
+      </div>
+
+      <Card className="w-full border-0 shadow-none bg-transparent">
+        <CardContent className="space-y-6 p-0">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Email Field */}
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium text-muted-foreground">
+                Email
+              </Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="pl-10 h-12 border-input focus:border-primary focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            </div>
+
+            {/* Password Field */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium text-muted-foreground">
+                Password
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="pl-10 pr-10 h-12 border-input focus:border-primary focus:ring-2 focus:ring-ring"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-12 px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Remember me and Forgot password */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <input
+                  id="remember"
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+                <Label htmlFor="remember" className="text-sm text-muted-foreground">
+                  Remember me
+                </Label>
+              </div>
+              <Link
+                href="/auth/forgot-password"
+                className="text-sm text-accent hover:opacity-90"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
+            {/* Alerts */}
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Alert variant="destructive" className="bg-red-50 border-red-200">
+                    <AlertDescription className="text-red-700">{error}</AlertDescription>
+                  </Alert>
+                </motion.div>
+              )}
+
+              {success && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Alert className="bg-green-50 border-green-200">
+                    <AlertDescription className="text-green-700 flex items-center gap-2">
+                      {isVerifying ? (
+                        <>
+                          <LoadingSpinner size="sm" />
+                          <span>Verifying credentials...</span>
+                          <LoadingDots />
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          <span>{success}</span>
+                        </>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Submit Button */}
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Button
+                type="submit"
+                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+                disabled={isLoading || isVerifying}
+              >
+                <AnimatePresence mode="wait">
+                  {isLoading ? (
+                    <motion.div
+                      key="loading"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="flex items-center space-x-2"
+                    >
+                      <LoadingSpinner size="sm" />
+                      <span>Signing in...</span>
+                    </motion.div>
+                  ) : isVerifying ? (
+                    <motion.div
+                      key="verifying"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="flex items-center space-x-2"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Success! Redirecting...</span>
+                    </motion.div>
+                  ) : (
+                    <motion.span
+                      key="signin"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      Sign in
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </Button>
+            </motion.div>
+          </form>
+
+          {/* Sign up link */}
+          <p className="text-center text-sm text-muted-foreground">
+            Don't have an account?{' '}
+            <Link
+              href="/auth/signup"
+              className="text-accent hover:opacity-90 font-medium"
+            >
+              Sign up
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* MFA Modal */}
+      <Dialog open={showMfaModal} onOpenChange={setShowMfaModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-center mb-4">
+              <div className="rounded-full bg-primary/10 p-3">
+                <Shield className="w-8 h-8 text-primary" />
+              </div>
+            </div>
+            <DialogTitle className="text-center text-2xl">Two-Factor Authentication</DialogTitle>
+            <DialogDescription className="text-center">
+              We've sent a verification code to{' '}
+              <span className="font-medium text-foreground">{maskEmail(email)}</span>
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-6">
+            {/* MFA Code Input */}
+            <div className="space-y-3">
+              <Label htmlFor="mfa-code" className="text-sm font-medium">
+                Enter 6-digit code
+              </Label>
+              <Input
+                id="mfa-code"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                placeholder="000000"
+                value={mfaCode}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '')
+                  setMfaCode(value)
+                }}
+                className="h-12 text-center text-2xl tracking-widest font-mono mt-2"
+                disabled={isVerifyingMfa || isVerifying}
+              />
+            </div>
+
+            {/* MFA Error */}
+            {mfaError && (
+              <Alert variant="destructive" className="bg-red-50 border-red-200">
+                <AlertDescription className="text-red-700">{mfaError}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Verify Button */}
+            <Button
+              onClick={handleVerifyMfa}
+              className="w-full h-12"
+              disabled={mfaCode.length !== 6 || isVerifyingMfa || isVerifying}
+            >
+              {isVerifyingMfa ? (
+                <div className="flex items-center space-x-2">
+                  <LoadingSpinner size="sm" />
+                  <span>Verifying...</span>
+                </div>
+              ) : isVerifying ? (
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Verified! Redirecting...</span>
+                </div>
+              ) : (
+                'Verify Code'
+              )}
+            </Button>
+
+            {/* Send Code Button */}
+            <div className="text-center">
+              <Button
+                variant="link"
+                onClick={handleSendCode}
+                disabled={isSendingCode}
+                className="text-sm"
+              >
+                {isSendingCode ? (
+                  <div className="flex items-center space-x-2">
+                    <LoadingSpinner size="sm" />
+                    <span>Sending...</span>
+                  </div>
+                ) : (
+                  "Didn't receive code? Resend"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

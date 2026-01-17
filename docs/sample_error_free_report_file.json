@@ -1,0 +1,23 @@
+{
+  "rules_version": "2025-09-19",
+  "script_version": "lambda_hybrid_guarded_v1.0_2025-11-06",
+  "timestamp_utc": "2025-12-04T14:05:22.598080",
+  "user_id": "b1c3dd8a-1031-7037-20bc-c5d849c6c5d0",
+  "upload_id": "7114aa39-cdfd-4a15-8de8-4c946c74bce4",
+  "rows_in": 31,
+  "rows_clean": 31,
+  "rows_fixed": 0,
+  "rows_quarantined": 0,
+  "dq_score": 100,
+  "artifact": "s3://base-cleanflowaidatalake9697f7f3-2hy7aq4aajii/data/b1c3dd8a-1031-7037-20bc-c5d849c6c5d0/7114aa39-cdfd-4a15-8de8-4c946c74bce4/result.parquet",
+  "mode": "hybrid",
+  "detected_erp": "Workday",
+  "detected_entity": "invoices",
+  "ai_actions": 0,
+  "hybrid_summary": {
+    "ai_actions": 0,
+    "ai_planner": "groq_hybrid_v1",
+    "outstanding_issues": [],
+    "status": "skipped"
+  }
+}
