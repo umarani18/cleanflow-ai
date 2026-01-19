@@ -19,6 +19,7 @@ import {
   ArrowUp,
   ArrowDown,
   Brain,
+  Menu,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -104,14 +105,14 @@ const SOURCE_OPTIONS = [
 const ERP_OPTIONS = [
   { label: "QuickBooks Online", value: "quickbooks" },
   { label: "Oracle Fusion", value: "oracle" },
-  { label: "SAP ERP", value: "sap" },
+  { label: "SAP", value: "sap" },
   { label: "Microsoft Dynamics", value: "dynamics" },
   { label: "NetSuite", value: "netsuite" },
   { label: "Workday", value: "workday" },
   { label: "Infor M3", value: "infor-m3" },
   { label: "Infor LN", value: "infor-ln" },
   { label: "Epicor Kinetic", value: "epicor" },
-  { label: "QAD ERP", value: "qad" },
+  { label: "QAD", value: "qad" },
   { label: "IFS Cloud", value: "ifs" },
   { label: "Sage Intacct", value: "sage" },
 ]
@@ -153,7 +154,9 @@ function FilesPageContent() {
   const [fileToPush, setFileToPush] = useState<FileStatusResponse | null>(null)
   const [activeSection, setActiveSection] = useState<"upload" | "explorer">("upload")
   const [selectedSource, setSelectedSource] = useState("local")
+  const [selectedDestination, setSelectedDestination] = useState("null")
   const [selectedErp, setSelectedErp] = useState("quickbooks")
+  const [selectedDestinationErp, setSelectedDestinationErp] = useState("quickbooks")
   const [sortField, setSortField] = useState<"name" | "score" | "status" | "uploaded" | "updated">("uploaded")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [useCustomRules, setUseCustomRules] = useState(false)
@@ -165,6 +168,19 @@ function FilesPageContent() {
   const [columnsLoading, setColumnsLoading] = useState(false)
   const [columnsError, setColumnsError] = useState<string | null>(null)
   const [selectionFileError, setSelectionFileError] = useState<string | null>(null)
+  const [displayColumnModalOpen, setDisplayColumnModalOpen] = useState(false)
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set([
+    "file",
+    "score",
+    "quality",
+    "rows",
+    "datatype",
+    "status",
+    "uploaded",
+    "updated",
+    "processingTime",
+    "actions"
+  ]))
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const selectionFileInputRef = useRef<HTMLInputElement>(null)
@@ -843,149 +859,264 @@ function FilesPageContent() {
           <div className="space-y-4">
             {/* Header Row: Source selector + ERP dropdown */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Source:</span>
-                <Select value={selectedSource} onValueChange={setSelectedSource}>
-                  <SelectTrigger className="w-full sm:w-[180px] h-9">
-                    <SelectValue placeholder="Select source" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SOURCE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {selectedSource === "erp" && (
-                  <Select value={selectedErp} onValueChange={setSelectedErp}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Source:</span>
+                  <Select value={selectedSource} onValueChange={(value) => {
+                    setSelectedSource(value)
+                    setSelectedDestination("null")
+                    console.log(`Selected Source: ${value}`)
+                  }}>
                     <SelectTrigger className="w-full sm:w-[180px] h-9">
-                      <SelectValue placeholder="Select ERP" />
+                      <SelectValue placeholder="Select source" />
                     </SelectTrigger>
                     <SelectContent>
-                      {ERP_OPTIONS.map((opt) => (
+                      {SOURCE_OPTIONS.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           {opt.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                )}
+                  {selectedSource === "erp" && (
+                    <Select value={selectedErp} onValueChange={setSelectedErp}>
+                      <SelectTrigger className="w-full sm:w-[180px] h-9">
+                        <SelectValue placeholder="Select ERP" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ERP_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Destination:</span>
+                  <Select value={selectedDestination} onValueChange={(value) => {
+                    setSelectedDestination(value)
+                    setSelectedSource("null")
+                    console.log(`Selected Destination: ${value}`)
+                  }}>
+                    <SelectTrigger className="w-full sm:w-[180px] h-9">
+                      <SelectValue placeholder="Select destination" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SOURCE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
+            
             {/* Custom Rules Section */}
-            <div className="rounded-lg border bg-card p-4">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="use-custom-rules"
-                      checked={useCustomRules}
-                      onCheckedChange={(checked) => setUseCustomRules(checked === true)}
-                    />
-                    <Label htmlFor="use-custom-rules" className="text-sm font-medium cursor-pointer">
-                      Use custom rules
-                    </Label>
+            {(selectedSource === "local" ||  selectedSource === "unified-bridge") && (
+              <div className="rounded-lg border bg-card p-4">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="use-custom-rules"
+                        checked={useCustomRules}
+                        onCheckedChange={(checked) => setUseCustomRules(checked === true)}
+                      />
+                      <Label htmlFor="use-custom-rules" className="text-sm font-medium cursor-pointer">
+                        Use custom rules
+                      </Label>
+                    </div>
+                    <div className="rounded-full bg-gradient-to-br from-blue-400 to-purple-500 p-1.5">
+                      <Brain className="h-4 w-4 text-white" />
+                    </div>
                   </div>
-                  <div className="rounded-full bg-gradient-to-br from-blue-400 to-purple-500 p-1.5">
-                    <Brain className="h-4 w-4 text-white" />
-                  </div>
+                  <Textarea
+                    className="min-h-[80px] text-sm resize-none"
+                    disabled={!useCustomRules}
+                    placeholder="Example: For any row where product_type is a TV and tv_cost < 10000, add invalid_tv_price and set status to Suspended."
+                    value={customRulePrompt}
+                    onChange={(e) => setCustomRulePrompt(e.target.value)}
+                  />
                 </div>
-                <Textarea
-                  className="min-h-[80px] text-sm resize-none"
-                  disabled={!useCustomRules}
-                  placeholder="Example: For any row where product_type is a TV and tv_cost < 10000, add invalid_tv_price and set status to Suspended."
-                  value={customRulePrompt}
-                  onChange={(e) => setCustomRulePrompt(e.target.value)}
-                />
               </div>
-            </div>
+            )}
 
             {/* Content Area */}
-            {selectedSource === "local" ? (
-              <div
-                className={cn(
-                  "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
-                  dragActive 
-                    ? "border-primary bg-primary/5 scale-[1.01]" 
-                    : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50"
-                )}
-                onDragEnter={handleDrag}
-                onDragOver={handleDrag}
-                onDragLeave={handleDrag}
-                onDrop={handleDrop}
-                onClick={() => !uploading && fileInputRef.current?.click()}
-              >
-                {uploading ? (
-                  <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
-                    <Loader2 className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 animate-spin text-primary" />
-                    <div className="text-center">
-                      <p className="text-base sm:text-lg font-medium">Uploading...</p>
-                      <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">{uploadProgress}%</p>
+            <div className="space-y-4">
+              {/* Source Section */}
+              {(selectedDestination === "null" && selectedSource === "local") ? (
+                <div
+                  className={cn(
+                    "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
+                    dragActive 
+                      ? "border-primary bg-primary/5 scale-[1.01]" 
+                      : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50"
+                  )}
+                  onDragEnter={handleDrag}
+                  onDragOver={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                >
+                  {uploading ? (
+                    <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
+                      <Loader2 className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 animate-spin text-primary" />
+                      <div className="text-center">
+                        <p className="text-base sm:text-lg font-medium">Uploading...</p>
+                        <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">{uploadProgress}%</p>
+                      </div>
+                      <Progress value={uploadProgress} className="w-48 sm:w-60 lg:w-72 h-2 sm:h-3" />
                     </div>
-                    <Progress value={uploadProgress} className="w-48 sm:w-60 lg:w-72 h-2 sm:h-3" />
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6 text-center">
-                    <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8">
-                      <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6 text-center">
+                      <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8">
+                        <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
+                      </div>
+                      <div className="space-y-1 sm:space-y-2">
+                        <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your ERP data for transformation</p>
+                        <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">Drag & drop or click to browse</p>
+                      </div>
                     </div>
-                    <div className="space-y-1 sm:space-y-2">
-                      <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your ERP data for transformation</p>
-                      <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">Drag & drop or click to browse</p>
-                    </div>
-                  </div>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,.xlsx,.xls,.json,.sql"
-                  className="hidden"
-                  onChange={handleFileInput}
-                />
-              </div>
-            ) : selectedSource === "erp" && selectedErp === "quickbooks" ? (
-              <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
-                <QuickBooksImport
-                  onImportComplete={handleQuickBooksImportComplete}
-                  onNotification={(message, type) => {
-                    toast({
-                      title: type === "success" ? "Success" : "Error",
-                      description: message,
-                      variant: type === "error" ? "destructive" : "default",
-                    })
-                  }}
-                />
-              </div>
-            ) : selectedSource === "unified-bridge" ? (
-              <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
-                <UnifiedBridgeImport
-                  onImportComplete={handleQuickBooksImportComplete}
-                  onNotification={(message, type) => {
-                    toast({
-                      title: type === "success" ? "Success" : "Error",
-                      description: message,
-                      variant: type === "error" ? "destructive" : "default",
-                    })
-                  }}
-                />
-              </div>
-            ) : selectedSource === "erp" ? (
-              <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
-                <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
-                  <Network className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-muted-foreground" />
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,.json,.sql"
+                    className="hidden"
+                    onChange={handleFileInput}
+                  />
                 </div>
-                <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
-                  {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label}
-                </h3>
-                <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
-                  Connect your {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label} account to import data directly.
-                </p>
-                <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
-              </div>
-            ) : null}
-          </div>
+              ) : selectedSource === "erp" && selectedErp === "quickbooks" ? (
+                <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                  <QuickBooksImport
+                    onImportComplete={handleQuickBooksImportComplete}
+                    onNotification={(message, type) => {
+                      toast({
+                        title: type === "success" ? "Success" : "Error",
+                        description: message,
+                        variant: type === "error" ? "destructive" : "default",
+                      })
+                    }}
+                  />
+                </div>
+              ) : selectedSource === "unified-bridge" ? (
+                <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                  <UnifiedBridgeImport
+                    onImportComplete={handleQuickBooksImportComplete}
+                    onNotification={(message, type) => {
+                      toast({
+                        title: type === "success" ? "Success" : "Error",
+                        description: message,
+                        variant: type === "error" ? "destructive" : "default",
+                      })
+                    }}
+                  />
+                </div>
+              ) : selectedSource === "erp" ? (
+                <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
+                  <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
+                    <Network className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
+                    {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label}
+                  </h3>
+                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
+                    Connect your {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label} account to import data directly.
+                  </p>
+                  <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
+                </div>
+              ) : null}
+            </div>
+
+            {selectedDestination === "local" ? (
+                <div
+                  className={cn(
+                    "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
+                    dragActive 
+                      ? "border-primary bg-primary/5 scale-[1.01]" 
+                      : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50"
+                  )}
+                  onDragEnter={handleDrag}
+                  onDragOver={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                >
+                  {uploading ? (
+                    <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
+                      <Loader2 className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 animate-spin text-primary" />
+                      <div className="text-center">
+                        <p className="text-base sm:text-lg font-medium">Uploading...</p>
+                        <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">{uploadProgress}%</p>
+                      </div>
+                      <Progress value={uploadProgress} className="w-48 sm:w-60 lg:w-72 h-2 sm:h-3" />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6 text-center">
+                      <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8">
+                        <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
+                      </div>
+                      <div className="space-y-1 sm:space-y-2">
+                        <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your ERP data for transformation</p>
+                        <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">Drag & drop or click to browse</p>
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,.json,.sql"
+                    className="hidden"
+                    onChange={handleFileInput}
+                  />
+                </div>
+              ) : selectedDestination === "erp" && selectedDestinationErp === "quickbooks" ? (
+                <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                  <QuickBooksImport
+                    onImportComplete={handleQuickBooksImportComplete}
+                    onNotification={(message, type) => {
+                      toast({
+                        title: type === "success" ? "Success" : "Error",
+                        description: message,
+                        variant: type === "error" ? "destructive" : "default",
+                      })
+                    }}
+                  />
+                </div>
+              ) : selectedDestination === "unified-bridge" ? (
+                <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                  <UnifiedBridgeImport
+                    onImportComplete={handleQuickBooksImportComplete}
+                    onNotification={(message, type) => {
+                      toast({
+                        title: type === "success" ? "Success" : "Error",
+                        description: message,
+                        variant: type === "error" ? "destructive" : "default",
+                      })
+                    }}
+                  />
+                </div>
+              ) : selectedDestination === "erp" ? (
+                <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
+                  <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
+                    <Network className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
+                    {ERP_OPTIONS.find((e) => e.value === selectedDestinationErp)?.label}
+                  </h3>
+                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
+                    Connect your {ERP_OPTIONS.find((e) => e.value === selectedDestinationErp)?.label} account to import data directly.
+                  </p>
+                  <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
+                </div>
+              ) : null}
+
+            </div>
         )}
 
         {/* File Explorer Section */}
@@ -1038,9 +1169,21 @@ function FilesPageContent() {
                   </Button>
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {filteredFiles.length} file{filteredFiles.length !== 1 ? "s" : ""}
-              </p>
+              <div className="flex items-center gap-2 ml-auto">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9"
+                      onClick={() => setDisplayColumnModalOpen(true)}
+                    >
+                      <Menu className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Column Filter</TooltipContent>
+                </Tooltip>
+              </div>
             </div>
 
             {/* Table */}
@@ -1049,40 +1192,61 @@ function FilesPageContent() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead 
-                        className="text-xs cursor-pointer hover:text-foreground transition-colors"
-                        onClick={() => handleSort("name")}
-                      >
-                        <span className="flex items-center">File<SortIcon field="name" /></span>
-                      </TableHead>
-                      <TableHead 
-                        className="text-xs hidden xl:table-cell cursor-pointer hover:text-foreground transition-colors"
-                        onClick={() => handleSort("score")}
-                      >
-                        <span className="flex items-center">Score<SortIcon field="score" /></span>
-                      </TableHead>
-                      <TableHead className="text-xs hidden 2xl:table-cell">Data Quality</TableHead>
-                      <TableHead className="text-xs hidden md:table-cell">Rows</TableHead>
-                      <TableHead 
-                        className="text-xs cursor-pointer hover:text-foreground transition-colors"
-                        onClick={() => handleSort("status")}
-                      >
-                        <span className="flex items-center">Status<SortIcon field="status" /></span>
-                      </TableHead>
-                      <TableHead 
-                        className="text-xs hidden lg:table-cell cursor-pointer hover:text-foreground transition-colors"
-                        onClick={() => handleSort("uploaded")}
-                      >
-                        <span className="flex items-center">Uploaded<SortIcon field="uploaded" /></span>
-                      </TableHead>
-                      <TableHead 
-                        className="text-xs hidden lg:table-cell cursor-pointer hover:text-foreground transition-colors"
-                        onClick={() => handleSort("updated")}
-                      >
-                        <span className="flex items-center">Updated<SortIcon field="updated" /></span>
-                      </TableHead>
-                      <TableHead className="text-xs text-right">Processing Time</TableHead>
-                      <TableHead className="text-xs text-right">Actions</TableHead>
+                      {visibleColumns.has("file") && (
+                        <TableHead 
+                          className="text-xs cursor-pointer hover:text-foreground transition-colors text-left"
+                          onClick={() => handleSort("name")}
+                        >
+                          <span className="flex items-center">File<SortIcon field="name" /></span>
+                        </TableHead>
+                      )}
+                      {visibleColumns.has("score") && (
+                        <TableHead 
+                          className="text-xs cursor-pointer hover:text-foreground transition-colors text-left"
+                          onClick={() => handleSort("score")}
+                        >
+                          <span className="flex items-center">Score<SortIcon field="score" /></span>
+                        </TableHead>
+                      )}
+                      {visibleColumns.has("quality") && (
+                        <TableHead className="text-xs text-left">Data Quality</TableHead>
+                      )}
+                      {visibleColumns.has("rows") && (
+                        <TableHead className="text-xs text-left">Rows</TableHead>
+                      )}
+                      {visibleColumns.has("datatype") && (
+                        <TableHead className="text-xs text-left">Data Type</TableHead>
+                      )}
+                      {visibleColumns.has("status") && (
+                        <TableHead 
+                          className="text-xs cursor-pointer hover:text-foreground transition-colors text-left"
+                          onClick={() => handleSort("status")}
+                        >
+                          <span className="flex items-center">Status<SortIcon field="status" /></span>
+                        </TableHead>
+                      )}
+                      {visibleColumns.has("uploaded") && (
+                        <TableHead 
+                          className="text-xs cursor-pointer hover:text-foreground transition-colors text-left"
+                          onClick={() => handleSort("uploaded")}
+                        >
+                          <span className="flex items-center">Uploaded<SortIcon field="uploaded" /></span>
+                        </TableHead>
+                      )}
+                      {visibleColumns.has("updated") && (
+                        <TableHead 
+                          className="text-xs cursor-pointer hover:text-foreground transition-colors text-left"
+                          onClick={() => handleSort("updated")}
+                        >
+                          <span className="flex items-center">Updated<SortIcon field="updated" /></span>
+                        </TableHead>
+                      )}
+                      {visibleColumns.has("processingTime") && (
+                        <TableHead className="text-xs text-left">Processing Time</TableHead>
+                      )}
+                      {visibleColumns.has("actions") && (
+                        <TableHead className="text-xs text-left">Actions</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1103,59 +1267,83 @@ function FilesPageContent() {
                     )}
                     {filteredFiles.map((file) => (
                       <TableRow key={file.upload_id} className="hover:bg-muted/50">
-                        <TableCell>
-                          <div>
-                            <p className="text-xs sm:text-sm font-medium truncate max-w-[100px] sm:max-w-[200px]">
-                              {file.original_filename || file.filename || "Untitled"}
-                            </p>
-                            <p className="text-[10px] sm:text-xs text-muted-foreground">
-                              {formatBytes(file.input_size_bytes || file.file_size || 0)}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden xl:table-cell">
-                          {typeof file.dq_score === "number" ? (
-                            <Badge variant="outline" className={cn(
-                              "w-[58px] justify-center text-xs tabular-nums font-medium",
-                              getScoreBadgeColor(file.dq_score)
-                            )}>
-                              {file.dq_score.toFixed(1)}%
+                        {visibleColumns.has("file") && (
+                          <TableCell className="text-left">
+                            <div>
+                              <p className="text-xs sm:text-sm font-medium truncate max-w-[100px] sm:max-w-[200px]">
+                                {file.original_filename || file.filename || "Untitled"}
+                              </p>
+                              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                                {formatBytes(file.input_size_bytes || file.file_size || 0)}
+                              </p>
+                            </div>
+                          </TableCell>
+                        )}
+                        {visibleColumns.has("score") && (
+                          <TableCell className="text-left">
+                            {typeof file.dq_score === "number" ? (
+                              <Badge variant="outline" className={cn(
+                                "w-[58px] justify-center text-xs tabular-nums font-medium",
+                                getScoreBadgeColor(file.dq_score)
+                              )}>
+                                {file.dq_score.toFixed(1)}%
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
+                        {visibleColumns.has("quality") && (
+                          <TableCell className="text-left">
+                            {typeof file.dq_score === "number" ? (
+                              <Badge variant="outline" className={cn(
+                                "w-20 justify-center text-xs font-medium",
+                                getScoreBadgeColor(file.dq_score)
+                              )}>
+                                {getDqQualityLabel(file.dq_score)}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
+                        {visibleColumns.has("rows") && (
+                          <TableCell className="text-sm text-muted-foreground tabular-nums text-left">
+                            {file.rows_clean || file.rows_in || 0}
+                          </TableCell>
+                        )}
+                        {visibleColumns.has("datatype") && (
+                          <TableCell className="text-xs text-muted-foreground text-left">
+                            <Badge variant="secondary" className="text-xs">
+                              {["CSV", "JSON", "Excel", "XML"][Math.floor(Math.random() * 4)]}
                             </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden 2xl:table-cell">
-                          {typeof file.dq_score === "number" ? (
-                            <Badge variant="outline" className={cn(
-                              "w-20 justify-center text-xs font-medium",
-                              getScoreBadgeColor(file.dq_score)
-                            )}>
-                              {getDqQualityLabel(file.dq_score)}
+                          </TableCell>
+                        )}
+                        {visibleColumns.has("status") && (
+                          <TableCell className="text-left">
+                            <Badge variant="outline" className={cn("text-xs font-medium whitespace-nowrap px-2 py-0.5", getStatusBadgeColor(file.status))}>
+                              {file.status || "UNKNOWN"}
                             </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-sm text-muted-foreground tabular-nums">
-                          {file.rows_clean || file.rows_in || 0}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={cn("text-xs font-medium whitespace-nowrap px-2 py-0.5", getStatusBadgeColor(file.status))}>
-                            {file.status || "UNKNOWN"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground tabular-nums">
-                          {formatToIST(file.uploaded_at || file.created_at)}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground tabular-nums">
-                          {formatToIST(file.updated_at || file.status_timestamp)}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground tabular-nums text-right">
-                          2h 15m
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-0.5 sm:gap-1">
+                          </TableCell>
+                        )}
+                        {visibleColumns.has("uploaded") && (
+                          <TableCell className="text-xs text-muted-foreground tabular-nums text-left">
+                            {formatToIST(file.uploaded_at || file.created_at)}
+                          </TableCell>
+                        )}
+                        {visibleColumns.has("updated") && (
+                          <TableCell className="text-xs text-muted-foreground tabular-nums text-left">
+                            {formatToIST(file.updated_at || file.status_timestamp)}
+                          </TableCell>
+                        )}
+                        {visibleColumns.has("processingTime") && (
+                          <TableCell className="text-xs text-muted-foreground tabular-nums text-left">
+                            {formatToIST(file.processing_time  || "2h 25m")}
+                          </TableCell>
+                        )}
+                        {visibleColumns.has("actions") && (
+                          <TableCell className="text-left">
+                            <div className="flex justify-start gap-0.5 sm:gap-1">
                             {(file.status === "UPLOADED" || file.status === "DQ_FAILED" || file.status === "FAILED" || file.status === "UPLOAD_FAILED") && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1232,6 +1420,7 @@ function FilesPageContent() {
                             </Tooltip>
                           </div>
                         </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1247,6 +1436,73 @@ function FilesPageContent() {
         )}
 
         {/* Modals */}
+        <AlertDialog open={displayColumnModalOpen} onOpenChange={setDisplayColumnModalOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Display Columns</AlertDialogTitle>
+              <AlertDialogDescription>
+                Select which columns to display in the file explorer table.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="select-all-display-columns"
+                    checked={visibleColumns.size === 10}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setVisibleColumns(new Set(["file", "score", "quality", "rows", "datatype", "status", "uploaded", "updated", "processingTime", "actions"]))
+                      } else {
+                        setVisibleColumns(new Set())
+                      }
+                    }}
+                  />
+                  <Label htmlFor="select-all-display-columns" className="text-sm font-medium">
+                    Select all
+                  </Label>
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                {[
+                  { id: "file", label: "File" },
+                  { id: "score", label: "Score" },
+                  { id: "quality", label: "Data Quality" },
+                  { id: "rows", label: "Rows" },
+                  { id: "datatype", label: "Data Type" },
+                  { id: "status", label: "Status" },
+                  { id: "uploaded", label: "Uploaded" },
+                  { id: "updated", label: "Updated" },
+                  { id: "processingTime", label: "Processing Time" },
+                  { id: "actions", label: "Actions" }
+                ].map((col) => (
+                  <div key={col.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`display-col-${col.id}`}
+                      checked={visibleColumns.has(col.id)}
+                      onCheckedChange={(checked) => {
+                        const newVisible = new Set(visibleColumns)
+                        if (checked) {
+                          newVisible.add(col.id)
+                        } else {
+                          newVisible.delete(col.id)
+                        }
+                        setVisibleColumns(newVisible)
+                      }}
+                    />
+                    <Label htmlFor={`display-col-${col.id}`} className="text-sm cursor-pointer">
+                      {col.label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Close</AlertDialogCancel>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <AlertDialog open={columnModalOpen} onOpenChange={setColumnModalOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>

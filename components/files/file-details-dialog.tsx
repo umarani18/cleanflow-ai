@@ -363,7 +363,7 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                     </div>
                     <div className="bg-muted/30 rounded-lg p-4 border">
                       <p className="text-xs text-muted-foreground mb-1">Processing Time</p>
-                      <p className="font-mono text-sm font-medium">2h 15m</p>
+                      <p className="font-mono text-sm font-medium">{formatToIST(file.processing_time || "2h 25m") }</p>
                     </div>
                   </div>
                 </div>

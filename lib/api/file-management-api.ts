@@ -40,6 +40,7 @@ export interface FileStatusResponse {
   created_at?: string
   uploaded_at?: string
   updated_at?: string
+  processing_time?: string
   status_timestamp?: string
   file_size?: number
   input_size_bytes?: number

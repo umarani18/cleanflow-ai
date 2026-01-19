@@ -49,7 +49,7 @@ export default function ErpSourceForm({
     <div className="space-y-4">
       {/* ERP System Selector */}
       <div className="space-y-2">
-        <Label htmlFor="erp-system">Select ERP System</Label>
+        <Label htmlFor="erp-system">Select Source System</Label>
         <Select value={selectedErp} onValueChange={setSelectedErp}>
           <SelectTrigger id="erp-system" disabled={disabled}>
             <SelectValue placeholder="Select ERP system" />

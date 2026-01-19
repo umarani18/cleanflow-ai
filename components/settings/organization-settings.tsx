@@ -737,11 +737,11 @@ export function OrganizationSettings() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[300px]">Permission</TableHead>
-                  <TableHead className="text-center">Owner</TableHead>
+                  {/* <TableHead className="text-center">Owner</TableHead> */}
                   <TableHead className="text-center">Super Admin</TableHead>
                   <TableHead className="text-center">Admin</TableHead>
-                  <TableHead className="text-center">Editor</TableHead>
-                  <TableHead className="text-center">Viewer</TableHead>
+                  <TableHead className="text-center">Data Stewards</TableHead>
+                  {/* <TableHead className="text-center">Viewer</TableHead> */}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -755,13 +755,13 @@ export function OrganizationSettings() {
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
+                    {/* <TableCell className="text-center">
                       <div className="flex justify-center">
                         <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center cursor-not-allowed opacity-70">
                           <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         </div>
                       </div>
-                    </TableCell>
+                    </TableCell> */}
                     <TableCell className="text-center">
                       <div className="flex justify-center">
                         <button
@@ -822,26 +822,6 @@ export function OrganizationSettings() {
                         </button>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex justify-center">
-                        <button
-                          onClick={() =>
-                            togglePermission(permission.id, "viewer")
-                          }
-                          className="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
-                        >
-                          {permission.viewer ? (
-                            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
-                              <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                              <X className="w-4 h-4 text-muted-foreground" />
-                            </div>
-                          )}
-                        </button>
-                      </div>
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -871,10 +851,10 @@ export function OrganizationSettings() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Database className="w-5 h-5" />
-              ERP Configuration
+              Configuration
             </CardTitle>
             <CardDescription>
-              Configure default input and export ERP systems for your data
+              Configure default input and export systems for your data
               processing workflows
             </CardDescription>
           </CardHeader>
@@ -882,9 +862,9 @@ export function OrganizationSettings() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Default Input ERP */}
               <div className="space-y-3">
-                <Label>Default Input ERP</Label>
+                <Label>Input System</Label>
                 <p className="text-sm text-muted-foreground">
-                  Select the default ERP for data imports
+                  Select the default source for data imports
                 </p>
                 <Select
                   value={servicesSettings.defaultInputErp}
@@ -926,9 +906,9 @@ export function OrganizationSettings() {
 
               {/* Default Export ERP */}
               <div className="space-y-3">
-                <Label>Default Export ERP</Label>
+                <Label>Export System</Label>
                 <p className="text-sm text-muted-foreground">
-                  Select the default ERP for data exports
+                  Select the default source for data exports
                 </p>
                 <Select
                   value={servicesSettings.defaultExportErp}
