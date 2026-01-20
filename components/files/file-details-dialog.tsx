@@ -363,7 +363,27 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                     </div>
                     <div className="bg-muted/30 rounded-lg p-4 border">
                       <p className="text-xs text-muted-foreground mb-1">Processing Time</p>
-                      <p className="font-mono text-sm font-medium">{formatToIST(file.processing_time || "2h 25m") }</p>
+                      <p className="font-mono text-sm font-medium">
+                        {(() => {
+                          if (file.processing_time) {
+                            if (typeof file.processing_time === 'string' && file.processing_time.includes('s')) {
+                              return file.processing_time
+                            }
+                            const seconds = typeof file.processing_time === 'string' ? parseFloat(file.processing_time) : file.processing_time
+                            if (!isNaN(seconds)) {
+                              if (seconds < 1) return `${(seconds * 1000).toFixed(0)}ms`
+                              if (seconds < 60) return `${seconds.toFixed(1)}s`
+                              const minutes = Math.floor(seconds / 60)
+                              const remainingSeconds = Math.floor(seconds % 60)
+                              if (minutes < 60) return `${minutes}m ${remainingSeconds}s`
+                              const hours = Math.floor(minutes / 60)
+                              const remainingMinutes = minutes % 60
+                              return `${hours}h ${remainingMinutes}m`
+                            }
+                          }
+                          return "—"
+                        })()}
+                      </p>
                     </div>
                   </div>
                 </div>

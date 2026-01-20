@@ -22,18 +22,18 @@ interface ErpSourceFormProps {
 }
 
 const ERP_OPTIONS = [
-  { label: "QuickBooks Online", value: "quickbooks" },
-  { label: "Oracle Fusion", value: "oracle" },
-  { label: "SAP ERP", value: "sap" },
-  { label: "Microsoft Dynamics", value: "dynamics" },
-  { label: "NetSuite", value: "netsuite" },
-  { label: "Workday", value: "workday" },
-  { label: "Infor M3", value: "infor-m3" },
-  { label: "Infor LN", value: "infor-ln" },
-  { label: "Epicor Kinetic", value: "epicor" },
-  { label: "QAD ERP", value: "qad" },
-  { label: "IFS Cloud", value: "ifs" },
-  { label: "Sage Intacct", value: "sage" },
+  { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
+  { label: "ORACLE FUSION", value: "oracle" },
+  { label: "SAP", value: "sap" },
+  { label: "MICROSOFT DYNAMICS", value: "dynamics" },
+  { label: "NETSUITE", value: "netsuite" },
+  { label: "WORKDAY", value: "workday" },
+  { label: "INFOR M3", value: "infor-m3" },
+  { label: "INFOR LN", value: "infor-ln" },
+  { label: "EPICOR KINETIC", value: "epicor" },
+  { label: "QAD", value: "qad" },
+  { label: "IFS CLOUD", value: "ifs" },
+  { label: "SAGE INTACCT", value: "sage" },
 ]
 
 export default function ErpSourceForm({

@@ -78,7 +78,7 @@ export default function UnifiedBridgeImport({
     ftp: "Pull files from FTP or SFTP servers",
     tcp: "Stream data from TCP endpoints",
     http: "Fetch data from HTTP APIs and endpoints",
-    other: "Connect to ERP systems like QuickBooks, SAP, Oracle",
+    other: "Connect to systems like QuickBooks, SAP, Oracle",
   }
 
   return (

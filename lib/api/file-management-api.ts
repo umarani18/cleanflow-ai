@@ -71,9 +71,13 @@ export interface DqReportResponse {
   rules_version?: string
   script_version?: string
   timestamp_utc?: string
+  input_timestamp_utc?: string
+  output_timestamp_utc?: string
+  processing_time_seconds?: number
   user_id?: string
   upload_id?: string
   rows_in?: number
+  rows_out?: number
   rows_clean?: number
   rows_fixed?: number
   rows_quarantined?: number

@@ -63,19 +63,19 @@ import { useToast } from "@/hooks/use-toast";
 
 // ERP Options
 const ERP_OPTIONS = [
-  { value: "quickbooks", label: "QuickBooks Online" },
-  { value: "oracle", label: "Oracle Fusion" },
-  { value: "sap", label: "SAP ERP" },
-  { value: "dynamics", label: "Microsoft Dynamics" },
-  { value: "netsuite", label: "NetSuite" },
-  { value: "workday", label: "Workday" },
-  { value: "infor-m3", label: "Infor M3" },
-  { value: "infor-ln", label: "Infor LN" },
-  { value: "epicor", label: "Epicor Kinetic" },
-  { value: "qad", label: "QAD ERP" },
-  { value: "ifs", label: "IFS Cloud" },
-  { value: "sage", label: "Sage Intacct" },
-  { value: "custom", label: "Custom ERP" },
+  { value: "quickbooks", label: "QUICKBOOKS ONLINE" },
+  { value: "oracle", label: "ORACLE FUSION" },
+  { value: "sap", label: "SAP" },
+  { value: "dynamics", label: "MICROSOFT DYNAMICS" },
+  { value: "netsuite", label: "NETSUITE" },
+  { value: "workday", label: "WORKDAY" },
+  { value: "infor-m3", label: "INFOR M3" },
+  { value: "infor-ln", label: "INFOR LN" },
+  { value: "epicor", label: "EPICOR KINETIC" },
+  { value: "qad", label: "QAD" },
+  { value: "ifs", label: "IFS CLOUD" },
+  { value: "sage", label: "SAGE INTACCT" },
+  { value: "custom", label: "CUSTOM" },
 ];
 
 // Initial organization settings
@@ -83,9 +83,8 @@ const INITIAL_ORG_SETTINGS = {
   name: "Infiniqon",
   email: "contact@infiniqon.com",
   phone: "+91 63 4567 8900",
-  address: "Ekkaduthangal, Chennai, Tamil Nadu 600032",
-  subscriptionPlan: "pro",
-  preferredFormat: "csv",
+  address: "Chennai, Tamil Nadu, 600044",
+  subscriptionPlan: "standard",
 };
 
 // Initial services settings
@@ -97,6 +96,7 @@ const INITIAL_SERVICES_SETTINGS = {
   dataTransformEnabled: true,
   dataQualityEnabled: true,
   cleanDataShieldEnabled: false,
+  preferredFormat: "csv",
 };
 
 // Initial members data
@@ -515,10 +515,10 @@ export function OrganizationSettings() {
 
             <Separator />
 
-            {/* Subscription & Preferences */}
+            {/* Subscription Plan */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Subscription Plan</Label>
+                <Label>Plan</Label>
                 <Select
                   value={orgSettings.subscriptionPlan}
                   onValueChange={(value) =>
@@ -529,29 +529,9 @@ export function OrganizationSettings() {
                     <SelectValue placeholder="Select plan" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="free">Free</SelectItem>
+                    <SelectItem value="standard">Standard</SelectItem>
                     <SelectItem value="pro">Pro</SelectItem>
                     <SelectItem value="enterprise">Enterprise</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Preferred Data Format</Label>
-                <Select
-                  value={orgSettings.preferredFormat}
-                  onValueChange={(value) =>
-                    handleOrgChange("preferredFormat", value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select format" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="csv">CSV</SelectItem>
-                    <SelectItem value="json">JSON</SelectItem>
-                    <SelectItem value="xlsx">XLSX</SelectItem>
-                    <SelectItem value="sql">SQL</SelectItem>
-                    <SelectItem value="parquet">Parquet</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -859,10 +839,10 @@ export function OrganizationSettings() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Default Input ERP */}
               <div className="space-y-3">
-                <Label>Input System</Label>
+                <Label>Import</Label>
                 <p className="text-sm text-muted-foreground">
                   Select the default source for data imports
                 </p>
@@ -906,7 +886,7 @@ export function OrganizationSettings() {
 
               {/* Default Export ERP */}
               <div className="space-y-3">
-                <Label>Export System</Label>
+                <Label>Export</Label>
                 <p className="text-sm text-muted-foreground">
                   Select the default source for data exports
                 </p>
@@ -947,6 +927,31 @@ export function OrganizationSettings() {
                   </div>
                 )}
               </div>
+
+              {/* Data Format */}
+              <div className="space-y-3">
+                <Label>Data Format</Label>
+                <p className="text-sm text-muted-foreground">
+                  Select the preferred data format
+                </p>
+                <Select
+                  value={servicesSettings.preferredFormat}
+                  onValueChange={(value) =>
+                    handleServicesChange("preferredFormat", value)
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="csv">CSV</SelectItem>
+                    <SelectItem value="json">JSON</SelectItem>
+                    <SelectItem value="xlsx">XLSX</SelectItem>
+                    <SelectItem value="sql">SQL</SelectItem>
+                    <SelectItem value="parquet">Parquet</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -958,9 +963,6 @@ export function OrganizationSettings() {
               <Cog className="w-5 h-5" />
               Services
             </CardTitle>
-            <CardDescription>
-              Enable or disable data processing services for your organization
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Data Transform */}

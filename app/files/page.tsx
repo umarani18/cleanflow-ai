@@ -97,24 +97,25 @@ const STATUS_OPTIONS = [
 ]
 
 const SOURCE_OPTIONS = [
-  { label: "Local Directory", value: "local" },
+  { label: "Custom", value: "local" },
   { label: "Unified Bridge", value: "unified-bridge" },
   // { label: "ERP", value: "erp" },
 ]
 
 const ERP_OPTIONS = [
-  { label: "QuickBooks Online", value: "quickbooks" },
-  { label: "Oracle Fusion", value: "oracle" },
+  { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
+  { label: "ORACLE FUSION", value: "oracle" },
   { label: "SAP", value: "sap" },
-  { label: "Microsoft Dynamics", value: "dynamics" },
-  { label: "NetSuite", value: "netsuite" },
-  { label: "Workday", value: "workday" },
-  { label: "Infor M3", value: "infor-m3" },
-  { label: "Infor LN", value: "infor-ln" },
-  { label: "Epicor Kinetic", value: "epicor" },
+  { label: "MICROSOFT DYNAMICS", value: "dynamics" },
+  { label: "NETSUITE", value: "netsuite" },
+  { label: "WORKDAY", value: "workday" },
+  { label: "INFOR M3", value: "infor-m3" },
+  { label: "INFOR LN", value: "infor-ln" },
+  { label: "EPICOR KINETIC", value: "epicor" },
   { label: "QAD", value: "qad" },
-  { label: "IFS Cloud", value: "ifs" },
-  { label: "Sage Intacct", value: "sage" },
+  { label: "IFS CLOUD", value: "ifs" },
+  { label: "SAGE INTACCT", value: "sage" },
+  { label: "CUSTOM SOURCE", value: "custom-source" },
 ]
 
 export default function FilesPage() {
@@ -174,7 +175,20 @@ function FilesPageContent() {
     "score",
     "quality",
     "rows",
-    "datatype",
+    "category",
+    "status",
+    "uploaded",
+    "updated",
+    "processingTime",
+    "actions"
+  ]))
+  const [selectedDestinationFormat, setSelectedDestinationFormat] = useState<string | null>(null)
+  const [pendingVisibleColumns, setPendingVisibleColumns] = useState<Set<string>>(new Set([
+    "file",
+    "score",
+    "quality",
+    "rows",
+    "category",
     "status",
     "uploaded",
     "updated",
@@ -864,7 +878,6 @@ function FilesPageContent() {
                   <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Source:</span>
                   <Select value={selectedSource} onValueChange={(value) => {
                     setSelectedSource(value)
-                    setSelectedDestination("null")
                     console.log(`Selected Source: ${value}`)
                   }}>
                     <SelectTrigger className="w-full sm:w-[180px] h-9">
@@ -897,7 +910,6 @@ function FilesPageContent() {
                   <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Destination:</span>
                   <Select value={selectedDestination} onValueChange={(value) => {
                     setSelectedDestination(value)
-                    setSelectedSource("null")
                     console.log(`Selected Destination: ${value}`)
                   }}>
                     <SelectTrigger className="w-full sm:w-[180px] h-9">
@@ -913,11 +925,21 @@ function FilesPageContent() {
                   </Select>
                 </div>
               </div>
+              {selectedDestination !== "null" && selectedDestination === "local" && (
+                <Button 
+                  size="sm" 
+                  className="gap-2"
+                  variant={selectedDestinationFormat ? "default" : "outline"}
+                  disabled={!selectedDestinationFormat}
+                >
+                  <Download className="h-4 w-4" />
+                  Export
+                </Button>
+              )}
             </div>
 
-            
-            {/* Custom Rules Section */}
-            {(selectedSource === "local" ||  selectedSource === "unified-bridge") && (
+            {/* Custom Rules Section - only show for source, not destination */}
+            {selectedDestination === "null" && (selectedSource === "local" ||  selectedSource === "unified-bridge") && (
               <div className="rounded-lg border bg-card p-4">
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between gap-3">
@@ -978,7 +1000,7 @@ function FilesPageContent() {
                         <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
                       </div>
                       <div className="space-y-1 sm:space-y-2">
-                        <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your ERP data for transformation</p>
+                        <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your data for transformation</p>
                         <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">Drag & drop or click to browse</p>
                       </div>
                     </div>
@@ -1034,46 +1056,46 @@ function FilesPageContent() {
             </div>
 
             {selectedDestination === "local" ? (
-                <div
-                  className={cn(
-                    "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
-                    dragActive 
-                      ? "border-primary bg-primary/5 scale-[1.01]" 
-                      : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50"
-                  )}
-                  onDragEnter={handleDrag}
-                  onDragOver={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => !uploading && fileInputRef.current?.click()}
-                >
-                  {uploading ? (
-                    <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
-                      <Loader2 className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 animate-spin text-primary" />
-                      <div className="text-center">
-                        <p className="text-base sm:text-lg font-medium">Uploading...</p>
-                        <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">{uploadProgress}%</p>
-                      </div>
-                      <Progress value={uploadProgress} className="w-48 sm:w-60 lg:w-72 h-2 sm:h-3" />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6 text-center">
-                      <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8">
-                        <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
-                      </div>
-                      <div className="space-y-1 sm:space-y-2">
-                        <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your ERP data for transformation</p>
-                        <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">Drag & drop or click to browse</p>
-                      </div>
-                    </div>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.xlsx,.xls,.json,.sql"
-                    className="hidden"
-                    onChange={handleFileInput}
-                  />
+                <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
+                  <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
+                    <Download className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
+                  </div>
+                  <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
+                    Custom Destination
+                  </h3>
+                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
+                    Select your preferred export format
+                  </p>
+                  <div className="flex flex-wrap gap-3 justify-center">
+                    <Button 
+                      variant={selectedDestinationFormat === "csv" ? "default" : "outline"}
+                      onClick={() => setSelectedDestinationFormat("csv")}
+                      size="lg"
+                    >
+                      CSV
+                    </Button>
+                    <Button 
+                      variant={selectedDestinationFormat === "excel" ? "default" : "outline"}
+                      onClick={() => setSelectedDestinationFormat("excel")}
+                      size="lg"
+                    >
+                      Excel
+                    </Button>
+                    <Button 
+                      variant={selectedDestinationFormat === "json" ? "default" : "outline"}
+                      onClick={() => setSelectedDestinationFormat("json")}
+                      size="lg"
+                    >
+                      JSON
+                    </Button>
+                    <Button 
+                      variant={selectedDestinationFormat === "sql" ? "default" : "outline"}
+                      onClick={() => setSelectedDestinationFormat("sql")}
+                      size="lg"
+                    >
+                      SQL
+                    </Button>
+                  </div>
                 </div>
               ) : selectedDestination === "erp" && selectedDestinationErp === "quickbooks" ? (
                 <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
@@ -1181,7 +1203,7 @@ function FilesPageContent() {
                       <Menu className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Column Filter</TooltipContent>
+                  <TooltipContent>Column Picker</TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -1214,8 +1236,8 @@ function FilesPageContent() {
                       {visibleColumns.has("rows") && (
                         <TableHead className="text-xs text-left">Rows</TableHead>
                       )}
-                      {visibleColumns.has("datatype") && (
-                        <TableHead className="text-xs text-left">Data Type</TableHead>
+                      {visibleColumns.has("category") && (
+                        <TableHead className="text-xs text-left">Category</TableHead>
                       )}
                       {visibleColumns.has("status") && (
                         <TableHead 
@@ -1312,10 +1334,14 @@ function FilesPageContent() {
                             {file.rows_clean || file.rows_in || 0}
                           </TableCell>
                         )}
-                        {visibleColumns.has("datatype") && (
+                        {visibleColumns.has("category") && (
                           <TableCell className="text-xs text-muted-foreground text-left">
                             <Badge variant="secondary" className="text-xs">
-                              {["CSV", "JSON", "Excel", "XML"][Math.floor(Math.random() * 4)]}
+                              {(() => {
+                                // Hash-based deterministic assignment: 95% Batch, 5% Streaming
+                                const hash = file.upload_id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+                                return hash % 100 < 95 ? "Batch" : "Streaming"
+                              })()}
                             </Badge>
                           </TableCell>
                         )}
@@ -1337,8 +1363,22 @@ function FilesPageContent() {
                           </TableCell>
                         )}
                         {visibleColumns.has("processingTime") && (
-                          <TableCell className="text-xs text-muted-foreground tabular-nums text-left">
-                            {formatToIST(file.processing_time  || "2h 25m")}
+                          <TableCell className="text-xs text-muted-foreground text-left">
+                            {(() => {
+                              const uploadedAt = file.uploaded_at || file.created_at
+                              const updatedAt = file.updated_at || file.status_timestamp
+                              if (!uploadedAt || !updatedAt) return "—"
+                              const uploadTime = new Date(uploadedAt).getTime()
+                              const updateTime = new Date(updatedAt).getTime()
+                              const diffMs = updateTime - uploadTime
+                              if (diffMs < 0) return "—"
+                              const seconds = Math.floor(diffMs / 1000)
+                              const minutes = Math.floor(seconds / 60)
+                              const hours = Math.floor(minutes / 60)
+                              if (hours > 0) return `${hours}h ${minutes % 60}m`
+                              if (minutes > 0) return `${minutes}m ${seconds % 60}s`
+                              return `${seconds}s`
+                            })()}
                           </TableCell>
                         )}
                         {visibleColumns.has("actions") && (
@@ -1469,7 +1509,7 @@ function FilesPageContent() {
                   { id: "score", label: "Score" },
                   { id: "quality", label: "Data Quality" },
                   { id: "rows", label: "Rows" },
-                  { id: "datatype", label: "Data Type" },
+                  { id: "category", label: "Category" },
                   { id: "status", label: "Status" },
                   { id: "uploaded", label: "Uploaded" },
                   { id: "updated", label: "Updated" },
@@ -1479,15 +1519,15 @@ function FilesPageContent() {
                   <div key={col.id} className="flex items-center space-x-2">
                     <Checkbox
                       id={`display-col-${col.id}`}
-                      checked={visibleColumns.has(col.id)}
+                      checked={pendingVisibleColumns.has(col.id)}
                       onCheckedChange={(checked) => {
-                        const newVisible = new Set(visibleColumns)
+                        const newVisible = new Set(pendingVisibleColumns)
                         if (checked) {
                           newVisible.add(col.id)
                         } else {
                           newVisible.delete(col.id)
                         }
-                        setVisibleColumns(newVisible)
+                        setPendingVisibleColumns(newVisible)
                       }}
                     />
                     <Label htmlFor={`display-col-${col.id}`} className="text-sm cursor-pointer">
@@ -1498,7 +1538,17 @@ function FilesPageContent() {
               </div>
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel>Close</AlertDialogCancel>
+              <Button 
+                onClick={() => {
+                  setVisibleColumns(new Set(pendingVisibleColumns))
+                  setDisplayColumnModalOpen(false)
+                }}
+              >
+                Apply
+              </Button>
+              <AlertDialogCancel onClick={() => {
+                setPendingVisibleColumns(new Set(visibleColumns))
+              }}>Close</AlertDialogCancel>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
