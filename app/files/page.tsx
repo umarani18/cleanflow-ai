@@ -878,6 +878,7 @@ function FilesPageContent() {
                   <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Source:</span>
                   <Select value={selectedSource} onValueChange={(value) => {
                     setSelectedSource(value)
+                    setSelectedDestination("null")
                     console.log(`Selected Source: ${value}`)
                   }}>
                     <SelectTrigger className="w-full sm:w-[180px] h-9">
@@ -910,6 +911,7 @@ function FilesPageContent() {
                   <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Destination:</span>
                   <Select value={selectedDestination} onValueChange={(value) => {
                     setSelectedDestination(value)
+                    setSelectedSource("null")
                     console.log(`Selected Destination: ${value}`)
                   }}>
                     <SelectTrigger className="w-full sm:w-[180px] h-9">
@@ -925,7 +927,7 @@ function FilesPageContent() {
                   </Select>
                 </div>
               </div>
-              {selectedDestination !== "null" && selectedDestination === "local" && (
+              {(selectedDestination === "unified-bridge" || selectedDestination === "local") && (
                 <Button 
                   size="sm" 
                   className="gap-2"
