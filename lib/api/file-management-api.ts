@@ -262,6 +262,28 @@ class FileManagementAPI {
 
     if (!response.ok) throw new Error(`Download failed: ${response.statusText}`)
 
+    // Check if response is JSON (presigned URL response) vs direct file content
+    const contentType = response.headers.get('Content-Type') || ''
+    
+    if (contentType.includes('application/json')) {
+      // Response may contain presigned URL - parse and fetch from S3
+      const data = await response.json()
+      if (data.presigned_url) {
+        console.log('📥 Fetching from presigned URL:', data.filename || 'file')
+        const s3Response = await fetch(data.presigned_url)
+        if (!s3Response.ok) {
+          throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
+        }
+        return s3Response.blob()
+      }
+      // If no presigned_url, might be an error
+      if (data.error) {
+        throw new Error(data.error)
+      }
+      // Fallback - return empty blob if unexpected JSON
+      return new Blob([JSON.stringify(data)], { type: 'application/json' })
+    }
+
     // Log transformation info if present
     const erpTransformation = response.headers.get('X-ERP-Transformation')
     if (erpTransformation === 'true') {
