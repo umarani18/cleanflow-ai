@@ -275,6 +275,95 @@ class FileManagementAPI {
     return response.blob()
   }
 
+  /**
+   * Export file with column selection and optional renaming.
+   * Uses POST method to send columns array and column_mapping object.
+   */
+  async exportWithColumns(
+    uploadId: string,
+    authToken: string,
+    options: {
+      format: 'csv' | 'excel' | 'json'
+      data: 'all' | 'clean' | 'quarantine'
+      columns?: string[]
+      columnMapping?: Record<string, string>
+      erp?: string
+      entity?: string
+    }
+  ): Promise<Blob> {
+    const url = `${this.baseURL}${ENDPOINTS.FILES_EXPORT(uploadId)}`
+
+    const body: Record<string, any> = {
+      format: options.format,
+      data: options.data,
+    }
+
+    if (options.columns && options.columns.length > 0) {
+      body.columns = options.columns
+    }
+
+    if (options.columnMapping && Object.keys(options.columnMapping).length > 0) {
+      body.column_mapping = options.columnMapping
+    }
+
+    if (options.erp) {
+      body.erp = options.erp
+    }
+
+    if (options.entity) {
+      body.entity = options.entity
+    }
+
+    console.log('📤 Export with columns:', { uploadId, ...options })
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `Export failed: ${response.statusText}`)
+    }
+
+    // Check if response is JSON (presigned URL response) vs direct file content
+    const contentType = response.headers.get('Content-Type') || ''
+    console.log('🔍 Response Content-Type:', contentType)
+    
+    if (contentType.includes('application/json')) {
+      // Response contains presigned URL - parse and fetch from S3
+      const data = await response.json()
+      if (data.presigned_url) {
+        console.log('📥 Fetching from presigned URL:', data.filename)
+        // Fetch the actual file from S3 presigned URL
+        const s3Response = await fetch(data.presigned_url)
+        if (!s3Response.ok) {
+          throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
+        }
+        return s3Response.blob()
+      }
+      // If no presigned_url, might be an error - throw
+      if (data.error) {
+        throw new Error(data.error)
+      }
+    }
+
+    // Log headers for debugging
+    const columnSelection = response.headers.get('X-Column-Selection')
+    if (columnSelection === 'true') {
+      console.log('Column selection applied:', {
+        selected: response.headers.get('X-Selected-Columns'),
+        renamed: response.headers.get('X-Renamed-Columns'),
+      })
+    }
+
+    return response.blob()
+  }
+
   async getFilePreviewFromS3(uploadId: string, authToken: string, maxRows: number = 20): Promise<{ headers: string[], sample_data: any[], total_rows: number }> {
     try {
       // Download the original file from S3 via export endpoint

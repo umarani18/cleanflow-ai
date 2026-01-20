@@ -18,6 +18,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Columns,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -33,6 +34,7 @@ import { fileManagementAPI, type FileStatusResponse } from "@/lib/api/file-manag
 import { AWS_CONFIG } from "@/lib/aws-config"
 import { cn, formatBytes, formatToIST } from "@/lib/utils"
 import { DownloadFormatModal } from "@/components/files/download-format-modal"
+import { ColumnExportDialog } from "@/components/files/column-export-dialog"
 import { ERPTransformationModal } from "@/components/files/erp-transformation-modal"
 import { FileDetailsDialog } from "@/components/files/file-details-dialog"
 import {
@@ -164,6 +166,11 @@ function FilesPageContent() {
   const [columnsLoading, setColumnsLoading] = useState(false)
   const [columnsError, setColumnsError] = useState<string | null>(null)
   const [selectionFileError, setSelectionFileError] = useState<string | null>(null)
+  // Column Export Dialog state
+  const [showColumnExportModal, setShowColumnExportModal] = useState(false)
+  const [columnExportFile, setColumnExportFile] = useState<FileStatusResponse | null>(null)
+  const [columnExportColumns, setColumnExportColumns] = useState<string[]>([])
+  const [columnExportLoading, setColumnExportLoading] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const selectionFileInputRef = useRef<HTMLInputElement>(null)
@@ -628,6 +635,91 @@ function FilesPageContent() {
   const handleDownloadClick = (file: FileStatusResponse) => {
     setDownloadModalFile(file)
     setShowDownloadModal(true)
+  }
+
+  const handleColumnExportClick = async (file: FileStatusResponse) => {
+    if (!idToken) return
+    
+    setColumnExportFile(file)
+    setColumnExportLoading(true)
+    setShowColumnExportModal(true)
+    
+    try {
+      // Fetch columns from the file
+      const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
+      setColumnExportColumns(resp.columns || [])
+    } catch (error) {
+      console.error("Failed to fetch columns for export:", error)
+      // Try to get columns from preview as fallback
+      try {
+        const preview = await fileManagementAPI.getFilePreview(file.upload_id, idToken)
+        setColumnExportColumns(preview.headers || [])
+      } catch (previewError) {
+        console.error("Failed to get columns from preview:", previewError)
+        setColumnExportColumns([])
+        toast({
+          title: "Warning",
+          description: "Could not load column list. Export may not work correctly.",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setColumnExportLoading(false)
+    }
+  }
+
+  const handleColumnExport = async (options: {
+    format: 'csv' | 'excel' | 'json'
+    dataType: 'all' | 'clean' | 'quarantine'
+    columns: string[]
+    columnMapping: Record<string, string>
+  }) => {
+    if (!columnExportFile || !idToken) return
+    
+    setDownloading(columnExportFile.upload_id)
+    
+    try {
+      const blob = await fileManagementAPI.exportWithColumns(
+        columnExportFile.upload_id,
+        idToken,
+        {
+          format: options.format,
+          data: options.dataType,
+          columns: options.columns,
+          columnMapping: options.columnMapping,
+        }
+      )
+      
+      const baseFilename = (columnExportFile.original_filename || columnExportFile.filename || "file").replace(/\.[^/.]+$/, "")
+      const extension = options.format === "excel" ? ".xlsx" : options.format === "json" ? ".json" : ".csv"
+      const filename = `${baseFilename}_export${extension}`
+      
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      
+      toast({
+        title: "Export Complete",
+        description: `Exported ${options.columns.length} columns with ${Object.keys(options.columnMapping).length} renamed`,
+      })
+      
+      setShowColumnExportModal(false)
+      setColumnExportFile(null)
+    } catch (error) {
+      console.error("Column export error:", error)
+      toast({
+        title: "Export Failed",
+        description: "Unable to export file with selected columns",
+        variant: "destructive",
+      })
+    } finally {
+      setDownloading(null)
+    }
   }
 
   const handleFormatSelected = (format: "csv" | "excel" | "json", dataType: "original" | "clean") => {
@@ -1175,6 +1267,22 @@ function FilesPageContent() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    onClick={() => handleColumnExportClick(file)}
+                                    disabled={downloading === file.upload_id}
+                                  >
+                                    <Columns className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Export with Column Selection</TooltipContent>
+                              </Tooltip>
+                            )}
+                            {(file.status === "DQ_FIXED" || file.status === "COMPLETED") && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="h-7 w-7 sm:h-8 sm:w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
                                     onClick={() => handlePushToQuickBooks(file)}
                                   >
@@ -1366,6 +1474,21 @@ function FilesPageContent() {
               variant: "destructive",
             })
           }}
+        />
+
+        <ColumnExportDialog
+          open={showColumnExportModal}
+          onOpenChange={(open) => {
+            setShowColumnExportModal(open)
+            if (!open) {
+              setColumnExportFile(null)
+              setColumnExportColumns([])
+            }
+          }}
+          fileName={columnExportFile?.original_filename || columnExportFile?.filename || "file"}
+          columns={columnExportColumns}
+          onExport={handleColumnExport}
+          exporting={downloading === columnExportFile?.upload_id || columnExportLoading}
         />
       </div>
     </TooltipProvider>
