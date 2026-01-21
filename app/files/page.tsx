@@ -1,7 +1,10 @@
+
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import * as XLSX from "xlsx"
+import { useAppDispatch, useAppSelector } from "@/lib/store"
+import { fetchFiles, updateFile, removeFile, selectFiles, selectFilesStatus } from "@/lib/features/files/filesSlice"
 import {
   Upload,
   FileText,
@@ -137,8 +140,17 @@ export default function FilesPage() {
 }
 
 function FilesPageContent() {
-  const [files, setFiles] = useState<FileStatusResponse[]>([])
+  const dispatch = useAppDispatch()
+  // Use Redux state instead of local state
+  const files = useAppSelector(selectFiles)
+  const filesStatus = useAppSelector(selectFilesStatus)
+  
   const [loading, setLoading] = useState(false)
+  
+  // Sync local loading state with Redux status for compatibility
+  useEffect(() => {
+    setLoading(filesStatus === 'loading')
+  }, [filesStatus])
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [downloading, setDownloading] = useState<string | null>(null)
@@ -211,74 +223,11 @@ function FilesPageContent() {
 
   const loadFiles = useCallback(async () => {
     if (!idToken) return
-    setLoading(true)
-    try {
-      const response = await fileManagementAPI.getUploads(idToken)
-      const items = response.items || []
-      setFiles(items)
+    // Dispatch global fetch action
+    dispatch(fetchFiles(idToken))
+  }, [idToken, dispatch])
 
-      // Background fetch for processing times if missing
-      const filesNeedingTime = items.filter(
-        f => (f.status === 'COMPLETED' || f.status === 'DQ_FIXED') &&
-             !f.processing_time && !f.processing_time_seconds
-      )
 
-      if (filesNeedingTime.length > 0) {
-        // Fetch in background without blocking UI
-        enrichFilesWithTime(filesNeedingTime)
-      }
-    } catch (error) {
-      console.error("Error loading files:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load files",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [idToken, toast])
-
-  const enrichFilesWithTime = async (candidates: FileStatusResponse[]) => {
-    if (!idToken) return
-    
-    // Process in chunks to avoid overwhelming the browser/API
-    const CHUNK_SIZE = 5
-    const updates = new Map<string, number>()
-    
-    for (let i = 0; i < candidates.length; i += CHUNK_SIZE) {
-      const chunk = candidates.slice(i, i + CHUNK_SIZE)
-      await Promise.all(chunk.map(async (file) => {
-        try {
-          const report = await fileManagementAPI.downloadDqReport(file.upload_id, idToken)
-          // Check for processing_time_seconds or fallback to parsing processing_time
-          let seconds = report.processing_time_seconds
-          
-          if (seconds === undefined && report.processing_time) {
-             const pt = report.processing_time as any
-             if (typeof pt === 'number') seconds = pt
-             else if (typeof pt === 'string') seconds = parseFloat(pt)
-          }
-
-          if (seconds !== undefined) {
-            updates.set(file.upload_id, seconds)
-          }
-        } catch (e) {
-          // Silent failure for report fetch
-          console.warn(`Failed to fetch report for time enrichment: ${file.upload_id}`)
-        }
-      }))
-    }
-
-    if (updates.size > 0) {
-      setFiles(prev => prev.map(f => {
-        if (updates.has(f.upload_id)) {
-          return { ...f, processing_time_seconds: updates.get(f.upload_id) }
-        }
-        return f
-      }))
-    }
-  }
 
   useEffect(() => {
     loadFiles()
@@ -399,13 +348,8 @@ function FilesPageContent() {
         useAI,
         (progress) => setUploadProgress(progress),
         (status) => {
-          setFiles((prev) => {
-            const existing = prev.find((f) => f.upload_id === status.upload_id)
-            if (existing) {
-              return prev.map((f) => (f.upload_id === status.upload_id ? status : f))
-            }
-            return [status, ...prev]
-          })
+          // Use Redux action to update store
+          dispatch(updateFile(status))
         },
         false // Don't auto-process
       )

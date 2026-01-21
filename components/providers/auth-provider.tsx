@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, ReactNode } from "react";
 import { useAuth as useAuthHook } from "@/hooks/useAuth";
+import { FilePreloader } from "@/components/files/file-preloader";
 
 interface MfaSetupData {
   secretCode: string;
@@ -64,6 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }}
     >
       {children}
+      <FilePreloader />
     </AuthContext.Provider>
   );
 };

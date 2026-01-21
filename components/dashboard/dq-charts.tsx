@@ -116,7 +116,7 @@ export function DqCharts({ files }: DqChartsProps) {
     useState<OverallDqReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
-  const [showStaticChart, setShowStaticChart] = useState(false);
+  const [showStaticChart, setShowStaticChart] = useState(true);
 
   useEffect(() => {
     const loadOverallReport = async () => {
@@ -632,13 +632,15 @@ export function DqCharts({ files }: DqChartsProps) {
                 </CardDescription>
               </div>
               
-              {/* Arrow Toggle - Icon Only */}
+              {/* Arrow Toggle - Icon Only - HIDDEN FOR DEMO
               <button
                 onClick={() => setShowStaticChart(!showStaticChart)}
                 className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title={showStaticChart ? "Switch to Live" : "Switch to Demo"}
               >
                 <ArrowRightLeft className="h-4 w-4" />
               </button>
+              */}
             </div>
 
             {!showStaticChart && (
@@ -737,6 +739,7 @@ export function DqCharts({ files }: DqChartsProps) {
               </ResponsiveContainer>
             </div>
           ) : (
+            /* LIVE CHART HIDDEN FOR DEMO
             monthlyData.length > 0 ? (
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -830,6 +833,8 @@ export function DqCharts({ files }: DqChartsProps) {
               No monthly data available
             </div>
             )
+            */
+            null
           )}
         </CardContent>
       </Card>
