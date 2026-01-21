@@ -26,6 +26,8 @@ import {
   Area,
   Legend,
   ResponsiveContainer,
+  LineChart,
+  Line,
 } from "recharts";
 import {
   FileStatusResponse,
@@ -40,6 +42,7 @@ import {
   CheckCircle,
   AlertTriangle,
   BarChart3,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -113,6 +116,7 @@ export function DqCharts({ files }: DqChartsProps) {
     useState<OverallDqReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
+  const [showStaticChart, setShowStaticChart] = useState(false);
 
   useEffect(() => {
     const loadOverallReport = async () => {
@@ -612,30 +616,128 @@ export function DqCharts({ files }: DqChartsProps) {
       </div>
 
       {/* Trends - Full width with comprehensive data */}
-      <Card className="border-0 shadow-sm">
+      {/* Trends - Full width with comprehensive data */}
+      {/* Trends - Full width with comprehensive data */}
+      <Card className="border-0 shadow-sm relative group">
         <CardHeader className="pb-1 pt-3 px-4">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                Processing Trends
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Row-level processing statistics over time
-              </CardDescription>
+            <div className="flex items-center gap-4">
+              <div>
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                  Processing Trends
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Row-level processing statistics over time
+                </CardDescription>
+              </div>
+              
+              {/* Arrow Toggle - Icon Only */}
+              <button
+                onClick={() => setShowStaticChart(!showStaticChart)}
+                className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+              </button>
             </div>
-            <Tabs value={timePeriod} onValueChange={(value) => setTimePeriod(value as 'day' | 'week' | 'month' | 'year')}>
-              <TabsList className="h-8">
-                <TabsTrigger value="day" className="text-xs px-3 h-7">Day</TabsTrigger>
-                <TabsTrigger value="week" className="text-xs px-3 h-7">Week</TabsTrigger>
-                {/* <TabsTrigger value="month" className="text-xs px-3 h-7">Month</TabsTrigger> */}
-                <TabsTrigger value="year" className="text-xs px-3 h-7">Year</TabsTrigger>
-              </TabsList>
-            </Tabs>
+
+            {!showStaticChart && (
+              <Tabs value={timePeriod} onValueChange={(value) => setTimePeriod(value as 'day' | 'week' | 'month' | 'year')}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="day" className="text-xs px-3 h-7">Day</TabsTrigger>
+                  <TabsTrigger value="week" className="text-xs px-3 h-7">Week</TabsTrigger>
+                  <TabsTrigger value="year" className="text-xs px-3 h-7">Year</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
           </div>
         </CardHeader>
         <CardContent className="px-4 pb-3 pt-1">
-          {monthlyData.length > 0 ? (
+          {showStaticChart ? (
+            <div className="h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={[
+                    { month: 'Jan', quarantined: 5,  clean: 80, fixed: 45 },
+                    { month: 'Feb', quarantined: 12, clean: 80, fixed: 47 },
+                    { month: 'Mar', quarantined: 25, clean: 79, fixed: 45 },
+                    { month: 'Apr', quarantined: 35, clean: 80, fixed: 43 },
+                    { month: 'May', quarantined: 48, clean: 80, fixed: 48 },
+                    { month: 'Jun', quarantined: 55, clean: 78, fixed: 46 },
+                    { month: 'Jul', quarantined: 62, clean: 77, fixed: 49 },
+                    { month: 'Aug', quarantined: 70, clean: 78, fixed: 54 },
+                    { month: 'Sep', quarantined: 78, clean: 79, fixed: 55 },
+                    { month: 'Oct', quarantined: 82, clean: 77, fixed: 59 },
+                    { month: 'Nov', quarantined: 90, clean: 76, fixed: 65 },
+                  ]}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 5 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={true}
+                    horizontal={true}
+                    stroke="#E5E7EB"
+                    opacity={0.5}
+                  />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11 }}
+                    stroke="#9CA3AF"
+                    axisLine={false}
+                    tickLine={false}
+                    interval={0}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10 }}
+                    stroke="#9CA3AF"
+                    axisLine={false}
+                    tickLine={false}
+                    domain={[0, 100]}
+                  />
+                  {/* Tooltip removed */}
+                  <Legend
+                    wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }}
+                    iconType="circle"
+                    iconSize={8}
+                  />
+                  {/* Line 1: Quarantined (Rising Yellow) */}
+                  <Line
+                    type="linear" 
+                    dataKey="quarantined"
+                    name="Quarantined" 
+                    stroke="#EAB308" 
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: "#EAB308", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={false}
+                    isAnimationActive={false}
+                  />
+                  {/* Line 2: Cleaned (Top Flat-ish Teal) */}
+                  <Line
+                    type="linear"
+                    dataKey="clean"
+                    name="Cleaned" 
+                    stroke="#14B8A6" 
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: "#14B8A6", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={false}
+                    isAnimationActive={false}
+                  />
+                  {/* Line 3: Fixed (Middle Blue) */}
+                  <Line
+                    type="linear"
+                    dataKey="fixed"
+                    name="Fixed" 
+                    stroke="#3B82F6" 
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: "#3B82F6", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            monthlyData.length > 0 ? (
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
@@ -723,10 +825,11 @@ export function DqCharts({ files }: DqChartsProps) {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          ) : (
+            ) : (
             <div className="h-[280px] flex items-center justify-center text-muted-foreground text-xs">
               No monthly data available
             </div>
+            )
           )}
         </CardContent>
       </Card>
