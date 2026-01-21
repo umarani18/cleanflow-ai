@@ -12,6 +12,7 @@ const ENDPOINTS = {
   FILES_COLUMNS: (id: string) => `/files/${id}/columns`, // GET - discover columns
   FILES_EXPORT: (id: string) => `/files/${id}/export`,   // GET - download files
   FILES_ISSUES: (id: string) => `/files/${id}/issues`,   // GET - paged outstanding issues
+  FILES_PREVIEW_DATA: (id: string) => `/files/${id}/preview-data`, // GET - first N rows as JSON
 }
 
 // Response Types
@@ -209,8 +210,20 @@ class FileManagementAPI {
   }
 
   async getFilePreview(uploadId: string, authToken: string): Promise<{ headers: string[], sample_data: any[], total_rows: number }> {
-    // Fetch preview from S3 (top 20 rows)
-    return this.getFilePreviewFromS3(uploadId, authToken, 20)
+    // Use dedicated preview-data endpoint that returns only first N rows
+    try {
+      const endpoint = `${ENDPOINTS.FILES_PREVIEW_DATA(uploadId)}?limit=50`
+      const data = await this.makeRequest(endpoint, authToken, { method: 'GET' })
+      return {
+        headers: data.headers || [],
+        sample_data: data.sample_data || [],
+        total_rows: data.total_rows || 0
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch preview data:', error)
+      // Fallback to S3 method if new endpoint fails
+      return this.getFilePreviewFromS3(uploadId, authToken, 20)
+    }
   }
 
   async startProcessing(

@@ -802,6 +802,28 @@ function FilesPageContent() {
 
       if (!response.ok) throw new Error(`Download failed: ${response.statusText}`)
 
+      // Check if response is JSON (presigned URL for large files) or direct file
+      const contentType = response.headers.get('Content-Type') || ''
+      
+      if (contentType.includes('application/json')) {
+        // Parse JSON to get presigned URL
+        const data = await response.json()
+        if (data.presigned_url) {
+          // Open presigned URL directly - browser will download the file
+          console.log('📥 Opening presigned URL for download:', data.filename || 'file')
+          window.open(data.presigned_url, '_blank')
+          toast({
+            title: "Success",
+            description: targetErp ? `Downloaded with ${targetErp}` : "File download started",
+          })
+          return
+        }
+        if (data.error) {
+          throw new Error(data.error)
+        }
+      }
+
+      // For small files, get blob directly
       const blob = await response.blob()
       const baseFilename = (file.original_filename || file.filename || "file").replace(/\.[^/.]+$/, "")
       const extension = format === "excel" ? ".xlsx" : format === "json" ? ".json" : ".csv"
