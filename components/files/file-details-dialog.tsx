@@ -365,14 +365,14 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                       <p className="text-xs text-muted-foreground mb-1">Processing Time</p>
                       <p className="font-mono text-sm font-medium">
                         {(() => {
-                          if (file.processing_time) {
+                          if (file.processing_time_seconds || file.processing_time) {
                             if (typeof file.processing_time === 'string' && file.processing_time.includes('s')) {
                               return file.processing_time
                             }
-                            const seconds = typeof file.processing_time === 'string' ? parseFloat(file.processing_time) : file.processing_time
-                            if (!isNaN(seconds)) {
+                            const seconds = file.processing_time_seconds ?? (typeof file.processing_time === 'string' ? parseFloat(file.processing_time) : file.processing_time)
+                            if (typeof seconds === 'number' && !isNaN(seconds)) {
                               if (seconds < 1) return `${(seconds * 1000).toFixed(0)}ms`
-                              if (seconds < 60) return `${seconds.toFixed(1)}s`
+                              if (seconds < 60) return `${seconds.toFixed(2)}s`
                               const minutes = Math.floor(seconds / 60)
                               const remainingSeconds = Math.floor(seconds % 60)
                               if (minutes < 60) return `${minutes}m ${remainingSeconds}s`
@@ -452,94 +452,25 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                           </tr>
                         </thead>
                         <tbody>
-                          {(() => {
-                            const startIdx = (previewPage - 1) * PREVIEW_PAGE_SIZE
-                            const endIdx = startIdx + PREVIEW_PAGE_SIZE
-                            const pageData = previewData.sample_data?.slice(startIdx, endIdx) || []
-                            return pageData.map((row, idx) => (
-                              <tr key={startIdx + idx} className="border-b hover:bg-muted/50 transition-colors">
-                                {previewData.headers?.map((header) => (
-                                  <td 
-                                    key={header} 
-                                    className="px-4 py-2.5 whitespace-nowrap border-r last:border-r-0 max-w-[300px] truncate"
-                                    title={row && typeof row === 'object' ? String(row[header] ?? '') : ''}
-                                  >
-                                    {row && typeof row === 'object' ? String(row[header] ?? '') : ''}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))
-                          })()}
+                          {previewData.sample_data?.map((row, idx) => (
+                            <tr key={idx} className="border-b hover:bg-muted/50 transition-colors">
+                              {previewData.headers?.map((header) => (
+                                <td 
+                                  key={header} 
+                                  className="px-4 py-2.5 whitespace-nowrap border-r last:border-r-0 max-w-[300px] truncate"
+                                  title={row && typeof row === 'object' ? String(row[header] ?? '') : ''}
+                                >
+                                  {row && typeof row === 'object' ? String(row[header] ?? '') : ''}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
-                    <div className="p-4 border-t bg-muted/10 shrink-0 space-y-3">
-                      <div className="text-xs text-muted-foreground text-center">
-                        {(() => {
-                          const startRow = (previewPage - 1) * PREVIEW_PAGE_SIZE + 1
-                          const endRow = Math.min(previewPage * PREVIEW_PAGE_SIZE, previewData.total_rows)
-                          return `Showing rows ${startRow}-${endRow} of ${previewData.total_rows} total records`
-                        })()}
-                      </div>
-                      <div className="flex items-center justify-center gap-2 flex-wrap">
-                        {(() => {
-                          const totalPages = Math.ceil(previewData.total_rows / PREVIEW_PAGE_SIZE)
-                          const pages = []
-                          
-                          // Always show first page
-                          pages.push(1)
-                          
-                          // Show pages around current page
-                          const startPage = Math.max(2, previewPage - 1)
-                          const endPage = Math.min(totalPages - 1, previewPage + 1)
-                          
-                          if (startPage > 2) pages.push('...')
-                          for (let i = startPage; i <= endPage; i++) {
-                            pages.push(i)
-                          }
-                          if (endPage < totalPages - 1) pages.push('...')
-                          
-                          // Always show last page
-                          if (totalPages > 1) pages.push(totalPages)
-                          
-                          return (
-                            <>
-                              <button
-                                onClick={() => setPreviewPage(prev => Math.max(1, prev - 1))}
-                                disabled={previewPage === 1}
-                                className="px-2 py-1 text-xs border rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                Prev
-                              </button>
-                              {pages.map((page, idx) => (
-                                <div key={idx}>
-                                  {page === '...' ? (
-                                    <span className="px-1 text-muted-foreground">...</span>
-                                  ) : (
-                                    <button
-                                      onClick={() => setPreviewPage(Number(page))}
-                                      className={cn(
-                                        "px-2 py-1 text-xs border rounded transition-colors",
-                                        page === previewPage
-                                          ? "bg-primary text-primary-foreground border-primary"
-                                          : "hover:bg-muted"
-                                      )}
-                                    >
-                                      {page}
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                              <button
-                                onClick={() => setPreviewPage(prev => Math.min(Math.ceil(previewData.total_rows / PREVIEW_PAGE_SIZE), prev + 1))}
-                                disabled={previewPage === Math.ceil(previewData.total_rows / PREVIEW_PAGE_SIZE)}
-                                className="px-2 py-1 text-xs border rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                Next
-                              </button>
-                            </>
-                          )
-                        })()}
+                    <div className="p-4 border-t bg-muted/10 shrink-0">
+                      <div className="text-sm text-muted-foreground text-center">
+                        Showing 1-{Math.min(20, previewData.total_rows)} of {previewData.total_rows} total records
                       </div>
                     </div>
                   </>

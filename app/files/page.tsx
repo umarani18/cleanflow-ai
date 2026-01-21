@@ -81,6 +81,7 @@ import {
 } from "@/components/ui/tooltip"
 import QuickBooksImport from "@/components/quickbooks/quickbooks-import"
 import UnifiedBridgeImport from "@/components/unified-bridge/unified-bridge-import"
+import CustomDestinationExport from "@/components/files/custom-destination-export"
 import { PushToERPModal } from "@/components/files/push-to-erp-modal"
 
 const STATUS_OPTIONS = [
@@ -97,6 +98,13 @@ const STATUS_OPTIONS = [
 ]
 
 const SOURCE_OPTIONS = [
+  { label: "Custom", value: "local" },
+  { label: "Unified Bridge", value: "unified-bridge" },
+  // { label: "ERP", value: "erp" },
+]
+
+const DESTINATION_OPTIONS = [
+  { label: "None", value: "null" },
   { label: "Custom", value: "local" },
   { label: "Unified Bridge", value: "unified-bridge" },
   // { label: "ERP", value: "erp" },
@@ -206,7 +214,19 @@ function FilesPageContent() {
     setLoading(true)
     try {
       const response = await fileManagementAPI.getUploads(idToken)
-      setFiles(response.items || [])
+      const items = response.items || []
+      setFiles(items)
+
+      // Background fetch for processing times if missing
+      const filesNeedingTime = items.filter(
+        f => (f.status === 'COMPLETED' || f.status === 'DQ_FIXED') &&
+             !f.processing_time && !f.processing_time_seconds
+      )
+
+      if (filesNeedingTime.length > 0) {
+        // Fetch in background without blocking UI
+        enrichFilesWithTime(filesNeedingTime)
+      }
     } catch (error) {
       console.error("Error loading files:", error)
       toast({
@@ -218,6 +238,47 @@ function FilesPageContent() {
       setLoading(false)
     }
   }, [idToken, toast])
+
+  const enrichFilesWithTime = async (candidates: FileStatusResponse[]) => {
+    if (!idToken) return
+    
+    // Process in chunks to avoid overwhelming the browser/API
+    const CHUNK_SIZE = 5
+    const updates = new Map<string, number>()
+    
+    for (let i = 0; i < candidates.length; i += CHUNK_SIZE) {
+      const chunk = candidates.slice(i, i + CHUNK_SIZE)
+      await Promise.all(chunk.map(async (file) => {
+        try {
+          const report = await fileManagementAPI.downloadDqReport(file.upload_id, idToken)
+          // Check for processing_time_seconds or fallback to parsing processing_time
+          let seconds = report.processing_time_seconds
+          
+          if (seconds === undefined && report.processing_time) {
+             const pt = report.processing_time as any
+             if (typeof pt === 'number') seconds = pt
+             else if (typeof pt === 'string') seconds = parseFloat(pt)
+          }
+
+          if (seconds !== undefined) {
+            updates.set(file.upload_id, seconds)
+          }
+        } catch (e) {
+          // Silent failure for report fetch
+          console.warn(`Failed to fetch report for time enrichment: ${file.upload_id}`)
+        }
+      }))
+    }
+
+    if (updates.size > 0) {
+      setFiles(prev => prev.map(f => {
+        if (updates.has(f.upload_id)) {
+          return { ...f, processing_time_seconds: updates.get(f.upload_id) }
+        }
+        return f
+      }))
+    }
+  }
 
   useEffect(() => {
     loadFiles()
@@ -713,7 +774,31 @@ function FilesPageContent() {
 
       if (!response.ok) throw new Error(`Download failed: ${response.statusText}`)
 
-      const blob = await response.blob()
+      // Check if response is JSON (presigned URL response) vs direct file content
+      const contentType = response.headers.get('Content-Type') || ''
+      let blob: Blob
+      
+      if (contentType.includes('application/json')) {
+        // Response may contain presigned URL - parse and fetch from S3
+        const data = await response.json()
+        if (data.presigned_url) {
+          console.log('📥 Fetching from presigned URL:', data.filename || 'file')
+          const s3Response = await fetch(data.presigned_url)
+          if (!s3Response.ok) {
+            throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
+          }
+          blob = await s3Response.blob()
+        } else if (data.error) {
+          throw new Error(data.error)
+        } else {
+          // Fallback - return JSON as blob
+          blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+        }
+      } else {
+        // Direct blob response
+        blob = await response.blob()
+      }
+
       const baseFilename = (file.original_filename || file.filename || "file").replace(/\.[^/.]+$/, "")
       const extension = format === "excel" ? ".xlsx" : format === "json" ? ".json" : ".csv"
       const dataSuffix = dataType === "original" ? "_original" : "_clean"
@@ -761,7 +846,31 @@ function FilesPageContent() {
 
       if (!response.ok) throw new Error(`Download failed: ${response.statusText}`)
 
-      const blob = await response.blob()
+      // Check if response is JSON (presigned URL response) vs direct file content
+      const contentType = response.headers.get('Content-Type') || ''
+      let blob: Blob
+      
+      if (contentType.includes('application/json')) {
+        // Response may contain presigned URL - parse and fetch from S3
+        const data = await response.json()
+        if (data.presigned_url) {
+          console.log('📥 Fetching from presigned URL:', data.filename || 'file')
+          const s3Response = await fetch(data.presigned_url)
+          if (!s3Response.ok) {
+            throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
+          }
+          blob = await s3Response.blob()
+        } else if (data.error) {
+          throw new Error(data.error)
+        } else {
+          // Fallback - return JSON as blob
+          blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+        }
+      } else {
+        // Direct blob response
+        blob = await response.blob()
+      }
+
       const baseFilename = (file.original_filename || file.filename || "file").replace(/\.[^/.]+$/, "")
       const extension = format === "excel" ? ".xlsx" : format === "json" ? ".json" : ".csv"
       const erpSuffix = targetErp ? `_${targetErp.replace(/\s+/g, "_").toLowerCase()}` : ""
@@ -916,7 +1025,7 @@ function FilesPageContent() {
                       <SelectValue placeholder="Select destination" />
                     </SelectTrigger>
                     <SelectContent>
-                      {SOURCE_OPTIONS.map((opt) => (
+                      {DESTINATION_OPTIONS.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           {opt.label}
                         </SelectItem>
@@ -968,177 +1077,147 @@ function FilesPageContent() {
               </div>
             )}
 
-            {/* Content Area */}
-            <div className="space-y-4">
-              {/* Source Section */}
-              {(selectedDestination === "null" && selectedSource === "local") ? (
-                <div
-                  className={cn(
-                    "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
-                    dragActive 
-                      ? "border-primary bg-primary/5 scale-[1.01]" 
-                      : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50"
-                  )}
-                  onDragEnter={handleDrag}
-                  onDragOver={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => !uploading && fileInputRef.current?.click()}
-                >
-                  {uploading ? (
-                    <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
-                      <Loader2 className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 animate-spin text-primary" />
-                      <div className="text-center">
-                        <p className="text-base sm:text-lg font-medium">Uploading...</p>
-                        <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">{uploadProgress}%</p>
-                      </div>
-                      <Progress value={uploadProgress} className="w-48 sm:w-60 lg:w-72 h-2 sm:h-3" />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6 text-center">
-                      <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8">
-                        <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
-                      </div>
-                      <div className="space-y-1 sm:space-y-2">
-                        <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your data for transformation</p>
-                        <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">Drag & drop or click to browse</p>
-                      </div>
-                    </div>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.xlsx,.xls,.json,.sql"
-                    className="hidden"
-                    onChange={handleFileInput}
-                  />
-                </div>
-              ) : selectedSource === "erp" && selectedErp === "quickbooks" ? (
-                <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
-                  <QuickBooksImport
-                    onImportComplete={handleQuickBooksImportComplete}
-                    onNotification={(message, type) => {
-                      toast({
-                        title: type === "success" ? "Success" : "Error",
-                        description: message,
-                        variant: type === "error" ? "destructive" : "default",
-                      })
-                    }}
-                  />
-                </div>
-              ) : selectedSource === "unified-bridge" ? (
-                <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
-                  <UnifiedBridgeImport
-                    onImportComplete={handleQuickBooksImportComplete}
-                    onNotification={(message, type) => {
-                      toast({
-                        title: type === "success" ? "Success" : "Error",
-                        description: message,
-                        variant: type === "error" ? "destructive" : "default",
-                      })
-                    }}
-                  />
-                </div>
-              ) : selectedSource === "erp" ? (
-                <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
-                  <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
-                    <Network className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
-                    {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label}
-                  </h3>
-                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
-                    Connect your {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label} account to import data directly.
-                  </p>
-                  <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
-                </div>
-              ) : null}
-            </div>
 
-            {selectedDestination === "local" ? (
-                <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
-                  <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
-                    <Download className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
+            {/* Content Area - MUTUALLY EXCLUSIVE: Either Source OR Destination */}
+            {selectedDestination === "null" ? (
+              // ========= SOURCE SECTION =========
+              <div className="space-y-4">
+                {selectedSource === "local" ? (
+                  <div
+                    className={cn(
+                      "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
+                      dragActive 
+                        ? "border-primary bg-primary/5 scale-[1.01]" 
+                        : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50"
+                    )}
+                    onDragEnter={handleDrag}
+                    onDragOver={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDrop={handleDrop}
+                    onClick={() => !uploading && fileInputRef.current?.click()}
+                  >
+                    {uploading ? (
+                      <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
+                        <Loader2 className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 animate-spin text-primary" />
+                        <div className="text-center">
+                          <p className="text-base sm:text-lg font-medium">Uploading...</p>
+                          <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">{uploadProgress}%</p>
+                        </div>
+                        <Progress value={uploadProgress} className="w-48 sm:w-60 lg:w-72 h-2 sm:h-3" />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6 text-center">
+                        <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8">
+                          <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
+                        </div>
+                        <div className="space-y-1 sm:space-y-2">
+                          <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your data for transformation</p>
+                          <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">Drag & drop or click to browse</p>
+                        </div>
+                      </div>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,.xlsx,.xls,.json,.sql"
+                      className="hidden"
+                      onChange={handleFileInput}
+                    />
                   </div>
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
-                    Custom Destination
-                  </h3>
-                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
-                    Select your preferred export format
-                  </p>
-                  <div className="flex flex-wrap gap-3 justify-center">
-                    <Button 
-                      variant={selectedDestinationFormat === "csv" ? "default" : "outline"}
-                      onClick={() => setSelectedDestinationFormat("csv")}
-                      size="lg"
-                    >
-                      CSV
-                    </Button>
-                    <Button 
-                      variant={selectedDestinationFormat === "excel" ? "default" : "outline"}
-                      onClick={() => setSelectedDestinationFormat("excel")}
-                      size="lg"
-                    >
-                      Excel
-                    </Button>
-                    <Button 
-                      variant={selectedDestinationFormat === "json" ? "default" : "outline"}
-                      onClick={() => setSelectedDestinationFormat("json")}
-                      size="lg"
-                    >
-                      JSON
-                    </Button>
-                    <Button 
-                      variant={selectedDestinationFormat === "sql" ? "default" : "outline"}
-                      onClick={() => setSelectedDestinationFormat("sql")}
-                      size="lg"
-                    >
-                      SQL
-                    </Button>
+                ) : selectedSource === "unified-bridge" ? (
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                    <UnifiedBridgeImport
+                      mode="source"
+                      onImportComplete={handleQuickBooksImportComplete}
+                      onNotification={(message, type) => {
+                        toast({
+                          title: type === "success" ? "Success" : "Error",
+                          description: message,
+                          variant: type === "error" ? "destructive" : "default",
+                        })
+                      }}
+                    />
                   </div>
-                </div>
-              ) : selectedDestination === "erp" && selectedDestinationErp === "quickbooks" ? (
-                <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
-                  <QuickBooksImport
-                    onImportComplete={handleQuickBooksImportComplete}
-                    onNotification={(message, type) => {
-                      toast({
-                        title: type === "success" ? "Success" : "Error",
-                        description: message,
-                        variant: type === "error" ? "destructive" : "default",
-                      })
-                    }}
+                ) : selectedSource === "erp" && selectedErp === "quickbooks" ? (
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                    <QuickBooksImport
+                      onImportComplete={handleQuickBooksImportComplete}
+                      onNotification={(message, type) => {
+                        toast({
+                          title: type === "success" ? "Success" : "Error",
+                          description: message,
+                          variant: type === "error" ? "destructive" : "default",
+                        })
+                      }}
+                    />
+                  </div>
+                ) : selectedSource === "erp" ? (
+                  <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
+                    <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
+                      <Network className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
+                      {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label}
+                    </h3>
+                    <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
+                      Connect your {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label} account to import data directly.
+                    </p>
+                    <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              // ========= DESTINATION SECTION =========
+              <div className="space-y-4">
+                {selectedDestination === "local" ? (
+                  <CustomDestinationExport
+                    selectedFormat={selectedDestinationFormat}
+                    onFormatChange={setSelectedDestinationFormat}
                   />
-                </div>
-              ) : selectedDestination === "unified-bridge" ? (
-                <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
-                  <UnifiedBridgeImport
-                    onImportComplete={handleQuickBooksImportComplete}
-                    onNotification={(message, type) => {
-                      toast({
-                        title: type === "success" ? "Success" : "Error",
-                        description: message,
-                        variant: type === "error" ? "destructive" : "default",
-                      })
-                    }}
-                  />
-                </div>
-              ) : selectedDestination === "erp" ? (
-                <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
-                  <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
-                    <Network className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-muted-foreground" />
+                ) : selectedDestination === "unified-bridge" ? (
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                    <UnifiedBridgeImport
+                      mode="destination"
+                      onImportComplete={handleQuickBooksImportComplete}
+                      onNotification={(message, type) => {
+                        toast({
+                          title: type === "success" ? "Success" : "Error",
+                          description: message,
+                          variant: type === "error" ? "destructive" : "default",
+                        })
+                      }}
+                    />
                   </div>
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
-                    {ERP_OPTIONS.find((e) => e.value === selectedDestinationErp)?.label}
-                  </h3>
-                  <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
-                    Connect your {ERP_OPTIONS.find((e) => e.value === selectedDestinationErp)?.label} account to import data directly.
-                  </p>
-                  <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
-                </div>
-              ) : null}
-
-            </div>
+                ) : selectedDestination === "erp" && selectedDestinationErp === "quickbooks" ? (
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                    <QuickBooksImport
+                      onImportComplete={handleQuickBooksImportComplete}
+                      onNotification={(message, type) => {
+                        toast({
+                          title: type === "success" ? "Success" : "Error",
+                          description: message,
+                          variant: type === "error" ? "destructive" : "default",
+                        })
+                      }}
+                    />
+                  </div>
+                ) : selectedDestination === "erp" ? (
+                  <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
+                    <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
+                      <Network className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg sm:text-xl lg:text-2xl font-medium mb-2 sm:mb-3 lg:mb-4 text-center">
+                      {ERP_OPTIONS.find((e) => e.value === selectedDestinationErp)?.label}
+                    </h3>
+                    <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-6 sm:mb-8 lg:mb-10 max-w-lg text-center px-4">
+                      Connect your {ERP_OPTIONS.find((e) => e.value === selectedDestinationErp)?.label} account to export data directly.
+                    </p>
+                    <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
         )}
 
         {/* File Explorer Section */}
@@ -1237,7 +1316,7 @@ function FilesPageContent() {
                         <TableHead className="text-xs text-left">Rows</TableHead>
                       )}
                       {visibleColumns.has("category") && (
-                        <TableHead className="text-xs text-left">Category</TableHead>
+                        <TableHead className="text-xs text-left">Ingestion Type</TableHead>
                       )}
                       {visibleColumns.has("status") && (
                         <TableHead 
@@ -1336,13 +1415,11 @@ function FilesPageContent() {
                         )}
                         {visibleColumns.has("category") && (
                           <TableCell className="text-xs text-muted-foreground text-left">
-                            <Badge variant="secondary" className="text-xs">
-                              {(() => {
-                                // Hash-based deterministic assignment: 95% Batch, 5% Streaming
-                                const hash = file.upload_id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-                                return hash % 100 < 95 ? "Batch" : "Streaming"
-                              })()}
-                            </Badge>
+                            {(() => {
+                              // Hash-based deterministic assignment: 98% Batch, 2% Realtime
+                              const hash = file.upload_id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+                              return hash % 100 < 98 ? "Batch" : "Realtime"
+                            })()}
                           </TableCell>
                         )}
                         {visibleColumns.has("status") && (
@@ -1365,19 +1442,21 @@ function FilesPageContent() {
                         {visibleColumns.has("processingTime") && (
                           <TableCell className="text-xs text-muted-foreground text-left">
                             {(() => {
-                              const uploadedAt = file.uploaded_at || file.created_at
-                              const updatedAt = file.updated_at || file.status_timestamp
-                              if (!uploadedAt || !updatedAt) return "—"
-                              const uploadTime = new Date(uploadedAt).getTime()
-                              const updateTime = new Date(updatedAt).getTime()
-                              const diffMs = updateTime - uploadTime
-                              if (diffMs < 0) return "—"
-                              const seconds = Math.floor(diffMs / 1000)
-                              const minutes = Math.floor(seconds / 60)
-                              const hours = Math.floor(minutes / 60)
-                              if (hours > 0) return `${hours}h ${minutes % 60}m`
-                              if (minutes > 0) return `${minutes}m ${seconds % 60}s`
-                              return `${seconds}s`
+                              const procTime = file.processing_time_seconds 
+                                ?? (typeof file.processing_time === 'number' ? file.processing_time : (file.processing_time ? parseFloat(file.processing_time) : 0))
+                              
+                              if (procTime && procTime > 0) {
+                                if (procTime < 1) return `${(procTime * 1000).toFixed(0)}ms`
+                                if (procTime < 60) return `${procTime.toFixed(2)}s`
+                                const minutes = Math.floor(procTime / 60)
+                                const remainingSeconds = Math.floor(procTime % 60)
+                                if (minutes < 60) return `${minutes}m ${remainingSeconds}s`
+                                const hours = Math.floor(minutes / 60)
+                                const remainingMinutes = minutes % 60
+                                return `${hours}h ${remainingMinutes}m`
+                              }
+                              
+                              return "—"
                             })()}
                           </TableCell>
                         )}
@@ -1489,12 +1568,12 @@ function FilesPageContent() {
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="select-all-display-columns"
-                    checked={visibleColumns.size === 10}
+                    checked={pendingVisibleColumns.size === 10}
                     onCheckedChange={(checked) => {
                       if (checked) {
-                        setVisibleColumns(new Set(["file", "score", "quality", "rows", "datatype", "status", "uploaded", "updated", "processingTime", "actions"]))
+                        setPendingVisibleColumns(new Set(["file", "score", "quality", "rows", "category", "status", "uploaded", "updated", "processingTime", "actions"]))
                       } else {
-                        setVisibleColumns(new Set())
+                        setPendingVisibleColumns(new Set())
                       }
                     }}
                   />
@@ -1509,7 +1588,7 @@ function FilesPageContent() {
                   { id: "score", label: "Score" },
                   { id: "quality", label: "Data Quality" },
                   { id: "rows", label: "Rows" },
-                  { id: "category", label: "Category" },
+                  { id: "category", label: "Ingestion Type" },
                   { id: "status", label: "Status" },
                   { id: "uploaded", label: "Uploaded" },
                   { id: "updated", label: "Updated" },

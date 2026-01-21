@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { fileManagementAPI, type TcpIngestionConfig } from "@/lib/api/file-management-api"
 
 interface TcpSourceFormProps {
+    mode?: "source" | "destination"
     token: string
     onIngestionStart: () => void
     onIngestionComplete: (result: { success: boolean; message: string; uploadId?: string }) => void
@@ -17,6 +18,7 @@ interface TcpSourceFormProps {
 }
 
 export default function TcpSourceForm({
+    mode = "source",
     token,
     onIngestionStart,
     onIngestionComplete,
@@ -191,7 +193,7 @@ export default function TcpSourceForm({
                     ) : (
                         <Network className="h-4 w-4" />
                     )}
-                    {isLoading ? "Ingesting..." : "Ingest Data"}
+                    {isLoading ? "Ingesting..." : mode === "source" ? "Ingest Data" : "Push Data"}
                 </Button>
             </div>
         </div>

@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import QuickBooksImport from '@/components/quickbooks/quickbooks-import'
 
 interface ErpSourceFormProps {
+  mode?: "source" | "destination"
+  uploadId?: string  // Required for export/destination mode
   token: string
   onIngestionStart: () => void
   onIngestionComplete: (result: { success: boolean; message: string; uploadId?: string }) => void
@@ -37,6 +39,8 @@ const ERP_OPTIONS = [
 ]
 
 export default function ErpSourceForm({
+  mode = "source",
+  uploadId,
   token,
   onIngestionStart,
   onIngestionComplete,
@@ -49,7 +53,7 @@ export default function ErpSourceForm({
     <div className="space-y-4">
       {/* ERP System Selector */}
       <div className="space-y-2">
-        <Label htmlFor="erp-system">Select Source System</Label>
+        <Label htmlFor="erp-system">{mode === "source" ? "Select Source System" : "Select Destination System"}</Label>
         <Select value={selectedErp} onValueChange={setSelectedErp}>
           <SelectTrigger id="erp-system" disabled={disabled}>
             <SelectValue placeholder="Select ERP system" />
@@ -67,10 +71,12 @@ export default function ErpSourceForm({
       {/* ERP-specific content */}
       {selectedErp === "quickbooks" ? (
         <QuickBooksImport
+          mode={mode}
+          uploadId={uploadId}
           onImportComplete={(uploadId) => {
             onIngestionComplete({
               success: true,
-              message: 'Successfully imported data from QuickBooks',
+              message: mode === "source" ? 'Successfully imported data from QuickBooks' : 'Successfully exported data to QuickBooks',
               uploadId,
             })
           }}
@@ -94,7 +100,7 @@ export default function ErpSourceForm({
             {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label}
           </h3>
           <p className="text-sm text-muted-foreground mb-6 max-w-md text-center">
-            Connect your {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label} account to import data directly.
+            Connect your {ERP_OPTIONS.find((e) => e.value === selectedErp)?.label} account to {mode === "source" ? "import" : "export"} data directly.
           </p>
           <Button disabled size="lg">Connect</Button>
         </div>

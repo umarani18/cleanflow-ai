@@ -19,6 +19,7 @@ import HttpSourceForm from "./http-source-form"
 import ErpSourceForm from "./erp-source-form"
 
 interface UnifiedBridgeImportProps {
+  mode?: "source" | "destination"
   onImportComplete?: (uploadId: string) => void
   onNotification?: (message: string, type: "success" | "error") => void
 }
@@ -26,6 +27,7 @@ interface UnifiedBridgeImportProps {
 type IngestionSource = "ftp" | "tcp" | "http" | "other"
 
 export default function UnifiedBridgeImport({
+  mode = "source",
   onImportComplete,
   onNotification,
 }: UnifiedBridgeImportProps) {
@@ -71,14 +73,22 @@ export default function UnifiedBridgeImport({
     ftp: "FTP/SFTP",
     tcp: "TCP",
     http: "HTTP",
-    other: "Other",
+    other: "Others",
   }
 
   const sourceDescriptions = {
-    ftp: "Pull files from FTP or SFTP servers",
-    tcp: "Stream data from TCP endpoints",
-    http: "Fetch data from HTTP APIs and endpoints",
-    other: "Connect to systems like QuickBooks, SAP, Oracle",
+    ftp: mode === "source" 
+      ? "Pull files from FTP or SFTP servers"
+      : "Ingest data to FTP or SFTP servers",
+    tcp: mode === "source"
+      ? "Stream data from TCP endpoints"
+      : "Ingest data to TCP endpoints",
+    http: mode === "source"
+      ? "Fetch data from HTTP APIs and endpoints"
+      : "Push data to HTTP APIs and endpoints",
+    other: mode === "source"
+      ? "Connect to systems like QuickBooks to import data"
+      : "Connect to systems like QuickBooks to export data",
   }
 
   return (
@@ -92,14 +102,16 @@ export default function UnifiedBridgeImport({
           <div>
             <h3 className="text-sm font-medium">Unified Bridge</h3>
             <p className="text-xs text-muted-foreground">
-              Ingest data from multiple sources
+              {mode === "source" 
+                ? "Ingest data from multiple sources"
+                : "Export data to multiple destinations"}
             </p>
           </div>
         </div>
         {isIngesting && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Ingesting...</span>
+            <span>{mode === "source" ? "Ingesting..." : "Exporting..."}</span>
           </div>
         )}
       </div>
@@ -152,6 +164,7 @@ export default function UnifiedBridgeImport({
         <div className="flex-1 overflow-auto">
           <TabsContent value="ftp" className="mt-0 h-full">
             <FtpSourceForm
+              mode={mode}
               token={idToken || ""}
               onIngestionStart={handleIngestionStart}
               onIngestionComplete={handleIngestionComplete}
@@ -162,6 +175,7 @@ export default function UnifiedBridgeImport({
 
           <TabsContent value="tcp" className="mt-0 h-full">
             <TcpSourceForm
+              mode={mode}
               token={idToken || ""}
               onIngestionStart={handleIngestionStart}
               onIngestionComplete={handleIngestionComplete}
@@ -172,6 +186,7 @@ export default function UnifiedBridgeImport({
 
           <TabsContent value="http" className="mt-0 h-full">
             <HttpSourceForm
+              mode={mode}
               token={idToken || ""}
               onIngestionStart={handleIngestionStart}
               onIngestionComplete={handleIngestionComplete}
@@ -182,6 +197,7 @@ export default function UnifiedBridgeImport({
 
           <TabsContent value="other" className="mt-0 h-full">
             <ErpSourceForm
+              mode={mode}
               token={idToken || ""}
               onIngestionStart={handleIngestionStart}
               onIngestionComplete={handleIngestionComplete}
@@ -197,7 +213,7 @@ export default function UnifiedBridgeImport({
       {!idToken && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20 mt-4 text-sm">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>Please log in to use Unified Bridge ingestion</span>
+          <span>Please log in to use Unified Bridge {mode === "source" ? "ingestion" : "export"}</span>
         </div>
       )}
     </div>

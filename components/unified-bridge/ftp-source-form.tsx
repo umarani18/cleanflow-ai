@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { fileManagementAPI, type FtpIngestionConfig } from "@/lib/api/file-management-api"
 
 interface FtpSourceFormProps {
+    mode?: "source" | "destination"
     token: string
     onIngestionStart: () => void
     onIngestionComplete: (result: { success: boolean; message: string; uploadId?: string }) => void
@@ -17,6 +18,7 @@ interface FtpSourceFormProps {
 }
 
 export default function FtpSourceForm({
+    mode = "source",
     token,
     onIngestionStart,
     onIngestionComplete,
@@ -239,7 +241,7 @@ export default function FtpSourceForm({
                     ) : (
                         <FolderDown className="h-4 w-4" />
                     )}
-                    {isLoading ? "Ingesting..." : "Ingest Data"}
+                    {isLoading ? "Ingesting..." : mode === "source" ? "Ingest Data" : "Push Data"}
                 </Button>
             </div>
         </div>

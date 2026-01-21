@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { fileManagementAPI, type HttpIngestionConfig } from "@/lib/api/file-management-api"
 
 interface HttpSourceFormProps {
+    mode?: "source" | "destination"
     token: string
     onIngestionStart: () => void
     onIngestionComplete: (result: { success: boolean; message: string; uploadId?: string }) => void
@@ -20,6 +21,7 @@ interface HttpSourceFormProps {
 type AuthType = "none" | "bearer" | "api_key" | "basic"
 
 export default function HttpSourceForm({
+    mode = "source",
     token,
     onIngestionStart,
     onIngestionComplete,
@@ -320,7 +322,7 @@ export default function HttpSourceForm({
                     className="gap-2 flex-1"
                 >
                     {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
-                    {isLoading ? "Fetching..." : "Fetch Data"}
+                    {isLoading ? "Fetching..." : mode === "source" ? "Fetch Data" : "Push Data"}
                 </Button>
             </div>
         </div>

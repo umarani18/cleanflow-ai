@@ -27,11 +27,15 @@ import quickBooksAPI, {
 } from '@/lib/api/quickbooks-api'
 
 interface QuickBooksImportProps {
+  mode?: "source" | "destination"
+  uploadId?: string  // Required for export/destination mode
   onImportComplete?: (uploadId: string) => void
   onNotification?: (message: string, type: 'success' | 'error') => void
 }
 
 export default function QuickBooksImport({
+  mode = "source",
+  uploadId,
   onImportComplete,
   onNotification,
 }: QuickBooksImportProps) {
@@ -39,9 +43,10 @@ export default function QuickBooksImport({
   const [connectionInfo, setConnectionInfo] = useState<QuickBooksConnectionStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [isImporting, setIsImporting] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
-  // Import configuration
-  const [importConfig, setImportConfig] = useState({
+  // Import/Export configuration
+  const [config, setConfig] = useState({
     entity: 'invoices' as 'customers' | 'invoices' | 'vendors' | 'items',
     dateFrom: '',
     dateTo: '',
@@ -138,7 +143,7 @@ export default function QuickBooksImport({
       return
     }
 
-    if (!importConfig.entity) {
+    if (!config.entity) {
       setError('Please select an entity to import')
       return
     }
@@ -149,18 +154,18 @@ export default function QuickBooksImport({
       setImportResult(null)
 
       const filters: { limit: number; date_from?: string; date_to?: string } = {
-        limit: importConfig.limit,
+        limit: config.limit,
       }
 
-      if (importConfig.dateFrom) {
-        filters.date_from = importConfig.dateFrom
+      if (config.dateFrom) {
+        filters.date_from = config.dateFrom
       }
-      if (importConfig.dateTo) {
-        filters.date_to = importConfig.dateTo
+      if (config.dateTo) {
+        filters.date_to = config.dateTo
       }
 
       console.log('Importing from QuickBooks with filters:', filters)
-      const result = await quickBooksAPI.importData(importConfig.entity, filters)
+      const result = await quickBooksAPI.importData(config.entity, filters)
       console.log('QuickBooks import result:', result)
 
       setImportResult(result)
@@ -175,6 +180,50 @@ export default function QuickBooksImport({
       onNotification?.('Import failed: ' + message, 'error')
     } finally {
       setIsImporting(false)
+    }
+  }
+
+  const exportToQuickBooks = async () => {
+    if (!connected) {
+      setError('Please connect to QuickBooks first')
+      return
+    }
+
+    if (!uploadId) {
+      setError('No data selected for export')
+      return
+    }
+
+    if (!config.entity) {
+      setError('Please select an entity to export')
+      return
+    }
+
+    try {
+      setIsExporting(true)
+      setError(null)
+      setImportResult(null)
+
+      console.log('Exporting to QuickBooks, uploadId:', uploadId)
+      const result = await quickBooksAPI.exportToQuickBooks(uploadId)
+      console.log('QuickBooks export result:', result)
+
+      setImportResult({
+        success: result.success,
+        message: result.message,
+        records_imported: result.records_exported || 0,
+        filename: `exported_to_quickbooks_${config.entity}`,
+        upload_id: uploadId,
+        entity: config.entity,
+      })
+      onNotification?.(`Successfully exported ${result.records_exported} records to QuickBooks!`, 'success')
+    } catch (err) {
+      console.error('Error exporting data:', err)
+      const message = (err as Error).message || 'Failed to export data'
+      setError(message)
+      onNotification?.('Export failed: ' + message, 'error')
+    } finally {
+      setIsExporting(false)
     }
   }
 
@@ -208,7 +257,7 @@ export default function QuickBooksImport({
         <Alert className="border-green-200 bg-green-50 py-2 sm:py-3">
           <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
           <AlertDescription className="text-sm sm:text-base text-green-900">
-            Imported {importResult.records_imported} records • {importResult.filename}
+            {mode === "source" ? "Imported" : "Exported"} {importResult.records_imported || 0} records • {importResult.filename}
           </AlertDescription>
         </Alert>
       )}
@@ -221,7 +270,7 @@ export default function QuickBooksImport({
           </div>
           <h3 className="text-lg sm:text-xl font-medium mb-2">QuickBooks Online</h3>
           <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mb-4 sm:mb-5 lg:mb-6 max-w-md px-4">
-            Connect your QuickBooks account to import data directly
+            Connect your QuickBooks account to {mode === "source" ? "import" : "export"} data directly
           </p>
           <Button onClick={connectQuickBooks} size="lg" className="bg-green-600 hover:bg-green-700 px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">
             <ExternalLink className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -254,12 +303,12 @@ export default function QuickBooksImport({
           <div className="grid gap-3 sm:gap-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">Entity</Label>
+                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">{mode === "source" ? "Entity" : "Destination Entity"}</Label>
                 <Select
-                  value={importConfig.entity}
+                  value={config.entity}
                   onValueChange={(value) =>
-                    setImportConfig({
-                      ...importConfig,
+                    setConfig({
+                      ...config,
                       entity: value as 'customers' | 'invoices' | 'vendors' | 'items',
                     })
                   }
@@ -280,9 +329,9 @@ export default function QuickBooksImport({
                 <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">Max Records</Label>
                 <Input
                   type="number"
-                  value={importConfig.limit}
+                  value={config.limit}
                   onChange={(e) =>
-                    setImportConfig({ ...importConfig, limit: parseInt(e.target.value) || 1000 })
+                    setConfig({ ...config, limit: parseInt(e.target.value) || 1000 })
                   }
                   min={1}
                   max={10000}
@@ -296,8 +345,8 @@ export default function QuickBooksImport({
                 <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">From Date <span className="text-muted-foreground font-normal">(Optional)</span></Label>
                 <Input
                   type="date"
-                  value={importConfig.dateFrom}
-                  onChange={(e) => setImportConfig({ ...importConfig, dateFrom: e.target.value })}
+                  value={config.dateFrom}
+                  onChange={(e) => setConfig({ ...config, dateFrom: e.target.value })}
                   className="h-9 sm:h-10 text-sm sm:text-base"
                 />
               </div>
@@ -305,27 +354,27 @@ export default function QuickBooksImport({
                 <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">To Date <span className="text-muted-foreground font-normal">(Optional)</span></Label>
                 <Input
                   type="date"
-                  value={importConfig.dateTo}
-                  onChange={(e) => setImportConfig({ ...importConfig, dateTo: e.target.value })}
+                  value={config.dateTo}
+                  onChange={(e) => setConfig({ ...config, dateTo: e.target.value })}
                   className="h-9 sm:h-10 text-sm sm:text-base"
                 />
               </div>
             </div>
 
             <Button
-              onClick={importFromQuickBooks}
-              disabled={isImporting}
+              onClick={mode === "source" ? importFromQuickBooks : exportToQuickBooks}
+              disabled={mode === "source" ? isImporting : isExporting}
               className="w-full bg-green-600 hover:bg-green-700 h-10 sm:h-12 text-sm sm:text-base"
             >
-              {isImporting ? (
+              {(mode === "source" ? isImporting : isExporting) ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-                  Importing...
+                  {mode === "source" ? "Importing..." : "Exporting..."}
                 </>
               ) : (
                 <>
                   <Download className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  Import from QuickBooks
+                  {mode === "source" ? "Import from QuickBooks" : "Export to QuickBooks"}
                 </>
               )}
             </Button>
