@@ -1085,6 +1085,7 @@ function FilesPageContent() {
                 ) : selectedSource === "erp" && selectedErp === "quickbooks" ? (
                   <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
                     <QuickBooksImport
+                      mode="source"
                       onImportComplete={handleQuickBooksImportComplete}
                       onNotification={(message, type) => {
                         toast({
@@ -1133,9 +1134,9 @@ function FilesPageContent() {
                     />
                   </div>
                 ) : selectedDestination === "erp" && selectedDestinationErp === "quickbooks" ? (
-                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
                     <QuickBooksImport
-                      onImportComplete={handleQuickBooksImportComplete}
+                      mode="destination"
                       onNotification={(message, type) => {
                         toast({
                           title: type === "success" ? "Success" : "Error",

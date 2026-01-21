@@ -21,10 +21,31 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import quickBooksAPI, {
   QuickBooksConnectionStatus,
   QuickBooksImportResponse,
 } from '@/lib/api/quickbooks-api'
+import { fileManagementAPI, type FileStatusResponse } from '@/lib/api/file-management-api'
+import { useAuth } from '@/hooks/useAuth'
+
+interface QuickBooksFile {
+  upload_id: string
+  filename: string
+  original_filename?: string
+  status: string
+  rows_clean?: number
+}
 
 interface QuickBooksImportProps {
   mode?: "source" | "destination"
@@ -34,16 +55,19 @@ interface QuickBooksImportProps {
 }
 
 export default function QuickBooksImport({
-  mode = "source",
+  mode,
   uploadId,
   onImportComplete,
   onNotification,
 }: QuickBooksImportProps) {
+  const { idToken } = useAuth()
   const [connected, setConnected] = useState(false)
   const [connectionInfo, setConnectionInfo] = useState<QuickBooksConnectionStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [isImporting, setIsImporting] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<QuickBooksFile | null>(null)
+  const [files, setFiles] = useState<QuickBooksFile[]>([])
 
   // Import/Export configuration
   const [config, setConfig] = useState({
@@ -55,6 +79,93 @@ export default function QuickBooksImport({
 
   const [importResult, setImportResult] = useState<QuickBooksImportResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  
+  // Column selection state
+  const [columnModalOpen, setColumnModalOpen] = useState(false)
+  const [availableColumns, setAvailableColumns] = useState<string[]>([])
+  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
+  const [columnsLoading, setColumnsLoading] = useState(false)
+  const [columnsError, setColumnsError] = useState<string | null>(null)
+
+  // Load files from API
+  const loadFiles = async () => {
+    if (!idToken) {
+      console.log('No idToken available, skipping file load')
+      return
+    }
+
+    try {
+      console.log('Loading files from API...')
+      const response = await fileManagementAPI.getUploads(idToken)
+      const uploadedFiles = response.items || []
+      const mappedFiles = uploadedFiles.map((f: FileStatusResponse) => ({
+        upload_id: f.upload_id,
+        filename: f.filename || '',
+        original_filename: f.original_filename,
+        status: f.status,
+        rows_clean: f.rows_clean,
+      }))
+      setFiles(mappedFiles)
+      console.log('Files loaded:', mappedFiles.length)
+    } catch (err) {
+      console.error('Error loading files:', err)
+    }
+  }
+
+  useEffect(() => {
+    if (mode === 'destination' && idToken) {
+      loadFiles()
+    }
+  }, [mode, idToken])
+
+  // Handle file selection with column fetching
+  const handleFileSelect = async (uploadId: string) => {
+    const file = files.find(f => f.upload_id === uploadId)
+    if (file) {
+      setSelectedFile(file)
+      
+      // Fetch columns for the selected file
+      if (mode === 'destination' && idToken) {
+        setColumnModalOpen(true)
+        setColumnsLoading(true)
+        setColumnsError(null)
+        
+        try {
+          const resp = await fileManagementAPI.getFileColumns(uploadId, idToken)
+          const cols = resp.columns || []
+          setAvailableColumns(cols)
+          setSelectedColumns(new Set(cols))
+          
+          if (cols.length === 0) {
+            setColumnsError('No columns detected for this file. You can still proceed.')
+          }
+        } catch (err) {
+          console.error('Failed to fetch columns:', err)
+          setAvailableColumns([])
+          setSelectedColumns(new Set())
+          setColumnsError('Unable to fetch columns. You can proceed without column selection.')
+        } finally {
+          setColumnsLoading(false)
+        }
+      }
+    }
+  }
+
+  const handleToggleColumn = (col: string, checked: boolean) => {
+    setSelectedColumns((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(col)
+      } else {
+        next.delete(col)
+      }
+      return next
+    })
+  }
+
+  const handleToggleAllColumns = (checked: boolean) => {
+    setSelectedColumns(checked ? new Set(availableColumns) : new Set())
+  }
 
   useEffect(() => {
     checkConnection()
@@ -189,8 +300,8 @@ export default function QuickBooksImport({
       return
     }
 
-    if (!uploadId) {
-      setError('No data selected for export')
+    if (!selectedFile && !uploadId) {
+      setError('Please select a file to export')
       return
     }
 
@@ -199,13 +310,27 @@ export default function QuickBooksImport({
       return
     }
 
+    if (mode === 'destination' && selectedColumns.size === 0) {
+      setError('Please select at least one column to export')
+      return
+    }
+
     try {
       setIsExporting(true)
       setError(null)
       setImportResult(null)
 
-      console.log('Exporting to QuickBooks, uploadId:', uploadId)
-      const result = await quickBooksAPI.exportToQuickBooks(uploadId)
+      const fileId = selectedFile?.upload_id || uploadId
+      
+      if (!fileId) {
+        setError('Please select a file to export')
+        return
+      }
+
+      console.log('Exporting to QuickBooks, uploadId:', fileId, 'Columns:', Array.from(selectedColumns))
+      
+      // For now, pass basic export request - columns will be filtered on backend
+      const result = await quickBooksAPI.exportToQuickBooks(fileId)
       console.log('QuickBooks export result:', result)
 
       setImportResult({
@@ -213,15 +338,28 @@ export default function QuickBooksImport({
         message: result.message,
         records_imported: result.records_exported || 0,
         filename: `exported_to_quickbooks_${config.entity}`,
-        upload_id: uploadId,
+        upload_id: fileId,
         entity: config.entity,
       })
+      
+      // Close column modal after successful export
+      setColumnModalOpen(false)
+      
       onNotification?.(`Successfully exported ${result.records_exported} records to QuickBooks!`, 'success')
     } catch (err) {
       console.error('Error exporting data:', err)
-      const message = (err as Error).message || 'Failed to export data'
-      setError(message)
-      onNotification?.('Export failed: ' + message, 'error')
+      const errorMsg = (err as Error).message || 'Failed to export data'
+      
+      // Provide more helpful error messages
+      let userMessage = 'Export failed: ' + errorMsg
+      if (errorMsg.includes('NoSuchKey') || errorMsg.includes('does not exist')) {
+        userMessage = 'The processed data for this file is not available. Please ensure the file has been processed successfully before exporting.'
+      } else if (errorMsg.includes('Connection')) {
+        userMessage = 'Connection to QuickBooks failed. Please reconnect and try again.'
+      }
+      
+      setError(userMessage)
+      onNotification?.(userMessage, 'error')
     } finally {
       setIsExporting(false)
     }
@@ -299,11 +437,131 @@ export default function QuickBooksImport({
             </Button>
           </div>
 
-          {/* Import Form */}
-          <div className="grid gap-3 sm:gap-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          {/* Import Form - Only for Source Mode */}
+          {mode === "source" && (
+            <div className="grid gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">Entity</Label>
+                  <Select
+                    value={config.entity}
+                    onValueChange={(value) =>
+                      setConfig({
+                        ...config,
+                        entity: value as 'customers' | 'invoices' | 'vendors' | 'items',
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-9 sm:h-10 text-sm sm:text-base">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {entityOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">Max Records</Label>
+                  <Input
+                    type="number"
+                    value={config.limit}
+                    onChange={(e) =>
+                      setConfig({ ...config, limit: parseInt(e.target.value) || 1000 })
+                    }
+                    min={1}
+                    max={10000}
+                    className="h-9 sm:h-10 text-sm sm:text-base"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">From Date <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+                  <Input
+                    type="date"
+                    value={config.dateFrom}
+                    onChange={(e) => setConfig({ ...config, dateFrom: e.target.value })}
+                    className="h-9 sm:h-10 text-sm sm:text-base"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">To Date <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+                  <Input
+                    type="date"
+                    value={config.dateTo}
+                    onChange={(e) => setConfig({ ...config, dateTo: e.target.value })}
+                    className="h-9 sm:h-10 text-sm sm:text-base"
+                  />
+                </div>
+              </div>
+
+              <Button
+                onClick={importFromQuickBooks}
+                disabled={isImporting}
+                className="w-full bg-green-600 hover:bg-green-700 h-10 sm:h-12 text-sm sm:text-base"
+              >
+                {isImporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                    Import from QuickBooks
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Export Form - Only for Destination Mode */}
+          {mode === "destination" && (
+            <div className="grid gap-3 sm:gap-4">
+              {/* File Selection */}
               <div>
-                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">{mode === "source" ? "Entity" : "Destination Entity"}</Label>
+                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">Select File to Export</Label>
+                {files && files.length > 0 ? (
+                  <Select
+                    value={selectedFile?.upload_id || ''}
+                    onValueChange={handleFileSelect}
+                  >
+                    <SelectTrigger className="h-9 sm:h-10 text-sm sm:text-base">
+                      <SelectValue placeholder="Choose a file to export" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {files.map((file) => (
+                        <SelectItem key={file.upload_id} value={file.upload_id}>
+                          {file.original_filename || file.filename}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="w-full h-9 sm:h-10 flex items-center px-3 border border-input rounded-md bg-muted text-sm text-muted-foreground">
+                    No files available. Please upload and process files first.
+                  </div>
+                )}
+              </div>
+
+              {/* Selected File Info */}
+              {selectedFile && (
+                <Alert className="border-blue-200 bg-blue-50 py-2 sm:py-3">
+                  <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                  <AlertDescription className="text-sm sm:text-base text-blue-900 ml-2">
+                    {selectedFile.original_filename || selectedFile.filename} • Status: {selectedFile.status}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Destination Entity */}
+              <div>
+                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">Destination Entity</Label>
                 <Select
                   value={config.entity}
                   onValueChange={(value) =>
@@ -325,62 +583,103 @@ export default function QuickBooksImport({
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">Max Records</Label>
-                <Input
-                  type="number"
-                  value={config.limit}
-                  onChange={(e) =>
-                    setConfig({ ...config, limit: parseInt(e.target.value) || 1000 })
-                  }
-                  min={1}
-                  max={10000}
-                  className="h-9 sm:h-10 text-sm sm:text-base"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div>
-                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">From Date <span className="text-muted-foreground font-normal">(Optional)</span></Label>
-                <Input
-                  type="date"
-                  value={config.dateFrom}
-                  onChange={(e) => setConfig({ ...config, dateFrom: e.target.value })}
-                  className="h-9 sm:h-10 text-sm sm:text-base"
-                />
-              </div>
-              <div>
-                <Label className="text-xs sm:text-sm mb-1.5 sm:mb-2 block">To Date <span className="text-muted-foreground font-normal">(Optional)</span></Label>
-                <Input
-                  type="date"
-                  value={config.dateTo}
-                  onChange={(e) => setConfig({ ...config, dateTo: e.target.value })}
-                  className="h-9 sm:h-10 text-sm sm:text-base"
-                />
-              </div>
+              <Button
+                onClick={exportToQuickBooks}
+                disabled={isExporting || !selectedFile}
+                className="w-full bg-green-600 hover:bg-green-700 h-10 sm:h-12 text-sm sm:text-base"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                    Export to QuickBooks
+                  </>
+                )}
+              </Button>
             </div>
-
-            <Button
-              onClick={mode === "source" ? importFromQuickBooks : exportToQuickBooks}
-              disabled={mode === "source" ? isImporting : isExporting}
-              className="w-full bg-green-600 hover:bg-green-700 h-10 sm:h-12 text-sm sm:text-base"
-            >
-              {(mode === "source" ? isImporting : isExporting) ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-                  {mode === "source" ? "Importing..." : "Exporting..."}
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  {mode === "source" ? "Import from QuickBooks" : "Export to QuickBooks"}
-                </>
-              )}
-            </Button>
-          </div>
+          )}
         </div>
       )}
+
+      {/* Column Selection Dialog */}
+      <AlertDialog open={columnModalOpen} onOpenChange={setColumnModalOpen}>
+        <AlertDialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Select Columns to Export</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose which columns from {selectedFile?.original_filename || selectedFile?.filename} should be exported to QuickBooks.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3">
+            {columnsLoading ? (
+              <div className="flex items-center space-x-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading columns...</span>
+              </div>
+            ) : (
+              <>
+                {/* Select All Checkbox */}
+                <div className="flex items-center space-x-2 py-2 border-b">
+                  <Checkbox
+                    id="select-all-columns"
+                    checked={selectedColumns.size === availableColumns.length && availableColumns.length > 0}
+                    onCheckedChange={(checked) => handleToggleAllColumns(checked === true)}
+                  />
+                  <label htmlFor="select-all-columns" className="text-sm font-medium cursor-pointer">
+                    Select All
+                  </label>
+                </div>
+
+                {/* Column List */}
+                <div className="max-h-64 overflow-y-auto space-y-2 pr-2">
+                  {availableColumns.length > 0 ? (
+                    availableColumns.map((col) => (
+                      <div key={col} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`col-${col}`}
+                          checked={selectedColumns.has(col)}
+                          onCheckedChange={(checked) => handleToggleColumn(col, checked === true)}
+                        />
+                        <label htmlFor={`col-${col}`} className="text-sm cursor-pointer truncate flex-1">
+                          {col}
+                        </label>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No columns available</p>
+                  )}
+                </div>
+
+                {columnsError && (
+                  <Alert variant="destructive" className="py-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs ml-2">{columnsError}</AlertDescription>
+                  </Alert>
+                )}
+              </>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={selectedColumns.size === 0 || isExporting}
+              onClick={() => {
+                setColumnModalOpen(false)
+                exportToQuickBooks()
+              }}
+            >
+              {isExporting ? 'Exporting...' : 'Confirm & Export'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
