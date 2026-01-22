@@ -42,7 +42,10 @@ import {
   CheckCircle,
   AlertTriangle,
   BarChart3,
-  ArrowRightLeft,
+  LineChart as LineChartIcon,
+  Activity,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -116,7 +119,6 @@ export function DqCharts({ files }: DqChartsProps) {
     useState<OverallDqReportResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [timePeriod, setTimePeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
-  const [showStaticChart, setShowStaticChart] = useState(true);
 
   useEffect(() => {
     const loadOverallReport = async () => {
@@ -615,229 +617,272 @@ export function DqCharts({ files }: DqChartsProps) {
         </Card>
       </div>
 
-      {/* Trends - Full width with comprehensive data */}
-      {/* Trends - Full width with comprehensive data */}
-      {/* Trends - Full width with comprehensive data */}
-      <Card className="border-0 shadow-sm relative group">
-        <CardHeader className="pb-1 pt-3 px-4">
+      {/* Professional Charts Carousel */}
+      <Card className="border-0 shadow-sm">
+        {/* <CardHeader className="pb-3 pt-4 px-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div>
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                  Processing Trends
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Row-level processing statistics over time
-                </CardDescription>
-              </div>
-              
-              {/* Arrow Toggle - Icon Only - HIDDEN FOR DEMO
-              <button
-                onClick={() => setShowStaticChart(!showStaticChart)}
-                className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                title={showStaticChart ? "Switch to Live" : "Switch to Demo"}
-              >
-                <ArrowRightLeft className="h-4 w-4" />
-              </button>
-              */}
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                Data Quality Analytics
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">
+                Row-level processing statistics and trends over time
+              </CardDescription>
             </div>
-
-            {!showStaticChart && (
-              <Tabs value={timePeriod} onValueChange={(value) => setTimePeriod(value as 'day' | 'week' | 'month' | 'year')}>
-                <TabsList className="h-8">
-                  <TabsTrigger value="day" className="text-xs px-3 h-7">Day</TabsTrigger>
-                  <TabsTrigger value="week" className="text-xs px-3 h-7">Week</TabsTrigger>
-                  <TabsTrigger value="year" className="text-xs px-3 h-7">Year</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            )}
           </div>
-        </CardHeader>
-        <CardContent className="px-4 pb-3 pt-1">
-          {showStaticChart ? (
-            <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={[
-                    { month: 'Jan', quarantined: 5,  clean: 80, fixed: 45 },
-                    { month: 'Feb', quarantined: 12, clean: 80, fixed: 47 },
-                    { month: 'Mar', quarantined: 25, clean: 79, fixed: 45 },
-                    { month: 'Apr', quarantined: 35, clean: 80, fixed: 43 },
-                    { month: 'May', quarantined: 48, clean: 80, fixed: 48 },
-                    { month: 'Jun', quarantined: 55, clean: 78, fixed: 46 },
-                    { month: 'Jul', quarantined: 62, clean: 77, fixed: 49 },
-                    { month: 'Aug', quarantined: 70, clean: 78, fixed: 54 },
-                    { month: 'Sep', quarantined: 78, clean: 79, fixed: 55 },
-                    { month: 'Oct', quarantined: 82, clean: 77, fixed: 59 },
-                    { month: 'Nov', quarantined: 90, clean: 76, fixed: 65 },
-                  ]}
-                  margin={{ top: 10, right: 30, left: 0, bottom: 5 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={true}
-                    horizontal={true}
-                    stroke="#E5E7EB"
-                    opacity={0.5}
-                  />
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 11 }}
-                    stroke="#9CA3AF"
-                    axisLine={false}
-                    tickLine={false}
-                    interval={0}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10 }}
-                    stroke="#9CA3AF"
-                    axisLine={false}
-                    tickLine={false}
-                    domain={[0, 100]}
-                  />
-                  {/* Tooltip removed */}
-                  <Legend
-                    wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }}
-                    iconType="circle"
-                    iconSize={8}
-                  />
-                  {/* Line 1: Quarantined (Rising Yellow) */}
-                  <Line
-                    type="linear" 
-                    dataKey="quarantined"
-                    name="Quarantined" 
-                    stroke="#EAB308" 
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: "#EAB308", strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={false}
-                    isAnimationActive={false}
-                  />
-                  {/* Line 2: Cleaned (Top Flat-ish Teal) */}
-                  <Line
-                    type="linear"
-                    dataKey="clean"
-                    name="Cleaned" 
-                    stroke="#14B8A6" 
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: "#14B8A6", strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={false}
-                    isAnimationActive={false}
-                  />
-                  {/* Line 3: Fixed (Middle Blue) */}
-                  <Line
-                    type="linear"
-                    dataKey="fixed"
-                    name="Fixed" 
-                    stroke="#3B82F6" 
-                    strokeWidth={3}
-                    dot={{ r: 4, fill: "#3B82F6", strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={false}
-                    isAnimationActive={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            /* LIVE CHART HIDDEN FOR DEMO
-            monthlyData.length > 0 ? (
-            <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={monthlyData}
-                  margin={{ top: 10, right: 30, left: 0, bottom: 5 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#E5E7EB"
-                  />
-                  <XAxis
-                    dataKey="period"
-                    tick={{ fontSize: 11 }}
-                    stroke="#9CA3AF"
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10 }}
-                    stroke="#9CA3AF"
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(value) =>
-                      value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
-                    }
-                  />
-                  <ChartTooltip
-                    content={({ active, payload, label }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-background border rounded-lg shadow-md p-3 text-xs">
-                            <p className="font-medium mb-2">{label}</p>
-                            {payload.map((entry, index) => (
-                              <div
-                                key={index}
-                                className="flex justify-between gap-4"
-                              >
-                                <span style={{ color: entry.color }}>
-                                  {entry.name}:
-                                </span>
-                                <span className="font-medium">
-                                  {Number(entry.value).toLocaleString()}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Legend
-                    wrapperStyle={{ fontSize: "11px", paddingTop: "10px" }}
-                    iconType="circle"
-                    iconSize={8}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="rowsIn"
-                    name="Rows In"
-                    stroke={CHART_COLORS.purple}
-                    fill={CHART_COLORS.purpleSoft}
-                    fillOpacity={0.5}
-                    strokeWidth={2}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="cleanRows"
-                    name="Validated Rows"
-                    stroke={CHART_COLORS.green}
-                    fill={CHART_COLORS.greenSoft}
-                    fillOpacity={0.5}
-                    strokeWidth={2}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="rowsQuarantined"
-                    name="Quarantined"
-                    stroke={CHART_COLORS.red}
-                    fill={CHART_COLORS.redSoft}
-                    fillOpacity={0.5}
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-            ) : (
-            <div className="h-[280px] flex items-center justify-center text-muted-foreground text-xs">
-              No monthly data available
-            </div>
-            )
-            */
-            null
-          )}
+        </CardHeader> */}
+        <CardContent className="px-4 pb-4 pt-2">
+          <ProfessionalChartsCarousel />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// Professional Charts Carousel Component
+function ProfessionalChartsCarousel() {
+  const [currentChart, setCurrentChart] = useState(0);
+
+  const trendData = [
+    { month: 'Jan', quarantined: 5,  clean: 80, fixed: 45 },
+    { month: 'Feb', quarantined: 12, clean: 80, fixed: 47 },
+    { month: 'Mar', quarantined: 25, clean: 79, fixed: 45 },
+    { month: 'Apr', quarantined: 35, clean: 80, fixed: 43 },
+    { month: 'May', quarantined: 48, clean: 80, fixed: 48 },
+    { month: 'Jun', quarantined: 55, clean: 78, fixed: 46 },
+    { month: 'Jul', quarantined: 62, clean: 77, fixed: 49 },
+    { month: 'Aug', quarantined: 70, clean: 78, fixed: 54 },
+    { month: 'Sep', quarantined: 78, clean: 79, fixed: 55 },
+    { month: 'Oct', quarantined: 82, clean: 77, fixed: 59 },
+    { month: 'Nov', quarantined: 90, clean: 76, fixed: 65 },
+  ];
+
+  const qualityMetricsData = [
+    { month: 'Jan', score: 65, errors: 35, issues: 28 },
+    { month: 'Feb', score: 68, errors: 32, issues: 25 },
+    { month: 'Mar', score: 72, errors: 28, issues: 22 },
+    { month: 'Apr', score: 75, errors: 25, issues: 20 },
+    { month: 'May', score: 78, errors: 22, issues: 18 },
+    { month: 'Jun', score: 80, errors: 20, issues: 16 },
+    { month: 'Jul', score: 82, errors: 18, issues: 14 },
+    { month: 'Aug', score: 84, errors: 16, issues: 12 },
+    { month: 'Sep', score: 85, errors: 15, issues: 11 },
+    { month: 'Oct', score: 87, errors: 13, issues: 10 },
+    { month: 'Nov', score: 88, errors: 12, issues: 9 },
+  ];
+
+  const processingRateData = [
+    { month: 'Jan', processed: 1000, successful: 850, failed: 150 },
+    { month: 'Feb', processed: 1200, successful: 1020, failed: 180 },
+    { month: 'Mar', processed: 1400, successful: 1260, failed: 140 },
+    { month: 'Apr', processed: 1600, successful: 1504, failed: 96 },
+    { month: 'May', processed: 1800, successful: 1746, failed: 54 },
+    { month: 'Jun', processed: 2000, successful: 1980, failed: 20 },
+    { month: 'Jul', processed: 2200, successful: 2178, failed: 22 },
+    { month: 'Aug', processed: 2400, successful: 2376, failed: 24 },
+    { month: 'Sep', processed: 2600, successful: 2548, failed: 52 },
+    { month: 'Oct', processed: 2800, successful: 2744, failed: 56 },
+    { month: 'Nov', processed: 3000, successful: 2940, failed: 60 },
+  ];
+
+  const charts = [
+    {
+      title: "Data Processing Trends",
+      subtitle: "Comparison of cleaned, fixed, and quarantined records",
+      icon: LineChartIcon,
+      render: () => (
+        <div className="h-[360px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={trendData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis 
+                dataKey="month" 
+                tick={{ fontSize: 12 }}
+                stroke="#6B7280"
+              />
+              <YAxis 
+                tick={{ fontSize: 11 }}
+                stroke="#6B7280"
+              />
+              <ChartTooltip 
+                contentStyle={{ backgroundColor: "#fff", border: "1px solid #E5E7EB" }}
+                formatter={(value) => value.toLocaleString()}
+              />
+              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "20px" }} />
+              <Line 
+                type="monotone" 
+                dataKey="clean" 
+                stroke="#10B981" 
+                strokeWidth={3}
+                dot={{ r: 5, fill: "#10B981" }}
+                name="Cleaned"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="fixed" 
+                stroke="#3B82F6" 
+                strokeWidth={3}
+                dot={{ r: 5, fill: "#3B82F6" }}
+                name="Fixed"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="quarantined" 
+                stroke="#F59E0B" 
+                strokeWidth={3}
+                dot={{ r: 5, fill: "#F59E0B" }}
+                name="Quarantined"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )
+    },
+    {
+      title: "Quality Score & Error Rates",
+      subtitle: "Quality score improvement over time with error tracking",
+      icon: Activity,
+      render: () => (
+        <div className="h-[360px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={qualityMetricsData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
+              <defs>
+                <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorErrors" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#EF4444" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis 
+                dataKey="month" 
+                tick={{ fontSize: 12 }}
+                stroke="#6B7280"
+              />
+              <YAxis 
+                tick={{ fontSize: 11 }}
+                stroke="#6B7280"
+              />
+              <ChartTooltip 
+                contentStyle={{ backgroundColor: "#fff", border: "1px solid #E5E7EB" }}
+                formatter={(value) => value.toLocaleString()}
+              />
+              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "20px" }} />
+              <Area 
+                type="monotone" 
+                dataKey="score" 
+                stroke="#8B5CF6" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorScore)"
+                name="Quality Score"
+              />
+              <Area 
+                type="monotone" 
+                dataKey="errors" 
+                stroke="#EF4444" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorErrors)"
+                name="Error Rate %"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )
+    },
+    {
+      title: "Processing Performance",
+      subtitle: "Total records processed vs successful completion rate",
+      icon: BarChart3,
+      render: () => (
+        <div className="h-[360px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={processingRateData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis 
+                dataKey="month" 
+                tick={{ fontSize: 12 }}
+                stroke="#6B7280"
+              />
+              <YAxis 
+                tick={{ fontSize: 11 }}
+                stroke="#6B7280"
+              />
+              <ChartTooltip 
+                contentStyle={{ backgroundColor: "#fff", border: "1px solid #E5E7EB" }}
+                formatter={(value) => value.toLocaleString()}
+              />
+              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "20px" }} />
+              <Bar dataKey="processed" fill="#6366F1" name="Total Processed" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="successful" fill="#10B981" name="Successful" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="failed" fill="#EF4444" name="Failed" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )
+    }
+  ];
+
+  const goToPrevious = () => {
+    setCurrentChart((prev) => (prev === 0 ? charts.length - 1 : prev - 1));
+  };
+
+  const goToNext = () => {
+    setCurrentChart((prev) => (prev === charts.length - 1 ? 0 : prev + 1));
+  };
+
+  const currentChartData = charts[currentChart];
+
+  return (
+    <div className="space-y-4">
+     
+      {/* Chart Header */}
+      <div className="flex items-start justify-between border-b pb-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            {currentChartData.icon && (
+              <currentChartData.icon className="h-5 w-5 text-blue-500" />
+            )}
+            <h3 className="font-semibold text-base">{currentChartData.title}</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">{currentChartData.subtitle}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            {currentChart + 1} / {charts.length}
+          </span>
+        </div>
+      </div>
+ {/* Navigation Controls - Top */}
+      <div className="flex items-center justify-between pb-2">
+        <button
+          onClick={goToPrevious}
+          className="p-2 rounded-lg hover:bg-muted transition-colors"
+          title="Previous chart"
+        >
+          <ChevronLeft className="h-6 w-6 text-blue-500 hover:text-blue-600" />
+        </button>
+
+        <div></div>
+
+        <button
+          onClick={goToNext}
+          className="p-2 rounded-lg hover:bg-muted transition-colors"
+          title="Next chart"
+        >
+          <ChevronRight className="h-6 w-6 text-blue-500 hover:text-blue-600" />
+        </button>
+      </div>
+
+      {/* Chart Container */}
+      <div className="relative bg-muted/20 rounded-lg p-4">
+        {currentChartData.render()}
+      </div>
     </div>
   );
 }
