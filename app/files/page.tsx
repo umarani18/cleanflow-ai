@@ -21,7 +21,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Brain,
+  Sparkles,
   Menu,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -1007,7 +1007,7 @@ function FilesPageContent() {
                       </Label>
                     </div>
                     <div className="rounded-full bg-gradient-to-br from-blue-400 to-purple-500 p-1.5">
-                      <Brain className="h-4 w-4 text-white" />
+                      <Sparkles className="h-4 w-4 text-white" />
                     </div>
                   </div>
                   <Textarea
