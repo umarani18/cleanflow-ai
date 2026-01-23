@@ -30,7 +30,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/providers/auth-provider"
 import { AuthGuard } from "@/components/auth/auth-guard"
 import { MainLayout } from "@/components/layout/main-layout"
-import { fileManagementAPI, type FileStatusResponse } from "@/lib/api/file-management-api"
+import { fileManagementAPI, type FileStatusResponse, type ProfilingResponse } from "@/lib/api/file-management-api"
 import { AWS_CONFIG } from "@/lib/aws-config"
 import { cn, formatBytes, formatToIST } from "@/lib/utils"
 import { DownloadFormatModal } from "@/components/files/download-format-modal"
@@ -82,6 +82,15 @@ import {
 import QuickBooksImport from "@/components/quickbooks/quickbooks-import"
 import UnifiedBridgeImport from "@/components/unified-bridge/unified-bridge-import"
 import { PushToERPModal } from "@/components/files/push-to-erp-modal"
+import { ColumnProfilingPanel } from "@/components/files/column-profiling-panel"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const STATUS_OPTIONS = [
   { label: "All", value: "all", type: "status" },
@@ -117,6 +126,8 @@ const ERP_OPTIONS = [
   { label: "Sage Intacct", value: "sage" },
 ]
 
+const RULE_IDS = Array.from({ length: 34 }, (_, i) => `R${i + 1}`)
+
 export default function FilesPage() {
   return (
     <AuthGuard>
@@ -150,6 +161,13 @@ function FilesPageContent() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [selectedFile, setSelectedFile] = useState<FileStatusResponse | null>(null)
+  const [showPushToErpModal, setShowPushToErpModal] = useState(false)
+  const [pushToErpFile, setPushToErpFile] = useState<FileStatusResponse | null>(null)
+  
+  // Profiling state
+  const [profilingFileId, setProfilingFileId] = useState<string | null>(null)
+  const [profilingData, setProfilingData] = useState<ProfilingResponse | null>(null)
+  const [loadingProfiling, setLoadingProfiling] = useState(false)
   const [pushQBModalOpen, setPushQBModalOpen] = useState(false)
   const [fileToPush, setFileToPush] = useState<FileStatusResponse | null>(null)
   const [activeSection, setActiveSection] = useState<"upload" | "explorer">("upload")
@@ -166,6 +184,20 @@ function FilesPageContent() {
   const [columnsLoading, setColumnsLoading] = useState(false)
   const [columnsError, setColumnsError] = useState<string | null>(null)
   const [selectionFileError, setSelectionFileError] = useState<string | null>(null)
+  const [confirmColumnsOpen, setConfirmColumnsOpen] = useState(false)
+  const [confirmColumns, setConfirmColumns] = useState<string[]>([])
+  const [confirmAllColumns, setConfirmAllColumns] = useState(false)
+  const [selectionProfilingData, setSelectionProfilingData] = useState<ProfilingResponse | null>(null)
+  const [selectionProfilingLoading, setSelectionProfilingLoading] = useState(false)
+  const [selectionProfilingError, setSelectionProfilingError] = useState<string | null>(null)
+  const [rulesDialogOpen, setRulesDialogOpen] = useState(false)
+  const [rulesConfirmed, setRulesConfirmed] = useState(false)
+  const [globalDisabledRules, setGlobalDisabledRules] = useState<string[]>([])
+  const [requiredColumns, setRequiredColumns] = useState<Set<string>>(new Set())
+  const [disableRulesByColumn, setDisableRulesByColumn] = useState<Record<string, string[]>>({})
+  const [overrideRulesByColumn, setOverrideRulesByColumn] = useState<Record<string, string[]>>({})
+  const [rulesDisableColumn, setRulesDisableColumn] = useState<string>("")
+  const [rulesOverrideColumn, setRulesOverrideColumn] = useState<string>("")
   // Column Export Dialog state
   const [showColumnExportModal, setShowColumnExportModal] = useState(false)
   const [columnExportFile, setColumnExportFile] = useState<FileStatusResponse | null>(null)
@@ -395,6 +427,10 @@ function FilesPageContent() {
         use_custom_rules: useCustomRules,
         custom_rule_prompt: useCustomRules ? customRulePrompt.trim() || null : null,
         selected_columns: cols,
+        required_columns: Array.from(requiredColumns),
+        global_disabled_rules: globalDisabledRules,
+        disable_rules: disableRulesByColumn,
+        column_rules_override: overrideRulesByColumn,
       })
       toast({
         title: "Processing Started",
@@ -419,6 +455,18 @@ function FilesPageContent() {
     setColumnsLoading(true)
     setColumnsError(null)
     setSelectionFileError(null)
+    setSelectionProfilingData(null)
+    setSelectionProfilingError(null)
+    setSelectionProfilingLoading(true)
+    setRulesConfirmed(false)
+    setGlobalDisabledRules([])
+    setRequiredColumns(new Set())
+    setDisableRulesByColumn({})
+    setOverrideRulesByColumn({})
+    setRulesDisableColumn("")
+    setRulesOverrideColumn("")
+    setUseCustomRules(false)
+    setCustomRulePrompt("")
 
     try {
       const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
@@ -428,12 +476,25 @@ function FilesPageContent() {
       if (cols.length === 0) {
         setColumnsError("No columns detected for this file. You can still proceed to process all columns.")
       }
+      try {
+        const safeColumns = cols && cols.length <= 100 ? cols : undefined
+        const profiling = await fileManagementAPI.getColumnProfilingPreview(
+          file.upload_id,
+          idToken,
+          safeColumns
+        )
+        setSelectionProfilingData(profiling)
+      } catch (error) {
+        console.error("Failed to load profiling preview:", error)
+        setSelectionProfilingError("Failed to load column profiling preview")
+      }
     } catch (error) {
       console.error("Failed to fetch columns:", error)
       setAvailableColumns([])
       setSelectedColumns(new Set())
       setColumnsError("Unable to fetch columns. You can proceed to process all columns or cancel.")
     } finally {
+      setSelectionProfilingLoading(false)
       setColumnsLoading(false)
     }
   }
@@ -453,12 +514,10 @@ function FilesPageContent() {
       return
     }
 
+    setConfirmColumns(cols ?? [])
+    setConfirmAllColumns(!cols || cols.length === 0)
+    setConfirmColumnsOpen(true)
     setColumnModalOpen(false)
-    await doStartProcessing(columnModalFile, cols)
-    setColumnModalFile(null)
-    setSelectedColumns(new Set())
-    setAvailableColumns([])
-    setSelectionFileError(null)
   }
 
   const handleColumnCancel = () => {
@@ -468,6 +527,81 @@ function FilesPageContent() {
     setAvailableColumns([])
     setColumnsError(null)
     setSelectionFileError(null)
+    setSelectionProfilingData(null)
+    setSelectionProfilingError(null)
+    setSelectionProfilingLoading(false)
+  }
+
+  const handleOpenRulesDialog = () => {
+    setRulesDialogOpen(true)
+  }
+
+  const handleCloseRulesDialog = () => {
+    setRulesDialogOpen(false)
+  }
+
+  const handleConfirmRulesDialog = () => {
+    setRulesConfirmed(true)
+    setRulesDialogOpen(false)
+  }
+
+  const toggleRuleInList = (rules: string[], ruleId: string, checked: boolean) => {
+    const normalized = ruleId.toUpperCase()
+    if (checked) {
+      return rules.includes(normalized) ? rules : [...rules, normalized]
+    }
+    return rules.filter((r) => r !== normalized)
+  }
+
+  const getSuggestedRules = (column: string) => {
+    const profile = selectionProfilingData?.profiles?.[column]
+    if (!profile?.rules) return []
+    return profile.rules.map((r) => r.rule_id.toUpperCase())
+  }
+
+  const handleToggleGlobalRule = (ruleId: string, checked: boolean) => {
+    setGlobalDisabledRules((prev) => toggleRuleInList(prev, ruleId, checked))
+  }
+
+  const handleToggleRequiredColumn = (col: string, checked: boolean) => {
+    setRequiredColumns((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(col)
+      } else {
+        next.delete(col)
+      }
+      return next
+    })
+  }
+
+  const handleSelectDisableColumn = (col: string) => {
+    setRulesDisableColumn(col)
+    if (!disableRulesByColumn[col]) {
+      setDisableRulesByColumn((prev) => ({ ...prev, [col]: [] }))
+    }
+  }
+
+  const handleSelectOverrideColumn = (col: string) => {
+    setRulesOverrideColumn(col)
+    if (!overrideRulesByColumn[col]) {
+      const suggested = getSuggestedRules(col)
+      setOverrideRulesByColumn((prev) => ({ ...prev, [col]: suggested }))
+    }
+  }
+
+  const handleToggleDisableRule = (col: string, ruleId: string, checked: boolean) => {
+    setDisableRulesByColumn((prev) => {
+      const current = prev[col] || []
+      return { ...prev, [col]: toggleRuleInList(current, ruleId, checked) }
+    })
+  }
+
+  const handleToggleOverrideRule = (col: string, ruleId: string, checked: boolean) => {
+    setOverrideRulesByColumn((prev) => {
+      const current = prev[col] || []
+      return { ...prev, [col]: toggleRuleInList(current, ruleId, checked) }
+    })
   }
 
   const handleToggleColumn = (col: string, checked: boolean) => {
@@ -484,6 +618,26 @@ function FilesPageContent() {
 
   const handleToggleAllColumns = (checked: boolean) => {
     setSelectedColumns(checked ? new Set(availableColumns) : new Set())
+  }
+
+  const handleConfirmColumnsCancel = () => {
+    setConfirmColumnsOpen(false)
+    setConfirmColumns([])
+    setConfirmAllColumns(false)
+    setColumnModalOpen(true)
+  }
+
+  const handleConfirmColumnsProceed = async () => {
+    if (!columnModalFile || !idToken) return
+    const cols = confirmAllColumns ? undefined : confirmColumns
+    setConfirmColumnsOpen(false)
+    await doStartProcessing(columnModalFile, cols)
+    setColumnModalFile(null)
+    setSelectedColumns(new Set())
+    setAvailableColumns([])
+    setSelectionFileError(null)
+    setConfirmColumns([])
+    setConfirmAllColumns(false)
   }
 
   const normalizeColumnName = (name: string) => name.trim()
@@ -598,6 +752,28 @@ function FilesPageContent() {
     // reset so same file can be re-selected
     if (selectionFileInputRef.current) {
       selectionFileInputRef.current.value = ""
+    }
+  }
+
+  const handleViewProfiling = async (fileId: string) => {
+    setProfilingFileId(fileId)
+    setLoadingProfiling(true)
+    setProfilingData(null)
+    
+    try {
+      if (!idToken) return
+      const data = await fileManagementAPI.getColumnProfiling(fileId, idToken)
+      setProfilingData(data)
+    } catch (error) {
+      console.error("Failed to load profiling data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load column profiling data",
+        variant: "destructive",
+      })
+      setProfilingFileId(null)
+    } finally {
+      setLoadingProfiling(false)
     }
   }
 
@@ -783,7 +959,7 @@ function FilesPageContent() {
     }
   }
 
-  const handleDownloadWithErp = async (targetErp: string | null) => {
+  const handleDownloadWithErp = async (targetErp: string | null, dataType: 'clean' | 'quarantine' | 'all' = 'all') => {
     if (!erpModalConfig || !idToken) return
 
     const { file, format } = erpModalConfig
@@ -793,7 +969,7 @@ function FilesPageContent() {
 
     try {
       const typeParam = format === "excel" ? "excel" : format === "json" ? "json" : "csv"
-      let downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=all`
+      let downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=${dataType}`
       if (targetErp) downloadUrl += `&erp=${encodeURIComponent(targetErp)}`
 
       const response = await fetch(downloadUrl, {
@@ -828,7 +1004,9 @@ function FilesPageContent() {
       const baseFilename = (file.original_filename || file.filename || "file").replace(/\.[^/.]+$/, "")
       const extension = format === "excel" ? ".xlsx" : format === "json" ? ".json" : ".csv"
       const erpSuffix = targetErp ? `_${targetErp.replace(/\s+/g, "_").toLowerCase()}` : ""
-      const filename = `${baseFilename}_clean${erpSuffix}${extension}`
+      // Add data type suffix
+      const dataTypeSuffix = dataType === 'clean' ? '_clean' : dataType === 'quarantine' ? '_quarantined' : '_full'
+      const filename = `${baseFilename}${dataTypeSuffix}${erpSuffix}${extension}`
 
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
@@ -1314,6 +1492,23 @@ function FilesPageContent() {
                                 <TooltipContent>Push to ERP</TooltipContent>
                               </Tooltip>
                             )}
+
+                            {file.status === 'DQ_FIXED' && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 sm:h-8 sm:w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                                    onClick={() => handleViewProfiling(file.upload_id)}
+                                  >
+                                    <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>View DQ Analysis</TooltipContent>
+                              </Tooltip>
+                            )}
+                            
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -1350,21 +1545,23 @@ function FilesPageContent() {
 
         {/* Modals */}
         <AlertDialog open={columnModalOpen} onOpenChange={setColumnModalOpen}>
-          <AlertDialogContent>
+          <AlertDialogContent className="!max-w-[95vw] !w-[95vw] h-[90vh] sm:!max-w-[95vw] overflow-hidden grid-rows-[auto_1fr_auto]">
             <AlertDialogHeader>
               <AlertDialogTitle>Select columns to process</AlertDialogTitle>
               <AlertDialogDescription>
                 Choose which columns should be included for this run. All columns are selected by default.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 overflow-hidden pr-1 min-h-0">
               {columnsLoading ? (
-                <div className="flex items-center space-x-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Loading columns...</span>
+                <div className="col-span-full flex items-center justify-center h-full text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Loading columns...</span>
+                  </div>
                 </div>
               ) : (
-                <>
+                <div className="space-y-3 min-h-0">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center space-x-2">
                       <Checkbox
@@ -1402,7 +1599,7 @@ function FilesPageContent() {
                       to quickly apply selections.
                     </p>
                   </div>
-                  <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0 max-h-[60vh]">
                     {availableColumns.map((col) => (
                       <div key={col} className="flex items-center space-x-2">
                         <Checkbox
@@ -1423,12 +1620,239 @@ function FilesPageContent() {
                   </div>
                   {columnsError && <p className="text-sm text-destructive">{columnsError}</p>}
                   {selectionFileError && <p className="text-sm text-destructive">{selectionFileError}</p>}
+                </div>
+              )}
+              <div className="space-y-2 min-h-0 overflow-hidden">
+                <p className="text-sm font-medium">Column profiling preview</p>
+                {selectionProfilingError && (
+                  <p className="text-sm text-destructive mt-1">{selectionProfilingError}</p>
+                )}
+                {(selectionProfilingLoading || selectionProfilingData) ? (
+                  <div className="mt-2 min-h-0 overflow-y-auto">
+                    <ColumnProfilingPanel
+                      data={selectionProfilingData}
+                      loading={selectionProfilingLoading}
+                      embedded
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Profiling preview will appear here.</p>
+                )}
+              </div>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleColumnCancel}>Cancel</AlertDialogCancel>
+              {!columnsLoading && !selectionProfilingLoading && !rulesConfirmed && (
+                <Button variant="outline" onClick={handleOpenRulesDialog}>
+                  Next: Customize rules
+                </Button>
+              )}
+              {!columnsLoading && !selectionProfilingLoading && rulesConfirmed && (
+                <AlertDialogAction onClick={handleColumnConfirm}>
+                  Proceed
+                </AlertDialogAction>
+              )}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Dialog open={rulesDialogOpen} onOpenChange={setRulesDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Customize rules (LLM)</DialogTitle>
+              <DialogDescription>
+                Add instructions that the LLM should apply for this document.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="use-custom-rules-dialog"
+                  checked={useCustomRules}
+                  onCheckedChange={(checked) => setUseCustomRules(checked === true)}
+                />
+                <Label htmlFor="use-custom-rules-dialog" className="text-sm font-medium cursor-pointer">
+                  Enable custom rules
+                </Label>
+              </div>
+              <Textarea
+                className="min-h-[120px] text-sm resize-none"
+                disabled={!useCustomRules}
+                placeholder="Example: For any row where product_type is a TV and tv_cost < 10000, add invalid_tv_price and set status to Suspended."
+                value={customRulePrompt}
+                onChange={(e) => setCustomRulePrompt(e.target.value)}
+              />
+            </div>
+
+            <Tabs defaultValue="global" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="global">Global Rules</TabsTrigger>
+                <TabsTrigger value="required">Required Fields</TabsTrigger>
+                <TabsTrigger value="disable">Disable Rules</TabsTrigger>
+                <TabsTrigger value="override">Edit Rules</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="global" className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Disable specific rules for all columns.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {RULE_IDS.map((ruleId) => (
+                    <label key={ruleId} className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={globalDisabledRules.includes(ruleId)}
+                        onCheckedChange={(checked) => handleToggleGlobalRule(ruleId, Boolean(checked))}
+                      />
+                      <span>{ruleId}</span>
+                    </label>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="required" className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Mark columns as required (R1). Missing values will be flagged.
+                </p>
+                {availableColumns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No columns available.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
+                    {availableColumns.map((col) => (
+                      <label key={col} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={requiredColumns.has(col)}
+                          onCheckedChange={(checked) => handleToggleRequiredColumn(col, Boolean(checked))}
+                        />
+                        <span>{col}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="disable" className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Disable rules for a specific column.
+                </p>
+                <Select value={rulesDisableColumn} onValueChange={handleSelectDisableColumn}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableColumns.map((col) => (
+                      <SelectItem key={col} value={col}>
+                        {col}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {rulesDisableColumn ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {RULE_IDS.map((ruleId) => {
+                      const selected = disableRulesByColumn[rulesDisableColumn] || []
+                      return (
+                        <label key={ruleId} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={selected.includes(ruleId)}
+                            onCheckedChange={(checked) => handleToggleDisableRule(rulesDisableColumn, ruleId, Boolean(checked))}
+                          />
+                          <span>{ruleId}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Select a column to configure disabled rules.</p>
+                )}
+              </TabsContent>
+
+              <TabsContent value="override" className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Edit rule suggestions for a specific column.
+                </p>
+                <Select value={rulesOverrideColumn} onValueChange={handleSelectOverrideColumn}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableColumns.map((col) => (
+                      <SelectItem key={col} value={col}>
+                        {col}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {rulesOverrideColumn ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {RULE_IDS.map((ruleId) => {
+                      const selected = overrideRulesByColumn[rulesOverrideColumn] || []
+                      return (
+                        <label key={ruleId} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={selected.includes(ruleId)}
+                            onCheckedChange={(checked) => handleToggleOverrideRule(rulesOverrideColumn, ruleId, Boolean(checked))}
+                          />
+                          <span>{ruleId}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Select a column to edit suggested rules.</p>
+                )}
+              </TabsContent>
+            </Tabs>
+            <AlertDialogFooter>
+              <Button variant="outline" onClick={handleCloseRulesDialog}>
+                Back
+              </Button>
+              <Button onClick={handleConfirmRulesDialog}>
+                Done
+              </Button>
+            </AlertDialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={confirmColumnsOpen} onOpenChange={setConfirmColumnsOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm columns</AlertDialogTitle>
+              <AlertDialogDescription>
+                Review the columns to be processed. Click Proceed to start processing.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-3">
+              {confirmAllColumns ? (
+                <p className="text-sm text-muted-foreground">
+                  All columns will be processed.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {confirmColumns.length} column(s) selected:
+                  </p>
+                  <div className="max-h-64 overflow-y-auto pr-1">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Column name</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {confirmColumns.map((col) => (
+                          <TableRow key={col}>
+                            <TableCell className="text-sm">{col}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </>
               )}
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={handleColumnCancel}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleColumnConfirm} disabled={columnsLoading}>
+              <AlertDialogCancel onClick={handleConfirmColumnsCancel}>Back</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmColumnsProceed}>
                 Proceed
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -1475,6 +1899,12 @@ function FilesPageContent() {
             erpModalConfig?.file.filename ||
             "selected file"
           }
+          dqStats={{
+            cleanRows: erpModalConfig?.file.rows_out ? (erpModalConfig.file.rows_out - (erpModalConfig.file.rows_fixed || 0)) : undefined,
+            fixedRows: erpModalConfig?.file.rows_fixed,
+            quarantinedRows: erpModalConfig?.file.rows_quarantined,
+            totalRows: erpModalConfig?.file.rows_in,
+          }}
         />
 
         <PushToERPModal
@@ -1512,6 +1942,23 @@ function FilesPageContent() {
           onExport={handleColumnExport}
           exporting={downloading === columnExportFile?.upload_id || columnExportLoading}
         />
+
+        <Dialog open={!!profilingFileId} onOpenChange={(open) => !open && setProfilingFileId(null)}>
+          <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="p-6 pb-2">
+              <DialogTitle>Column Profiling & DQ Analysis</DialogTitle>
+              <DialogDescription>
+                Detailed analysis of data types, quality issues, and suggested rules.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto p-6 pt-2">
+              <ColumnProfilingPanel 
+                data={profilingData} 
+                loading={loadingProfiling} 
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   )

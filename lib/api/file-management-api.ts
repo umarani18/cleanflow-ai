@@ -13,6 +13,8 @@ const ENDPOINTS = {
   FILES_EXPORT: (id: string) => `/files/${id}/export`,   // GET - download files
   FILES_ISSUES: (id: string) => `/files/${id}/issues`,   // GET - paged outstanding issues
   FILES_PREVIEW_DATA: (id: string) => `/files/${id}/preview-data`, // GET - first N rows as JSON
+  FILES_PROFILING: (id: string) => `/files/${id}/profiling`, // GET - column profiling data
+  FILES_PROFILING_PREVIEW: (id: string) => `/files/${id}/profiling-preview`, // GET - column profiling preview
 }
 
 // Response Types
@@ -117,6 +119,33 @@ export interface IssuesResponse {
   applied_filters?: string[]
 }
 
+export interface ColumnProfileRule {
+  rule_id: string
+  confidence: number
+  decision: 'auto' | 'human'
+  reasoning: string
+}
+
+export interface ColumnProfile {
+  type_guess: string
+  type_confidence: number
+  null_rate: number
+  unique_ratio: number
+  rules: ColumnProfileRule[]
+  profile_time_sec?: number
+  llm_time_sec?: number
+}
+
+export interface ProfilingResponse {
+  summary: {
+    total_columns: number
+    total_rules: number
+    processed_at: string
+    engine_version: string
+  }
+  profiles: Record<string, ColumnProfile>
+}
+
 // Overall DQ Report (per-user aggregated)
 export interface OverallDqReportResponse {
   user_id: string
@@ -205,6 +234,27 @@ class FileManagementAPI {
     }
   }
 
+  async getColumnProfiling(fileId: string, authToken: string): Promise<ProfilingResponse> {
+    return this.makeRequest(ENDPOINTS.FILES_PROFILING(fileId), authToken, { method: 'GET' })
+  }
+
+  async getColumnProfilingPreview(
+    fileId: string,
+    authToken: string,
+    columns?: string[],
+    sampleSize: number = 500
+  ): Promise<ProfilingResponse> {
+    const params = new URLSearchParams()
+    if (columns && columns.length > 0) {
+      params.set('columns', columns.join(','))
+    }
+    if (sampleSize) {
+      params.set('sample', String(sampleSize))
+    }
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    return this.makeRequest(`${ENDPOINTS.FILES_PROFILING_PREVIEW(fileId)}${qs}`, authToken, { method: 'GET' })
+  }
+
   async getFileStatus(uploadId: string, authToken: string): Promise<FileStatusResponse> {
     return this.makeRequest(ENDPOINTS.FILES_STATUS(uploadId), authToken, { method: 'GET' })
   }
@@ -229,7 +279,15 @@ class FileManagementAPI {
   async startProcessing(
     uploadId: string,
     authToken: string,
-    options?: { use_custom_rules?: boolean; custom_rule_prompt?: string | null; selected_columns?: string[] }
+    options?: {
+      use_custom_rules?: boolean
+      custom_rule_prompt?: string | null
+      selected_columns?: string[]
+      required_columns?: string[]
+      global_disabled_rules?: string[]
+      disable_rules?: Record<string, string[]>
+      column_rules_override?: Record<string, string[]>
+    }
   ): Promise<any> {
     console.log('Starting processing:', uploadId, options?.use_custom_rules ? '(with custom rules)' : '')
     const payload: Record<string, any> = {}
@@ -248,6 +306,22 @@ class FileManagementAPI {
       if (filtered.length > 0) {
         payload.selected_columns = filtered
       }
+    }
+
+    if (options?.required_columns) {
+      payload.required_columns = options.required_columns
+    }
+
+    if (options?.global_disabled_rules) {
+      payload.global_disabled_rules = options.global_disabled_rules
+    }
+
+    if (options?.disable_rules) {
+      payload.disable_rules = options.disable_rules
+    }
+
+    if (options?.column_rules_override) {
+      payload.column_rules_override = options.column_rules_override
     }
 
     return this.makeRequest(ENDPOINTS.FILES_PROCESS(uploadId), authToken, {
@@ -1133,4 +1207,3 @@ export interface UnifiedBridgeImportResponse {
 
 export const fileManagementAPI = new FileManagementAPI()
 export default fileManagementAPI
-
