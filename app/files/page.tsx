@@ -24,13 +24,12 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/providers/auth-provider"
 import { AuthGuard } from "@/components/auth/auth-guard"
 import { MainLayout } from "@/components/layout/main-layout"
-import { fileManagementAPI, type FileStatusResponse, type ProfilingResponse } from "@/lib/api/file-management-api"
+import { fileManagementAPI, type FileStatusResponse, type ProfilingResponse, type CustomRuleDefinition, type CustomRuleSuggestionResponse } from "@/lib/api/file-management-api"
 import { AWS_CONFIG } from "@/lib/aws-config"
 import { cn, formatBytes, formatToIST } from "@/lib/utils"
 import { DownloadFormatModal } from "@/components/files/download-format-modal"
@@ -91,6 +90,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { RULE_IDS, getRuleMeta } from "@/lib/rule-metadata"
 
 const STATUS_OPTIONS = [
   { label: "All", value: "all", type: "status" },
@@ -126,7 +126,12 @@ const ERP_OPTIONS = [
   { label: "Sage Intacct", value: "sage" },
 ]
 
-const RULE_IDS = Array.from({ length: 34 }, (_, i) => `R${i + 1}`)
+const RULE_SEVERITY_STYLES: Record<string, string> = {
+  critical: "bg-red-500/10 text-red-700 border-red-500/20",
+  warning: "bg-amber-500/10 text-amber-700 border-amber-500/20",
+  info: "bg-blue-500/10 text-blue-700 border-blue-500/20",
+}
+
 
 export default function FilesPage() {
   return (
@@ -175,8 +180,6 @@ function FilesPageContent() {
   const [selectedErp, setSelectedErp] = useState("quickbooks")
   const [sortField, setSortField] = useState<"name" | "score" | "status" | "uploaded" | "updated">("uploaded")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
-  const [useCustomRules, setUseCustomRules] = useState(false)
-  const [customRulePrompt, setCustomRulePrompt] = useState("")
   const [columnModalOpen, setColumnModalOpen] = useState(false)
   const [columnModalFile, setColumnModalFile] = useState<FileStatusResponse | null>(null)
   const [availableColumns, setAvailableColumns] = useState<string[]>([])
@@ -198,6 +201,12 @@ function FilesPageContent() {
   const [overrideRulesByColumn, setOverrideRulesByColumn] = useState<Record<string, string[]>>({})
   const [rulesDisableColumn, setRulesDisableColumn] = useState<string>("")
   const [rulesOverrideColumn, setRulesOverrideColumn] = useState<string>("")
+  const [customRules, setCustomRules] = useState<CustomRuleDefinition[]>([])
+  const [customRuleColumn, setCustomRuleColumn] = useState<string>("")
+  const [customRulePrompt, setCustomRulePrompt] = useState<string>("")
+  const [customRuleSuggestion, setCustomRuleSuggestion] = useState<CustomRuleSuggestionResponse | null>(null)
+  const [customRuleSuggesting, setCustomRuleSuggesting] = useState(false)
+  const [customRuleSuggestError, setCustomRuleSuggestError] = useState<string | null>(null)
   // Column Export Dialog state
   const [showColumnExportModal, setShowColumnExportModal] = useState(false)
   const [columnExportFile, setColumnExportFile] = useState<FileStatusResponse | null>(null)
@@ -208,6 +217,38 @@ function FilesPageContent() {
   const selectionFileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const { idToken } = useAuth()
+
+  const renderRuleOption = (
+    ruleId: string,
+    checked: boolean,
+    onCheckedChange: (checked: boolean) => void
+  ) => {
+    const meta = getRuleMeta(ruleId)
+    return (
+      <label key={ruleId} className="flex items-start gap-3 rounded-md border border-muted/60 p-3">
+        <Checkbox
+          checked={checked}
+          onCheckedChange={(value) => onCheckedChange(Boolean(value))}
+        />
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">{meta.name}</span>
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px] h-5 px-2 uppercase",
+                RULE_SEVERITY_STYLES[meta.severity] || RULE_SEVERITY_STYLES.info
+              )}
+            >
+              {meta.severity}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">{meta.description}</p>
+          <p className="text-[10px] text-muted-foreground">Rule ID: {ruleId}</p>
+        </div>
+      </label>
+    )
+  }
 
   const loadFiles = useCallback(async () => {
     if (!idToken) return
@@ -424,13 +465,12 @@ function FilesPageContent() {
 
     try {
       await fileManagementAPI.startProcessing(file.upload_id, idToken, {
-        use_custom_rules: useCustomRules,
-        custom_rule_prompt: useCustomRules ? customRulePrompt.trim() || null : null,
         selected_columns: cols,
         required_columns: Array.from(requiredColumns),
         global_disabled_rules: globalDisabledRules,
         disable_rules: disableRulesByColumn,
         column_rules_override: overrideRulesByColumn,
+        custom_rules: customRules,
       })
       toast({
         title: "Processing Started",
@@ -465,8 +505,12 @@ function FilesPageContent() {
     setOverrideRulesByColumn({})
     setRulesDisableColumn("")
     setRulesOverrideColumn("")
-    setUseCustomRules(false)
+    setCustomRules([])
+    setCustomRuleColumn("")
     setCustomRulePrompt("")
+    setCustomRuleSuggestion(null)
+    setCustomRuleSuggesting(false)
+    setCustomRuleSuggestError(null)
 
     try {
       const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
@@ -543,6 +587,66 @@ function FilesPageContent() {
   const handleConfirmRulesDialog = () => {
     setRulesConfirmed(true)
     setRulesDialogOpen(false)
+  }
+
+  const handleGenerateCustomRule = async () => {
+    if (!columnModalFile || !idToken) return
+    if (!customRuleColumn) {
+      toast({
+        title: "Select a column",
+        description: "Choose the column to apply the custom check.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (!customRulePrompt.trim()) {
+      toast({
+        title: "Enter a prompt",
+        description: "Describe the validation rule you want to create.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setCustomRuleSuggesting(true)
+    setCustomRuleSuggestError(null)
+    try {
+      const response = await fileManagementAPI.suggestCustomRule(columnModalFile.upload_id, idToken, {
+        column: customRuleColumn,
+        prompt: customRulePrompt.trim(),
+      })
+      setCustomRuleSuggestion(response)
+      if (response.error) {
+        setCustomRuleSuggestError(response.error)
+      }
+    } catch (error) {
+      console.error("Custom rule suggestion failed:", error)
+      setCustomRuleSuggestError("Failed to generate rule suggestion.")
+    } finally {
+      setCustomRuleSuggesting(false)
+    }
+  }
+
+  const handleApproveCustomRule = () => {
+    const suggestion = customRuleSuggestion?.suggestion
+    if (!suggestion || customRuleSuggestion?.executable === false) {
+      return
+    }
+
+    const ruleId = suggestion.rule_id?.toUpperCase() || `CUST_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`.toUpperCase()
+    const nextRule: CustomRuleDefinition = {
+      ...suggestion,
+      rule_id: ruleId,
+      column: customRuleColumn,
+    }
+    setCustomRules((prev) => [...prev, nextRule])
+    setCustomRuleSuggestion(null)
+    setCustomRulePrompt("")
+  }
+
+  const handleRemoveCustomRule = (ruleId?: string) => {
+    if (!ruleId) return
+    setCustomRules((prev) => prev.filter((rule) => rule.rule_id !== ruleId))
   }
 
   const toggleRuleInList = (rules: string[], ruleId: string, checked: boolean) => {
@@ -1147,26 +1251,12 @@ function FilesPageContent() {
 
             {/* Custom Rules Section */}
             <div className="rounded-lg border bg-card p-4">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="use-custom-rules"
-                      checked={useCustomRules}
-                      onCheckedChange={(checked) => setUseCustomRules(checked === true)}
-                    />
-                    <Label htmlFor="use-custom-rules" className="text-sm font-medium cursor-pointer">
-                      Use custom rules (LLM)
-                    </Label>
-                  </div>
-                </div>
-                <Textarea
-                  className="min-h-[80px] text-sm resize-none"
-                  disabled={!useCustomRules}
-                  placeholder="Example: For any row where product_type is a TV and tv_cost < 10000, add invalid_tv_price and set status to Suspended."
-                  value={customRulePrompt}
-                  onChange={(e) => setCustomRulePrompt(e.target.value)}
-                />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Custom checks (optional)</p>
+                <p className="text-xs text-muted-foreground">
+                  Add custom validations when you start processing a file. You can review and approve them before
+                  anything runs.
+                </p>
               </div>
             </div>
 
@@ -1493,21 +1583,6 @@ function FilesPageContent() {
                               </Tooltip>
                             )}
 
-                            {file.status === 'DQ_FIXED' && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 sm:h-8 sm:w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50"
-                                    onClick={() => handleViewProfiling(file.upload_id)}
-                                  >
-                                    <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>View DQ Analysis</TooltipContent>
-                              </Tooltip>
-                            )}
                             
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -1644,7 +1719,7 @@ function FilesPageContent() {
               <AlertDialogCancel onClick={handleColumnCancel}>Cancel</AlertDialogCancel>
               {!columnsLoading && !selectionProfilingLoading && !rulesConfirmed && (
                 <Button variant="outline" onClick={handleOpenRulesDialog}>
-                  Next: Customize rules
+                  Next: Review rules
                 </Button>
               )}
               {!columnsLoading && !selectionProfilingLoading && rulesConfirmed && (
@@ -1659,59 +1734,185 @@ function FilesPageContent() {
         <Dialog open={rulesDialogOpen} onOpenChange={setRulesDialogOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Customize rules (LLM)</DialogTitle>
+              <DialogTitle>AI-based suggestions (optional)</DialogTitle>
               <DialogDescription>
-                Add instructions that the LLM should apply for this document.
+                AI reviews this dataset and suggests extra checks. Review and confirm before applying.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="use-custom-rules-dialog"
-                  checked={useCustomRules}
-                  onCheckedChange={(checked) => setUseCustomRules(checked === true)}
-                />
-                <Label htmlFor="use-custom-rules-dialog" className="text-sm font-medium cursor-pointer">
-                  Enable custom rules
-                </Label>
-              </div>
-              <Textarea
-                className="min-h-[120px] text-sm resize-none"
-                disabled={!useCustomRules}
-                placeholder="Example: For any row where product_type is a TV and tv_cost < 10000, add invalid_tv_price and set status to Suspended."
-                value={customRulePrompt}
-                onChange={(e) => setCustomRulePrompt(e.target.value)}
-              />
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Add deterministic checks for specific columns. Nothing is auto-fixed or deleted.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Scope: this dataset only. You can change these settings before processing starts.
+              </p>
             </div>
 
             <Tabs defaultValue="global" className="space-y-4">
               <TabsList>
+                <TabsTrigger value="custom">Custom Checks</TabsTrigger>
                 <TabsTrigger value="global">Global Rules</TabsTrigger>
                 <TabsTrigger value="required">Required Fields</TabsTrigger>
                 <TabsTrigger value="disable">Disable Rules</TabsTrigger>
                 <TabsTrigger value="override">Edit Rules</TabsTrigger>
               </TabsList>
 
+              <TabsContent value="custom" className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Column</Label>
+                    <Select value={customRuleColumn} onValueChange={setCustomRuleColumn}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select column" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableColumns.map((col) => (
+                          <SelectItem key={col} value={col}>
+                            {col}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="text-xs text-muted-foreground">Prompt</Label>
+                    <Input
+                      value={customRulePrompt}
+                      onChange={(event) => setCustomRulePrompt(event.target.value)}
+                      placeholder="Validate this column as IPv4 address"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button variant="outline" onClick={handleGenerateCustomRule} disabled={customRuleSuggesting}>
+                      {customRuleSuggesting ? "Generating..." : "Generate rule"}
+                    </Button>
+                  </div>
+                </div>
+
+                {customRuleSuggestError && (
+                  <p className="text-sm text-destructive">{customRuleSuggestError}</p>
+                )}
+
+                {customRuleSuggestion?.suggestion && (
+                  <div className="rounded-md border border-muted/60 p-3 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">
+                        {customRuleSuggestion.suggestion.rule_name || "Suggested rule"}
+                      </span>
+                      {customRuleSuggestion.suggestion.severity && (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] h-5 px-2 uppercase",
+                            RULE_SEVERITY_STYLES[customRuleSuggestion.suggestion.severity] || RULE_SEVERITY_STYLES.info
+                          )}
+                        >
+                          {customRuleSuggestion.suggestion.severity}
+                        </Badge>
+                      )}
+                      {typeof customRuleSuggestion.suggestion.confidence === "number" && (
+                        <span className="text-xs text-muted-foreground">
+                          {(customRuleSuggestion.suggestion.confidence * 100).toFixed(0)}% confidence
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Template: {customRuleSuggestion.suggestion.template}
+                    </p>
+                    {customRuleSuggestion.suggestion.explanation && (
+                      <p className="text-xs text-muted-foreground">
+                        {customRuleSuggestion.suggestion.explanation}
+                      </p>
+                    )}
+                    {customRuleSuggestion.executable === false && (
+                      <p className="text-xs text-destructive">
+                        This rule template is not supported for execution yet.
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleApproveCustomRule}
+                        disabled={customRuleSuggestion.executable === false}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setCustomRuleSuggestion(null)}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    Approved checks will run during processing for this file.
+                  </p>
+                  {customRules.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No custom checks added yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {customRules.map((rule) => (
+                        <div
+                          key={rule.rule_id}
+                          className="flex items-start justify-between gap-4 rounded-md border border-muted/60 p-3"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium">{rule.rule_name || "Custom check"}</span>
+                              {rule.severity && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-[10px] h-5 px-2 uppercase",
+                                    RULE_SEVERITY_STYLES[rule.severity] || RULE_SEVERITY_STYLES.info
+                                  )}
+                                >
+                                  {rule.severity}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Column: {rule.column} · Template: {rule.template}
+                            </p>
+                            {rule.explanation && (
+                              <p className="text-xs text-muted-foreground">{rule.explanation}</p>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveCustomRule(rule.rule_id)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
               <TabsContent value="global" className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Disable specific rules for all columns.
+                  Turn off specific checks for all columns in this dataset.
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {RULE_IDS.map((ruleId) => (
-                    <label key={ruleId} className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={globalDisabledRules.includes(ruleId)}
-                        onCheckedChange={(checked) => handleToggleGlobalRule(ruleId, Boolean(checked))}
-                      />
-                      <span>{ruleId}</span>
-                    </label>
-                  ))}
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {RULE_IDS.map((ruleId) =>
+                    renderRuleOption(ruleId, globalDisabledRules.includes(ruleId), (checked) =>
+                      handleToggleGlobalRule(ruleId, checked)
+                    )
+                  )}
                 </div>
               </TabsContent>
 
               <TabsContent value="required" className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Mark columns as required (R1). Missing values will be flagged.
+                  Mark columns as required. Missing values will be flagged.
                 </p>
                 {availableColumns.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No columns available.</p>
@@ -1732,7 +1933,7 @@ function FilesPageContent() {
 
               <TabsContent value="disable" className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Disable rules for a specific column.
+                  Turn off checks for a specific column.
                 </p>
                 <Select value={rulesDisableColumn} onValueChange={handleSelectDisableColumn}>
                   <SelectTrigger className="w-full">
@@ -1747,17 +1948,13 @@ function FilesPageContent() {
                   </SelectContent>
                 </Select>
                 {rulesDisableColumn ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                     {RULE_IDS.map((ruleId) => {
                       const selected = disableRulesByColumn[rulesDisableColumn] || []
                       return (
-                        <label key={ruleId} className="flex items-center gap-2 text-sm">
-                          <Checkbox
-                            checked={selected.includes(ruleId)}
-                            onCheckedChange={(checked) => handleToggleDisableRule(rulesDisableColumn, ruleId, Boolean(checked))}
-                          />
-                          <span>{ruleId}</span>
-                        </label>
+                        renderRuleOption(ruleId, selected.includes(ruleId), (checked) =>
+                          handleToggleDisableRule(rulesDisableColumn, ruleId, checked)
+                        )
                       )
                     })}
                   </div>
@@ -1768,7 +1965,7 @@ function FilesPageContent() {
 
               <TabsContent value="override" className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Edit rule suggestions for a specific column.
+                  Edit suggested checks for a specific column.
                 </p>
                 <Select value={rulesOverrideColumn} onValueChange={handleSelectOverrideColumn}>
                   <SelectTrigger className="w-full">
@@ -1783,17 +1980,13 @@ function FilesPageContent() {
                   </SelectContent>
                 </Select>
                 {rulesOverrideColumn ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                     {RULE_IDS.map((ruleId) => {
                       const selected = overrideRulesByColumn[rulesOverrideColumn] || []
                       return (
-                        <label key={ruleId} className="flex items-center gap-2 text-sm">
-                          <Checkbox
-                            checked={selected.includes(ruleId)}
-                            onCheckedChange={(checked) => handleToggleOverrideRule(rulesOverrideColumn, ruleId, Boolean(checked))}
-                          />
-                          <span>{ruleId}</span>
-                        </label>
+                        renderRuleOption(ruleId, selected.includes(ruleId), (checked) =>
+                          handleToggleOverrideRule(rulesOverrideColumn, ruleId, checked)
+                        )
                       )
                     })}
                   </div>

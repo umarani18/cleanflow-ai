@@ -15,6 +15,7 @@ const ENDPOINTS = {
   FILES_PREVIEW_DATA: (id: string) => `/files/${id}/preview-data`, // GET - first N rows as JSON
   FILES_PROFILING: (id: string) => `/files/${id}/profiling`, // GET - column profiling data
   FILES_PROFILING_PREVIEW: (id: string) => `/files/${id}/profiling-preview`, // GET - column profiling preview
+  FILES_CUSTOM_RULE_SUGGEST: (id: string) => `/files/${id}/custom-rule-suggest`, // POST - custom rule suggestion
 }
 
 // Response Types
@@ -121,9 +122,26 @@ export interface IssuesResponse {
 
 export interface ColumnProfileRule {
   rule_id: string
+  rule_name?: string
   confidence: number
   decision: 'auto' | 'human'
   reasoning: string
+}
+
+export interface CustomRuleDefinition {
+  rule_id?: string
+  column: string
+  template: string
+  params?: Record<string, any>
+  rule_name?: string
+  explanation?: string
+  severity?: "critical" | "warning" | "info"
+}
+
+export interface CustomRuleSuggestionResponse {
+  suggestion?: CustomRuleDefinition & { confidence?: number }
+  executable?: boolean
+  error?: string
 }
 
 export interface ColumnProfile {
@@ -280,24 +298,16 @@ class FileManagementAPI {
     uploadId: string,
     authToken: string,
     options?: {
-      use_custom_rules?: boolean
-      custom_rule_prompt?: string | null
       selected_columns?: string[]
       required_columns?: string[]
       global_disabled_rules?: string[]
       disable_rules?: Record<string, string[]>
       column_rules_override?: Record<string, string[]>
+      custom_rules?: CustomRuleDefinition[]
     }
   ): Promise<any> {
-    console.log('Starting processing:', uploadId, options?.use_custom_rules ? '(with custom rules)' : '')
+    console.log('Starting processing:', uploadId, options?.custom_rules?.length ? '(with custom rules)' : '')
     const payload: Record<string, any> = {}
-
-    if (options?.use_custom_rules) {
-      payload.use_custom_rules = true
-      if (options.custom_rule_prompt) {
-        payload.custom_rule_prompt = options.custom_rule_prompt
-      }
-    }
 
     if (options?.selected_columns && Array.isArray(options.selected_columns)) {
       const filtered = options.selected_columns
@@ -324,9 +334,24 @@ class FileManagementAPI {
       payload.column_rules_override = options.column_rules_override
     }
 
+    if (options?.custom_rules) {
+      payload.custom_rules = options.custom_rules
+    }
+
     return this.makeRequest(ENDPOINTS.FILES_PROCESS(uploadId), authToken, {
       method: "POST",
       body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined
+    })
+  }
+
+  async suggestCustomRule(
+    uploadId: string,
+    authToken: string,
+    payload: { column: string; prompt: string }
+  ): Promise<CustomRuleSuggestionResponse> {
+    return this.makeRequest(ENDPOINTS.FILES_CUSTOM_RULE_SUGGEST(uploadId), authToken, {
+      method: "POST",
+      body: JSON.stringify(payload),
     })
   }
 

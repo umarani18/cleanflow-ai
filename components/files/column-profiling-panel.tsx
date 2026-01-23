@@ -22,6 +22,13 @@ import {
   Search
 } from "lucide-react"
 import type { ProfilingResponse } from "@/lib/api/file-management-api"
+import { getRuleMeta } from "@/lib/rule-metadata"
+
+const RULE_SEVERITY_STYLES: Record<string, string> = {
+  critical: "bg-red-500/10 text-red-700 border-red-500/20",
+  warning: "bg-amber-500/10 text-amber-700 border-amber-500/20",
+  info: "bg-blue-500/10 text-blue-700 border-blue-500/20",
+}
 
 interface ColumnProfilingPanelProps {
   data: ProfilingResponse | null
@@ -238,25 +245,47 @@ export function ColumnProfilingPanel({ data, loading, embedded }: ColumnProfilin
                     ) : (
                       profile.rules.slice(0, 3).map((rule, idx) => (
                         <div key={idx} className="bg-muted/30 p-2 rounded-md text-xs">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-primary">{rule.rule_id}</span>
-                            <Badge 
-                              variant={rule.decision === 'auto' ? "default" : "secondary"}
-                              className={`text-[10px] h-4 px-1 ${
-                                rule.decision === 'auto' 
-                                  ? 'bg-green-500/10 text-green-700 hover:bg-green-500/20' 
-                                  : 'bg-orange-500/10 text-orange-700 hover:bg-orange-500/20'
-                              }`}
-                            >
-                              {rule.decision}
-                            </Badge>
-                            <span className="text-muted-foreground">
-                              {(rule.confidence * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                          <p className="text-muted-foreground line-clamp-2 leading-tight">
-                            {rule.reasoning}
-                          </p>
+                          {(() => {
+                            const meta = getRuleMeta(rule.rule_id)
+                            const displayName = rule.rule_name || meta.name
+                            return (
+                              <>
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className="font-semibold text-primary">{displayName}</span>
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] h-4 px-1 uppercase ${
+                                      RULE_SEVERITY_STYLES[meta.severity] || RULE_SEVERITY_STYLES.info
+                                    }`}
+                                  >
+                                    {meta.severity}
+                                  </Badge>
+                                  <Badge 
+                                    variant={rule.decision === 'auto' ? "default" : "secondary"}
+                                    className={`text-[10px] h-4 px-1 ${
+                                      rule.decision === 'auto' 
+                                        ? 'bg-green-500/10 text-green-700 hover:bg-green-500/20' 
+                                        : 'bg-orange-500/10 text-orange-700 hover:bg-orange-500/20'
+                                    }`}
+                                  >
+                                    {rule.decision}
+                                  </Badge>
+                                  <span className="text-muted-foreground">
+                                    {(rule.confidence * 100).toFixed(0)}%
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">Rule ID: {rule.rule_id}</span>
+                                </div>
+                                <p className="text-muted-foreground leading-tight">
+                                  {meta.description}
+                                </p>
+                                {rule.reasoning && (
+                                  <p className="text-muted-foreground mt-1 leading-tight">
+                                    Why: {rule.reasoning}
+                                  </p>
+                                )}
+                              </>
+                            )
+                          })()}
                         </div>
                       ))
                     )}
