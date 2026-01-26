@@ -23,23 +23,25 @@ import {
   ArrowDown,
   Sparkles,
   Menu,
+  Columns,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/components/providers/auth-provider"
 import { AuthGuard } from "@/components/auth/auth-guard"
 import { MainLayout } from "@/components/layout/main-layout"
-import { fileManagementAPI, type FileStatusResponse } from "@/lib/api/file-management-api"
+import { fileManagementAPI, type FileStatusResponse, type ProfilingResponse, type CustomRuleDefinition, type CustomRuleSuggestionResponse } from "@/lib/api/file-management-api"
 import { AWS_CONFIG } from "@/lib/aws-config"
 import { cn, formatBytes, formatToIST } from "@/lib/utils"
 import { DownloadFormatModal } from "@/components/files/download-format-modal"
+import { ColumnExportDialog } from "@/components/files/column-export-dialog"
 import { ERPTransformationModal } from "@/components/files/erp-transformation-modal"
 import { FileDetailsDialog } from "@/components/files/file-details-dialog"
+import { WizardDialog } from "@/components/processing"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -86,6 +88,17 @@ import QuickBooksImport from "@/components/quickbooks/quickbooks-import"
 import UnifiedBridgeImport from "@/components/unified-bridge/unified-bridge-import"
 import CustomDestinationExport from "@/components/files/custom-destination-export"
 import { PushToERPModal } from "@/components/files/push-to-erp-modal"
+import { ColumnProfilingPanel } from "@/components/files/column-profiling-panel"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { RULE_IDS, getRuleMeta } from "@/lib/rule-metadata"
+import { Textarea } from "@/components/ui/textarea"
 
 const STATUS_OPTIONS = [
   { label: "All", value: "all", type: "status" },
@@ -129,6 +142,13 @@ const ERP_OPTIONS = [
   { label: "CUSTOM SOURCE", value: "custom-source" },
 ]
 
+const RULE_SEVERITY_STYLES: Record<string, string> = {
+  critical: "bg-red-500/10 text-red-700 border-red-500/20",
+  warning: "bg-amber-500/10 text-amber-700 border-amber-500/20",
+  info: "bg-blue-500/10 text-blue-700 border-blue-500/20",
+}
+
+
 export default function FilesPage() {
   return (
     <AuthGuard>
@@ -171,6 +191,17 @@ function FilesPageContent() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [selectedFile, setSelectedFile] = useState<FileStatusResponse | null>(null)
+  const [showPushToErpModal, setShowPushToErpModal] = useState(false)
+  const [pushToErpFile, setPushToErpFile] = useState<FileStatusResponse | null>(null)
+
+  // Wizard state
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardFile, setWizardFile] = useState<FileStatusResponse | null>(null)
+
+  // Profiling state
+  const [profilingFileId, setProfilingFileId] = useState<string | null>(null)
+  const [profilingData, setProfilingData] = useState<ProfilingResponse | null>(null)
+  const [loadingProfiling, setLoadingProfiling] = useState(false)
   const [pushQBModalOpen, setPushQBModalOpen] = useState(false)
   const [fileToPush, setFileToPush] = useState<FileStatusResponse | null>(null)
   const [activeSection, setActiveSection] = useState<"upload" | "explorer">("upload")
@@ -180,8 +211,6 @@ function FilesPageContent() {
   const [selectedDestinationErp, setSelectedDestinationErp] = useState("quickbooks")
   const [sortField, setSortField] = useState<"name" | "score" | "status" | "uploaded" | "updated">("uploaded")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
-  const [useCustomRules, setUseCustomRules] = useState(false)
-  const [customRulePrompt, setCustomRulePrompt] = useState("")
   const [columnModalOpen, setColumnModalOpen] = useState(false)
   const [columnModalFile, setColumnModalFile] = useState<FileStatusResponse | null>(null)
   const [availableColumns, setAvailableColumns] = useState<string[]>([])
@@ -190,6 +219,7 @@ function FilesPageContent() {
   const [columnsError, setColumnsError] = useState<string | null>(null)
   const [selectionFileError, setSelectionFileError] = useState<string | null>(null)
   const [displayColumnModalOpen, setDisplayColumnModalOpen] = useState(false)
+  const [useCustomRules, setUseCustomRules] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set([
     "file",
     "score",
@@ -215,11 +245,68 @@ function FilesPageContent() {
     "processingTime",
     "actions"
   ]))
+  const [confirmColumnsOpen, setConfirmColumnsOpen] = useState(false)
+  const [confirmColumns, setConfirmColumns] = useState<string[]>([])
+  const [confirmAllColumns, setConfirmAllColumns] = useState(false)
+  const [selectionProfilingData, setSelectionProfilingData] = useState<ProfilingResponse | null>(null)
+  const [selectionProfilingLoading, setSelectionProfilingLoading] = useState(false)
+  const [selectionProfilingError, setSelectionProfilingError] = useState<string | null>(null)
+  const [rulesDialogOpen, setRulesDialogOpen] = useState(false)
+  const [rulesConfirmed, setRulesConfirmed] = useState(false)
+  const [globalDisabledRules, setGlobalDisabledRules] = useState<string[]>([])
+  const [requiredColumns, setRequiredColumns] = useState<Set<string>>(new Set())
+  const [disableRulesByColumn, setDisableRulesByColumn] = useState<Record<string, string[]>>({})
+  const [overrideRulesByColumn, setOverrideRulesByColumn] = useState<Record<string, string[]>>({})
+  const [rulesDisableColumn, setRulesDisableColumn] = useState<string>("")
+  const [rulesOverrideColumn, setRulesOverrideColumn] = useState<string>("")
+  const [customRules, setCustomRules] = useState<CustomRuleDefinition[]>([])
+  const [customRuleColumn, setCustomRuleColumn] = useState<string>("")
+  const [customRulePrompt, setCustomRulePrompt] = useState<string>("")
+  const [customRuleSuggestion, setCustomRuleSuggestion] = useState<CustomRuleSuggestionResponse | null>(null)
+  const [customRuleSuggesting, setCustomRuleSuggesting] = useState(false)
+  const [customRuleSuggestError, setCustomRuleSuggestError] = useState<string | null>(null)
+  // Column Export Dialog state
+  const [showColumnExportModal, setShowColumnExportModal] = useState(false)
+  const [columnExportFile, setColumnExportFile] = useState<FileStatusResponse | null>(null)
+  const [columnExportColumns, setColumnExportColumns] = useState<string[]>([])
+  const [columnExportLoading, setColumnExportLoading] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const selectionFileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const { idToken } = useAuth()
+
+  const renderRuleOption = (
+    ruleId: string,
+    checked: boolean,
+    onCheckedChange: (checked: boolean) => void
+  ) => {
+    const meta = getRuleMeta(ruleId)
+    return (
+      <label key={ruleId} className="flex items-start gap-3 rounded-md border border-muted/60 p-3">
+        <Checkbox
+          checked={checked}
+          onCheckedChange={(value) => onCheckedChange(Boolean(value))}
+        />
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">{meta.name}</span>
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-[10px] h-5 px-2 uppercase",
+                RULE_SEVERITY_STYLES[meta.severity] || RULE_SEVERITY_STYLES.info
+              )}
+            >
+              {meta.severity}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">{meta.description}</p>
+          <p className="text-[10px] text-muted-foreground">Rule ID: {ruleId}</p>
+        </div>
+      </label>
+    )
+  }
 
   const loadFiles = useCallback(async () => {
     if (!idToken) return
@@ -252,22 +339,22 @@ function FilesPageContent() {
     .filter((file) => {
       const name = (file.original_filename || file.filename || "").toLowerCase()
       const matchesSearch = name.includes(searchQuery.toLowerCase())
-      
+
       // Check if statusFilter is a status or quality filter
       const filterOption = STATUS_OPTIONS.find(opt => opt.value === statusFilter)
       if (!filterOption || filterOption.value === "all") {
         return matchesSearch
       }
-      
+
       if (filterOption.type === "status") {
         return matchesSearch && file.status === statusFilter
       }
-      
+
       if (filterOption.type === "quality") {
         const fileQuality = getDqQuality(file.dq_score)
         return matchesSearch && fileQuality === statusFilter
       }
-      
+
       return matchesSearch
     })
     .sort((a, b) => {
@@ -311,7 +398,7 @@ function FilesPageContent() {
 
   const SortIcon = ({ field }: { field: "name" | "score" | "status" | "uploaded" | "updated" }) => {
     if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />
-    return sortDirection === "asc" 
+    return sortDirection === "asc"
       ? <ArrowUp className="h-3 w-3 ml-1" />
       : <ArrowDown className="h-3 w-3 ml-1" />
   }
@@ -421,9 +508,12 @@ function FilesPageContent() {
 
     try {
       await fileManagementAPI.startProcessing(file.upload_id, idToken, {
-        use_custom_rules: useCustomRules,
-        custom_rule_prompt: useCustomRules ? customRulePrompt.trim() || null : null,
         selected_columns: cols,
+        required_columns: Array.from(requiredColumns),
+        global_disabled_rules: globalDisabledRules,
+        disable_rules: disableRulesByColumn,
+        column_rules_override: overrideRulesByColumn,
+        custom_rules: customRules,
       })
       toast({
         title: "Processing Started",
@@ -443,28 +533,9 @@ function FilesPageContent() {
   const handleStartProcessing = async (file: FileStatusResponse) => {
     if (!idToken) return
 
-    setColumnModalFile(file)
-    setColumnModalOpen(true)
-    setColumnsLoading(true)
-    setColumnsError(null)
-    setSelectionFileError(null)
-
-    try {
-      const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
-      const cols = resp.columns || []
-      setAvailableColumns(cols)
-      setSelectedColumns(new Set(cols))
-      if (cols.length === 0) {
-        setColumnsError("No columns detected for this file. You can still proceed to process all columns.")
-      }
-    } catch (error) {
-      console.error("Failed to fetch columns:", error)
-      setAvailableColumns([])
-      setSelectedColumns(new Set())
-      setColumnsError("Unable to fetch columns. You can proceed to process all columns or cancel.")
-    } finally {
-      setColumnsLoading(false)
-    }
+    // Open wizard dialog
+    setWizardFile(file)
+    setWizardOpen(true)
   }
 
   const handleColumnConfirm = async () => {
@@ -482,12 +553,10 @@ function FilesPageContent() {
       return
     }
 
+    setConfirmColumns(cols ?? [])
+    setConfirmAllColumns(!cols || cols.length === 0)
+    setConfirmColumnsOpen(true)
     setColumnModalOpen(false)
-    await doStartProcessing(columnModalFile, cols)
-    setColumnModalFile(null)
-    setSelectedColumns(new Set())
-    setAvailableColumns([])
-    setSelectionFileError(null)
   }
 
   const handleColumnCancel = () => {
@@ -497,6 +566,141 @@ function FilesPageContent() {
     setAvailableColumns([])
     setColumnsError(null)
     setSelectionFileError(null)
+    setSelectionProfilingData(null)
+    setSelectionProfilingError(null)
+    setSelectionProfilingLoading(false)
+  }
+
+  const handleOpenRulesDialog = () => {
+    setRulesDialogOpen(true)
+  }
+
+  const handleCloseRulesDialog = () => {
+    setRulesDialogOpen(false)
+  }
+
+  const handleConfirmRulesDialog = () => {
+    setRulesConfirmed(true)
+    setRulesDialogOpen(false)
+  }
+
+  const handleGenerateCustomRule = async () => {
+    if (!columnModalFile || !idToken) return
+    if (!customRuleColumn) {
+      toast({
+        title: "Select a column",
+        description: "Choose the column to apply the custom check.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (!customRulePrompt.trim()) {
+      toast({
+        title: "Enter a prompt",
+        description: "Describe the validation rule you want to create.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setCustomRuleSuggesting(true)
+    setCustomRuleSuggestError(null)
+    try {
+      const response = await fileManagementAPI.suggestCustomRule(columnModalFile.upload_id, idToken, {
+        column: customRuleColumn,
+        prompt: customRulePrompt.trim(),
+      })
+      setCustomRuleSuggestion(response)
+      if (response.error) {
+        setCustomRuleSuggestError(response.error)
+      }
+    } catch (error) {
+      console.error("Custom rule suggestion failed:", error)
+      setCustomRuleSuggestError("Failed to generate rule suggestion.")
+    } finally {
+      setCustomRuleSuggesting(false)
+    }
+  }
+
+  const handleApproveCustomRule = () => {
+    const suggestion = customRuleSuggestion?.suggestion
+    if (!suggestion || customRuleSuggestion?.executable === false) {
+      return
+    }
+
+    const ruleId = suggestion.rule_id?.toUpperCase() || `CUST_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`.toUpperCase()
+    const nextRule: CustomRuleDefinition = {
+      ...suggestion,
+      rule_id: ruleId,
+      column: customRuleColumn,
+    }
+    setCustomRules((prev) => [...prev, nextRule])
+    setCustomRuleSuggestion(null)
+    setCustomRulePrompt("")
+  }
+
+  const handleRemoveCustomRule = (ruleId?: string) => {
+    if (!ruleId) return
+    setCustomRules((prev) => prev.filter((rule) => rule.rule_id !== ruleId))
+  }
+
+  const toggleRuleInList = (rules: string[], ruleId: string, checked: boolean) => {
+    const normalized = ruleId.toUpperCase()
+    if (checked) {
+      return rules.includes(normalized) ? rules : [...rules, normalized]
+    }
+    return rules.filter((r) => r !== normalized)
+  }
+
+  const getSuggestedRules = (column: string) => {
+    const profile = selectionProfilingData?.profiles?.[column]
+    if (!profile?.rules) return []
+    return profile.rules.map((r) => r.rule_id.toUpperCase())
+  }
+
+  const handleToggleGlobalRule = (ruleId: string, checked: boolean) => {
+    setGlobalDisabledRules((prev) => toggleRuleInList(prev, ruleId, checked))
+  }
+
+  const handleToggleRequiredColumn = (col: string, checked: boolean) => {
+    setRequiredColumns((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(col)
+      } else {
+        next.delete(col)
+      }
+      return next
+    })
+  }
+
+  const handleSelectDisableColumn = (col: string) => {
+    setRulesDisableColumn(col)
+    if (!disableRulesByColumn[col]) {
+      setDisableRulesByColumn((prev) => ({ ...prev, [col]: [] }))
+    }
+  }
+
+  const handleSelectOverrideColumn = (col: string) => {
+    setRulesOverrideColumn(col)
+    if (!overrideRulesByColumn[col]) {
+      const suggested = getSuggestedRules(col)
+      setOverrideRulesByColumn((prev) => ({ ...prev, [col]: suggested }))
+    }
+  }
+
+  const handleToggleDisableRule = (col: string, ruleId: string, checked: boolean) => {
+    setDisableRulesByColumn((prev) => {
+      const current = prev[col] || []
+      return { ...prev, [col]: toggleRuleInList(current, ruleId, checked) }
+    })
+  }
+
+  const handleToggleOverrideRule = (col: string, ruleId: string, checked: boolean) => {
+    setOverrideRulesByColumn((prev) => {
+      const current = prev[col] || []
+      return { ...prev, [col]: toggleRuleInList(current, ruleId, checked) }
+    })
   }
 
   const handleToggleColumn = (col: string, checked: boolean) => {
@@ -515,24 +719,24 @@ function FilesPageContent() {
     setSelectedColumns(checked ? new Set(availableColumns) : new Set())
   }
 
-  const calculateProcessingTime = (uploadedAt: string | null | undefined, updatedAt: string | null | undefined): string => {
-    if (!uploadedAt || !updatedAt) return "—"
-    
-    const uploadTime = new Date(uploadedAt).getTime()
-    const updateTime = new Date(updatedAt).getTime()
-    const diffMs = updateTime - uploadTime
-    
-    if (diffMs < 0) return "—"
-    
-    const seconds = Math.floor(diffMs / 1000)
-    const minutes = Math.floor(seconds / 60)
-    const hours = Math.floor(minutes / 60)
-    const days = Math.floor(hours / 24)
-    
-    if (days > 0) return `${days}d ${hours % 24}h`
-    if (hours > 0) return `${hours}h ${minutes % 60}m`
-    if (minutes > 0) return `${minutes}m ${seconds % 60}s`
-    return `${seconds}s`
+  const handleConfirmColumnsCancel = () => {
+    setConfirmColumnsOpen(false)
+    setConfirmColumns([])
+    setConfirmAllColumns(false)
+    setColumnModalOpen(true)
+  }
+
+  const handleConfirmColumnsProceed = async () => {
+    if (!columnModalFile || !idToken) return
+    const cols = confirmAllColumns ? undefined : confirmColumns
+    setConfirmColumnsOpen(false)
+    await doStartProcessing(columnModalFile, cols)
+    setColumnModalFile(null)
+    setSelectedColumns(new Set())
+    setAvailableColumns([])
+    setSelectionFileError(null)
+    setConfirmColumns([])
+    setConfirmAllColumns(false)
   }
 
   const normalizeColumnName = (name: string) => name.trim()
@@ -650,6 +854,28 @@ function FilesPageContent() {
     }
   }
 
+  const handleViewProfiling = async (fileId: string) => {
+    setProfilingFileId(fileId)
+    setLoadingProfiling(true)
+    setProfilingData(null)
+
+    try {
+      if (!idToken) return
+      const data = await fileManagementAPI.getColumnProfiling(fileId, idToken)
+      setProfilingData(data)
+    } catch (error) {
+      console.error("Failed to load profiling data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load column profiling data",
+        variant: "destructive",
+      })
+      setProfilingFileId(null)
+    } finally {
+      setLoadingProfiling(false)
+    }
+  }
+
   const handleDeleteClick = (file: FileStatusResponse) => {
     setFileToDelete(file)
     setShowDeleteModal(true)
@@ -684,6 +910,91 @@ function FilesPageContent() {
   const handleDownloadClick = (file: FileStatusResponse) => {
     setDownloadModalFile(file)
     setShowDownloadModal(true)
+  }
+
+  const handleColumnExportClick = async (file: FileStatusResponse) => {
+    if (!idToken) return
+
+    setColumnExportFile(file)
+    setColumnExportLoading(true)
+    setShowColumnExportModal(true)
+
+    try {
+      // Fetch columns from the file
+      const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
+      setColumnExportColumns(resp.columns || [])
+    } catch (error) {
+      console.error("Failed to fetch columns for export:", error)
+      // Try to get columns from preview as fallback
+      try {
+        const preview = await fileManagementAPI.getFilePreview(file.upload_id, idToken)
+        setColumnExportColumns(preview.headers || [])
+      } catch (previewError) {
+        console.error("Failed to get columns from preview:", previewError)
+        setColumnExportColumns([])
+        toast({
+          title: "Warning",
+          description: "Could not load column list. Export may not work correctly.",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setColumnExportLoading(false)
+    }
+  }
+
+  const handleColumnExport = async (options: {
+    format: 'csv' | 'excel' | 'json'
+    dataType: 'all' | 'clean' | 'quarantine'
+    columns: string[]
+    columnMapping: Record<string, string>
+  }) => {
+    if (!columnExportFile || !idToken) return
+
+    setDownloading(columnExportFile.upload_id)
+
+    try {
+      const blob = await fileManagementAPI.exportWithColumns(
+        columnExportFile.upload_id,
+        idToken,
+        {
+          format: options.format,
+          data: options.dataType,
+          columns: options.columns,
+          columnMapping: options.columnMapping,
+        }
+      )
+
+      const baseFilename = (columnExportFile.original_filename || columnExportFile.filename || "file").replace(/\.[^/.]+$/, "")
+      const extension = options.format === "excel" ? ".xlsx" : options.format === "json" ? ".json" : ".csv"
+      const filename = `${baseFilename}_export${extension}`
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      toast({
+        title: "Export Complete",
+        description: `Exported ${options.columns.length} columns with ${Object.keys(options.columnMapping).length} renamed`,
+      })
+
+      setShowColumnExportModal(false)
+      setColumnExportFile(null)
+    } catch (error) {
+      console.error("Column export error:", error)
+      toast({
+        title: "Export Failed",
+        description: "Unable to export file with selected columns",
+        variant: "destructive",
+      })
+    } finally {
+      setDownloading(null)
+    }
   }
 
   const handleFormatSelected = (format: "csv" | "excel" | "json", dataType: "original" | "clean") => {
@@ -771,7 +1082,7 @@ function FilesPageContent() {
     }
   }
 
-  const handleDownloadWithErp = async (targetErp: string | null) => {
+  const handleDownloadWithErp = async (targetErp: string | null, dataType: 'clean' | 'quarantine' | 'all' = 'all') => {
     if (!erpModalConfig || !idToken) return
 
     const { file, format } = erpModalConfig
@@ -781,7 +1092,7 @@ function FilesPageContent() {
 
     try {
       const typeParam = format === "excel" ? "excel" : format === "json" ? "json" : "csv"
-      let downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=all`
+      let downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=${dataType}`
       if (targetErp) downloadUrl += `&erp=${encodeURIComponent(targetErp)}`
 
       const response = await fetch(downloadUrl, {
@@ -790,35 +1101,35 @@ function FilesPageContent() {
 
       if (!response.ok) throw new Error(`Download failed: ${response.statusText}`)
 
-      // Check if response is JSON (presigned URL response) vs direct file content
+      // Check if response is JSON (presigned URL for large files) or direct file
       const contentType = response.headers.get('Content-Type') || ''
-      let blob: Blob
-      
+
       if (contentType.includes('application/json')) {
-        // Response may contain presigned URL - parse and fetch from S3
+        // Parse JSON to get presigned URL
         const data = await response.json()
         if (data.presigned_url) {
-          console.log('📥 Fetching from presigned URL:', data.filename || 'file')
-          const s3Response = await fetch(data.presigned_url)
-          if (!s3Response.ok) {
-            throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
-          }
-          blob = await s3Response.blob()
-        } else if (data.error) {
-          throw new Error(data.error)
-        } else {
-          // Fallback - return JSON as blob
-          blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+          // Open presigned URL directly - browser will download the file
+          console.log('📥 Opening presigned URL for download:', data.filename || 'file')
+          window.open(data.presigned_url, '_blank')
+          toast({
+            title: "Success",
+            description: targetErp ? `Downloaded with ${targetErp}` : "File download started",
+          })
+          return
         }
-      } else {
-        // Direct blob response
-        blob = await response.blob()
+        if (data.error) {
+          throw new Error(data.error)
+        }
       }
 
+      // For small files, get blob directly
+      const blob = await response.blob()
       const baseFilename = (file.original_filename || file.filename || "file").replace(/\.[^/.]+$/, "")
       const extension = format === "excel" ? ".xlsx" : format === "json" ? ".json" : ".csv"
       const erpSuffix = targetErp ? `_${targetErp.replace(/\s+/g, "_").toLowerCase()}` : ""
-      const filename = `${baseFilename}_clean${erpSuffix}${extension}`
+      // Add data type suffix
+      const dataTypeSuffix = dataType === 'clean' ? '_clean' : dataType === 'quarantine' ? '_quarantined' : '_full'
+      const filename = `${baseFilename}${dataTypeSuffix}${erpSuffix}${extension}`
 
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
@@ -991,8 +1302,12 @@ function FilesPageContent() {
               )}
             </div>
 
+
+            
+
             {/* Custom Rules Section - only show for source, not destination */}
             {selectedDestination === "null" && (selectedSource === "local" ||  selectedSource === "unified-bridge") && (
+              
               <div className="rounded-lg border bg-card p-4">
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between gap-3">
@@ -1455,6 +1770,22 @@ function FilesPageContent() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    onClick={() => handleColumnExportClick(file)}
+                                    disabled={downloading === file.upload_id}
+                                  >
+                                    <Columns className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Export with Column Selection</TooltipContent>
+                              </Tooltip>
+                            )}
+                            {(file.status === "DQ_FIXED" || file.status === "COMPLETED") && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     className="h-7 w-7 sm:h-8 sm:w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
                                     onClick={() => handlePushToQuickBooks(file)}
                                   >
@@ -1464,6 +1795,8 @@ function FilesPageContent() {
                                 <TooltipContent>Export Data</TooltipContent>
                               </Tooltip>
                             )}
+
+
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -1578,21 +1911,23 @@ function FilesPageContent() {
         </AlertDialog>
 
         <AlertDialog open={columnModalOpen} onOpenChange={setColumnModalOpen}>
-          <AlertDialogContent>
+          <AlertDialogContent className="!max-w-[95vw] !w-[95vw] h-[90vh] sm:!max-w-[95vw] overflow-hidden grid-rows-[auto_1fr_auto]">
             <AlertDialogHeader>
               <AlertDialogTitle>Select columns to process</AlertDialogTitle>
               <AlertDialogDescription>
                 Choose which columns should be included for this run. All columns are selected by default.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 overflow-hidden pr-1 min-h-0">
               {columnsLoading ? (
-                <div className="flex items-center space-x-2 text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Loading columns...</span>
+                <div className="col-span-full flex items-center justify-center h-full text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Loading columns...</span>
+                  </div>
                 </div>
               ) : (
-                <>
+                <div className="space-y-3 min-h-0">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center space-x-2">
                       <Checkbox
@@ -1630,7 +1965,7 @@ function FilesPageContent() {
                       to quickly apply selections.
                     </p>
                   </div>
-                  <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                  <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0 max-h-[60vh]">
                     {availableColumns.map((col) => (
                       <div key={col} className="flex items-center space-x-2">
                         <Checkbox
@@ -1651,12 +1986,377 @@ function FilesPageContent() {
                   </div>
                   {columnsError && <p className="text-sm text-destructive">{columnsError}</p>}
                   {selectionFileError && <p className="text-sm text-destructive">{selectionFileError}</p>}
+                </div>
+              )}
+              <div className="space-y-2 min-h-0 overflow-hidden">
+                <p className="text-sm font-medium">Column profiling preview</p>
+                {selectionProfilingError && (
+                  <p className="text-sm text-destructive mt-1">{selectionProfilingError}</p>
+                )}
+                {(selectionProfilingLoading || selectionProfilingData) ? (
+                  <div className="mt-2 min-h-0 overflow-y-auto">
+                    <ColumnProfilingPanel
+                      data={selectionProfilingData}
+                      loading={selectionProfilingLoading}
+                      embedded
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Profiling preview will appear here.</p>
+                )}
+              </div>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleColumnCancel}>Cancel</AlertDialogCancel>
+              {!columnsLoading && !selectionProfilingLoading && !rulesConfirmed && (
+                <Button variant="outline" onClick={handleOpenRulesDialog}>
+                  Next: Review rules
+                </Button>
+              )}
+              {!columnsLoading && !selectionProfilingLoading && rulesConfirmed && (
+                <AlertDialogAction onClick={handleColumnConfirm}>
+                  Proceed
+                </AlertDialogAction>
+              )}
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Dialog open={rulesDialogOpen} onOpenChange={setRulesDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>AI-based suggestions (optional)</DialogTitle>
+              <DialogDescription>
+                AI reviews this dataset and suggests extra checks. Review and confirm before applying.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Add deterministic checks for specific columns. Nothing is auto-fixed or deleted.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Scope: this dataset only. You can change these settings before processing starts.
+              </p>
+            </div>
+
+            <Tabs defaultValue="global" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="custom">Custom Checks</TabsTrigger>
+                <TabsTrigger value="global">Global Rules</TabsTrigger>
+                <TabsTrigger value="required">Required Fields</TabsTrigger>
+                <TabsTrigger value="disable">Disable Rules</TabsTrigger>
+                <TabsTrigger value="override">Edit Rules</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="custom" className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Column</Label>
+                    <Select value={customRuleColumn} onValueChange={setCustomRuleColumn}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select column" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableColumns.map((col) => (
+                          <SelectItem key={col} value={col}>
+                            {col}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label className="text-xs text-muted-foreground">Prompt</Label>
+                    <Input
+                      value={customRulePrompt}
+                      onChange={(event) => setCustomRulePrompt(event.target.value)}
+                      placeholder="Validate this column as IPv4 address"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button variant="outline" onClick={handleGenerateCustomRule} disabled={customRuleSuggesting}>
+                      {customRuleSuggesting ? "Generating..." : "Generate rule"}
+                    </Button>
+                  </div>
+                </div>
+
+                {customRuleSuggestError && (
+                  <p className="text-sm text-destructive">{customRuleSuggestError}</p>
+                )}
+
+                {customRuleSuggestion?.suggestion && (
+                  <div className="rounded-md border border-muted/60 p-3 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">
+                        {customRuleSuggestion.suggestion.rule_name || "Suggested rule"}
+                      </span>
+                      {customRuleSuggestion.suggestion.severity && (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] h-5 px-2 uppercase",
+                            RULE_SEVERITY_STYLES[customRuleSuggestion.suggestion.severity] || RULE_SEVERITY_STYLES.info
+                          )}
+                        >
+                          {customRuleSuggestion.suggestion.severity}
+                        </Badge>
+                      )}
+                      {typeof customRuleSuggestion.suggestion.confidence === "number" && (
+                        <span className="text-xs text-muted-foreground">
+                          {(customRuleSuggestion.suggestion.confidence * 100).toFixed(0)}% confidence
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Template: {customRuleSuggestion.suggestion.template}
+                    </p>
+                    {customRuleSuggestion.suggestion.explanation && (
+                      <p className="text-xs text-muted-foreground">
+                        {customRuleSuggestion.suggestion.explanation}
+                      </p>
+                    )}
+                    {customRuleSuggestion.suggestion.template === "code" && customRuleSuggestion.suggestion.code && (
+                      <details className="mt-2">
+                        <summary className="text-xs text-primary cursor-pointer hover:underline">
+                          View Python Code
+                        </summary>
+                        <pre className="mt-2 p-3 bg-zinc-900 text-green-400 text-xs rounded-md overflow-x-auto max-h-48 overflow-y-auto">
+                          <code>{customRuleSuggestion.suggestion.code}</code>
+                        </pre>
+                      </details>
+                    )}
+                    {customRuleSuggestion.executable === false && (
+                      <p className="text-xs text-destructive">
+                        This rule template is not supported for execution yet.
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleApproveCustomRule}
+                        disabled={customRuleSuggestion.executable === false}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setCustomRuleSuggestion(null)}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    Approved checks will run during processing for this file.
+                  </p>
+                  {customRules.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No custom checks added yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {customRules.map((rule) => (
+                        <div
+                          key={rule.rule_id}
+                          className="flex items-start justify-between gap-4 rounded-md border border-muted/60 p-3"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium">{rule.rule_name || "Custom check"}</span>
+                              {rule.severity && (
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "text-[10px] h-5 px-2 uppercase",
+                                    RULE_SEVERITY_STYLES[rule.severity] || RULE_SEVERITY_STYLES.info
+                                  )}
+                                >
+                                  {rule.severity}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Column: {rule.column} · Template: {rule.template}
+                            </p>
+                            {rule.explanation && (
+                              <p className="text-xs text-muted-foreground">{rule.explanation}</p>
+                            )}
+                            {rule.template === "code" && rule.code && (
+                              <details className="mt-1">
+                                <summary className="text-xs text-primary cursor-pointer hover:underline">
+                                  View Python Code
+                                </summary>
+                                <pre className="mt-2 p-2 bg-zinc-900 text-green-400 text-xs rounded-md overflow-x-auto max-h-32 overflow-y-auto">
+                                  <code>{rule.code}</code>
+                                </pre>
+                              </details>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveCustomRule(rule.rule_id)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="global" className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Turn off specific checks for all columns in this dataset.
+                </p>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {RULE_IDS.map((ruleId) =>
+                    renderRuleOption(ruleId, globalDisabledRules.includes(ruleId), (checked) =>
+                      handleToggleGlobalRule(ruleId, checked)
+                    )
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="required" className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Mark columns as required. Missing values will be flagged.
+                </p>
+                {availableColumns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No columns available.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
+                    {availableColumns.map((col) => (
+                      <label key={col} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={requiredColumns.has(col)}
+                          onCheckedChange={(checked) => handleToggleRequiredColumn(col, Boolean(checked))}
+                        />
+                        <span>{col}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="disable" className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Turn off checks for a specific column.
+                </p>
+                <Select value={rulesDisableColumn} onValueChange={handleSelectDisableColumn}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableColumns.map((col) => (
+                      <SelectItem key={col} value={col}>
+                        {col}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {rulesDisableColumn ? (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {RULE_IDS.map((ruleId) => {
+                      const selected = disableRulesByColumn[rulesDisableColumn] || []
+                      return (
+                        renderRuleOption(ruleId, selected.includes(ruleId), (checked) =>
+                          handleToggleDisableRule(rulesDisableColumn, ruleId, checked)
+                        )
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Select a column to configure disabled rules.</p>
+                )}
+              </TabsContent>
+
+              <TabsContent value="override" className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Edit suggested checks for a specific column.
+                </p>
+                <Select value={rulesOverrideColumn} onValueChange={handleSelectOverrideColumn}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableColumns.map((col) => (
+                      <SelectItem key={col} value={col}>
+                        {col}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {rulesOverrideColumn ? (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {RULE_IDS.map((ruleId) => {
+                      const selected = overrideRulesByColumn[rulesOverrideColumn] || []
+                      return (
+                        renderRuleOption(ruleId, selected.includes(ruleId), (checked) =>
+                          handleToggleOverrideRule(rulesOverrideColumn, ruleId, checked)
+                        )
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Select a column to edit suggested rules.</p>
+                )}
+              </TabsContent>
+            </Tabs>
+            <AlertDialogFooter>
+              <Button variant="outline" onClick={handleCloseRulesDialog}>
+                Back
+              </Button>
+              <Button onClick={handleConfirmRulesDialog}>
+                Done
+              </Button>
+            </AlertDialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={confirmColumnsOpen} onOpenChange={setConfirmColumnsOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm columns</AlertDialogTitle>
+              <AlertDialogDescription>
+                Review the columns to be processed. Click Proceed to start processing.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-3">
+              {confirmAllColumns ? (
+                <p className="text-sm text-muted-foreground">
+                  All columns will be processed.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {confirmColumns.length} column(s) selected:
+                  </p>
+                  <div className="max-h-64 overflow-y-auto pr-1">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Column name</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {confirmColumns.map((col) => (
+                          <TableRow key={col}>
+                            <TableCell className="text-sm">{col}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </>
               )}
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={handleColumnCancel}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleColumnConfirm} disabled={columnsLoading}>
+              <AlertDialogCancel onClick={handleConfirmColumnsCancel}>Back</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmColumnsProceed}>
                 Proceed
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -1703,6 +2403,12 @@ function FilesPageContent() {
             erpModalConfig?.file.filename ||
             "selected file"
           }
+          dqStats={{
+            cleanRows: erpModalConfig?.file.rows_out ? (erpModalConfig.file.rows_out - (erpModalConfig.file.rows_fixed || 0)) : undefined,
+            fixedRows: erpModalConfig?.file.rows_fixed,
+            quarantinedRows: erpModalConfig?.file.rows_quarantined,
+            totalRows: erpModalConfig?.file.rows_in,
+          }}
         />
 
         <PushToERPModal
@@ -1723,6 +2429,51 @@ function FilesPageContent() {
               description: error,
               variant: "destructive",
             })
+          }}
+        />
+
+        <ColumnExportDialog
+          open={showColumnExportModal}
+          onOpenChange={(open) => {
+            setShowColumnExportModal(open)
+            if (!open) {
+              setColumnExportFile(null)
+              setColumnExportColumns([])
+            }
+          }}
+          fileName={columnExportFile?.original_filename || columnExportFile?.filename || "file"}
+          columns={columnExportColumns}
+          onExport={handleColumnExport}
+          exporting={downloading === columnExportFile?.upload_id || columnExportLoading}
+        />
+
+        <Dialog open={!!profilingFileId} onOpenChange={(open) => !open && setProfilingFileId(null)}>
+          <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="p-6 pb-2">
+              <DialogTitle>Column Profiling & DQ Analysis</DialogTitle>
+              <DialogDescription>
+                Detailed analysis of data types, quality issues, and suggested rules.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto p-6 pt-2">
+              <ColumnProfilingPanel
+                data={profilingData}
+                loading={loadingProfiling}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Processing Wizard Dialog */}
+        <WizardDialog
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          file={wizardFile}
+          authToken={idToken || ""}
+          onComplete={() => {
+            setWizardOpen(false)
+            setWizardFile(null)
+            loadFiles() // Refresh file list after processing
           }}
         />
       </div>
