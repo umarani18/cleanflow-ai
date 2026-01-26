@@ -132,6 +132,7 @@ export interface CustomRuleDefinition {
   rule_id?: string
   column: string
   template: string
+  code?: string  // LLM-generated Python code (when template="code")
   params?: Record<string, any>
   rule_name?: string
   explanation?: string
@@ -376,7 +377,7 @@ class FileManagementAPI {
 
     // Check if response is JSON (presigned URL response) vs direct file content
     const contentType = response.headers.get('Content-Type') || ''
-    
+
     if (contentType.includes('application/json')) {
       // Response may contain presigned URL - parse and fetch from S3
       const data = await response.json()
@@ -467,7 +468,7 @@ class FileManagementAPI {
     // Check if response is JSON (presigned URL response) vs direct file content
     const contentType = response.headers.get('Content-Type') || ''
     console.log('🔍 Response Content-Type:', contentType)
-    
+
     if (contentType.includes('application/json')) {
       // Response contains presigned URL - parse and fetch from S3
       const data = await response.json()

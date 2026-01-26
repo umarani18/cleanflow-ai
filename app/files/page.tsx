@@ -168,7 +168,7 @@ function FilesPageContent() {
   const [selectedFile, setSelectedFile] = useState<FileStatusResponse | null>(null)
   const [showPushToErpModal, setShowPushToErpModal] = useState(false)
   const [pushToErpFile, setPushToErpFile] = useState<FileStatusResponse | null>(null)
-  
+
   // Profiling state
   const [profilingFileId, setProfilingFileId] = useState<string | null>(null)
   const [profilingData, setProfilingData] = useState<ProfilingResponse | null>(null)
@@ -291,22 +291,22 @@ function FilesPageContent() {
     .filter((file) => {
       const name = (file.original_filename || file.filename || "").toLowerCase()
       const matchesSearch = name.includes(searchQuery.toLowerCase())
-      
+
       // Check if statusFilter is a status or quality filter
       const filterOption = STATUS_OPTIONS.find(opt => opt.value === statusFilter)
       if (!filterOption || filterOption.value === "all") {
         return matchesSearch
       }
-      
+
       if (filterOption.type === "status") {
         return matchesSearch && file.status === statusFilter
       }
-      
+
       if (filterOption.type === "quality") {
         const fileQuality = getDqQuality(file.dq_score)
         return matchesSearch && fileQuality === statusFilter
       }
-      
+
       return matchesSearch
     })
     .sort((a, b) => {
@@ -350,7 +350,7 @@ function FilesPageContent() {
 
   const SortIcon = ({ field }: { field: "name" | "score" | "status" | "uploaded" | "updated" }) => {
     if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />
-    return sortDirection === "asc" 
+    return sortDirection === "asc"
       ? <ArrowUp className="h-3 w-3 ml-1" />
       : <ArrowDown className="h-3 w-3 ml-1" />
   }
@@ -863,7 +863,7 @@ function FilesPageContent() {
     setProfilingFileId(fileId)
     setLoadingProfiling(true)
     setProfilingData(null)
-    
+
     try {
       if (!idToken) return
       const data = await fileManagementAPI.getColumnProfiling(fileId, idToken)
@@ -919,11 +919,11 @@ function FilesPageContent() {
 
   const handleColumnExportClick = async (file: FileStatusResponse) => {
     if (!idToken) return
-    
+
     setColumnExportFile(file)
     setColumnExportLoading(true)
     setShowColumnExportModal(true)
-    
+
     try {
       // Fetch columns from the file
       const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
@@ -955,9 +955,9 @@ function FilesPageContent() {
     columnMapping: Record<string, string>
   }) => {
     if (!columnExportFile || !idToken) return
-    
+
     setDownloading(columnExportFile.upload_id)
-    
+
     try {
       const blob = await fileManagementAPI.exportWithColumns(
         columnExportFile.upload_id,
@@ -969,11 +969,11 @@ function FilesPageContent() {
           columnMapping: options.columnMapping,
         }
       )
-      
+
       const baseFilename = (columnExportFile.original_filename || columnExportFile.filename || "file").replace(/\.[^/.]+$/, "")
       const extension = options.format === "excel" ? ".xlsx" : options.format === "json" ? ".json" : ".csv"
       const filename = `${baseFilename}_export${extension}`
-      
+
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
@@ -982,12 +982,12 @@ function FilesPageContent() {
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
-      
+
       toast({
         title: "Export Complete",
         description: `Exported ${options.columns.length} columns with ${Object.keys(options.columnMapping).length} renamed`,
       })
-      
+
       setShowColumnExportModal(false)
       setColumnExportFile(null)
     } catch (error) {
@@ -1084,7 +1084,7 @@ function FilesPageContent() {
 
       // Check if response is JSON (presigned URL for large files) or direct file
       const contentType = response.headers.get('Content-Type') || ''
-      
+
       if (contentType.includes('application/json')) {
         // Parse JSON to get presigned URL
         const data = await response.json()
@@ -1265,8 +1265,8 @@ function FilesPageContent() {
               <div
                 className={cn(
                   "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
-                  dragActive 
-                    ? "border-primary bg-primary/5 scale-[1.01]" 
+                  dragActive
+                    ? "border-primary bg-primary/5 scale-[1.01]"
                     : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50"
                 )}
                 onDragEnter={handleDrag}
@@ -1407,13 +1407,13 @@ function FilesPageContent() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead 
+                      <TableHead
                         className="text-xs cursor-pointer hover:text-foreground transition-colors"
                         onClick={() => handleSort("name")}
                       >
                         <span className="flex items-center">File<SortIcon field="name" /></span>
                       </TableHead>
-                      <TableHead 
+                      <TableHead
                         className="text-xs hidden xl:table-cell cursor-pointer hover:text-foreground transition-colors"
                         onClick={() => handleSort("score")}
                       >
@@ -1421,19 +1421,19 @@ function FilesPageContent() {
                       </TableHead>
                       <TableHead className="text-xs hidden 2xl:table-cell">DQ Quality</TableHead>
                       <TableHead className="text-xs hidden md:table-cell">Rows</TableHead>
-                      <TableHead 
+                      <TableHead
                         className="text-xs cursor-pointer hover:text-foreground transition-colors"
                         onClick={() => handleSort("status")}
                       >
                         <span className="flex items-center">Status<SortIcon field="status" /></span>
                       </TableHead>
-                      <TableHead 
+                      <TableHead
                         className="text-xs hidden lg:table-cell cursor-pointer hover:text-foreground transition-colors"
                         onClick={() => handleSort("uploaded")}
                       >
                         <span className="flex items-center">Uploaded<SortIcon field="uploaded" /></span>
                       </TableHead>
-                      <TableHead 
+                      <TableHead
                         className="text-xs hidden lg:table-cell cursor-pointer hover:text-foreground transition-colors"
                         onClick={() => handleSort("updated")}
                       >
@@ -1583,7 +1583,7 @@ function FilesPageContent() {
                               </Tooltip>
                             )}
 
-                            
+
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -1824,6 +1824,16 @@ function FilesPageContent() {
                         {customRuleSuggestion.suggestion.explanation}
                       </p>
                     )}
+                    {customRuleSuggestion.suggestion.template === "code" && customRuleSuggestion.suggestion.code && (
+                      <details className="mt-2">
+                        <summary className="text-xs text-primary cursor-pointer hover:underline">
+                          View Python Code
+                        </summary>
+                        <pre className="mt-2 p-3 bg-zinc-900 text-green-400 text-xs rounded-md overflow-x-auto max-h-48 overflow-y-auto">
+                          <code>{customRuleSuggestion.suggestion.code}</code>
+                        </pre>
+                      </details>
+                    )}
                     {customRuleSuggestion.executable === false && (
                       <p className="text-xs text-destructive">
                         This rule template is not supported for execution yet.
@@ -1881,6 +1891,16 @@ function FilesPageContent() {
                             </p>
                             {rule.explanation && (
                               <p className="text-xs text-muted-foreground">{rule.explanation}</p>
+                            )}
+                            {rule.template === "code" && rule.code && (
+                              <details className="mt-1">
+                                <summary className="text-xs text-primary cursor-pointer hover:underline">
+                                  View Python Code
+                                </summary>
+                                <pre className="mt-2 p-2 bg-zinc-900 text-green-400 text-xs rounded-md overflow-x-auto max-h-32 overflow-y-auto">
+                                  <code>{rule.code}</code>
+                                </pre>
+                              </details>
                             )}
                           </div>
                           <Button
@@ -2145,9 +2165,9 @@ function FilesPageContent() {
               </DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-y-auto p-6 pt-2">
-              <ColumnProfilingPanel 
-                data={profilingData} 
-                loading={loadingProfiling} 
+              <ColumnProfilingPanel
+                data={profilingData}
+                loading={loadingProfiling}
               />
             </div>
           </DialogContent>
