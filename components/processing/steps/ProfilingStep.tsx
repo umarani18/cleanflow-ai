@@ -1,0 +1,231 @@
+"use client"
+
+import React, { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Loader2, ArrowLeft, ArrowRight, RefreshCw, Check, X } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useProcessingWizard } from "../WizardContext"
+import { fileManagementAPI } from "@/lib/api/file-management-api"
+
+export function ProfilingStep() {
+  const {
+    uploadId,
+    authToken,
+    selectedColumns,
+    setSelectedColumns,
+    columnProfiles,
+    setColumnProfiles,
+    requiredColumns,
+    setRequiredColumns,
+    allColumns,
+    prevStep,
+    nextStep,
+  } = useProcessingWizard()
+
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [activeColumn, setActiveColumn] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (selectedColumns.length > 0 && Object.keys(columnProfiles).length === 0 && authToken) {
+      fetchProfiling()
+    }
+  }, [selectedColumns, authToken])
+
+  const fetchProfiling = async () => {
+    if (!authToken) return
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await fileManagementAPI.getColumnProfilingPreview(uploadId, authToken, selectedColumns, 500)
+      const profiles = (response as any)?.profiles || (response as any)?.column_profiles || {}
+      if (profiles && Object.keys(profiles).length > 0) {
+        setColumnProfiles(profiles)
+      }
+      const inferredRequired = (response as any)?.required_columns
+      if (Array.isArray(inferredRequired) && inferredRequired.length > 0) {
+        setRequiredColumns(inferredRequired)
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch profiling data")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const toggleColumnSelection = (col: string) => {
+    setSelectedColumns((prev) => {
+      if (prev.includes(col)) {
+        return prev.filter((c) => c !== col)
+      }
+      if (!columnProfiles[col]) {
+        profileSingle(col)
+      }
+      return [...prev, col]
+    })
+  }
+
+  const profileSingle = async (column: string) => {
+    if (!authToken) return
+    try {
+      const response = await fileManagementAPI.getColumnProfilingPreview(uploadId, authToken, [column], 500)
+      const profiles = (response as any)?.profiles || (response as any)?.column_profiles || {}
+      if (profiles?.[column]) {
+        setColumnProfiles({
+          ...columnProfiles,
+          [column]: profiles[column],
+        })
+      }
+    } catch (err) {
+      console.error("Failed to profile column", column, err)
+    }
+  }
+
+  const hasProfiles = Object.keys(columnProfiles).length > 0
+  const canProceed = selectedColumns.length > 0 && hasProfiles && !loading
+
+  return (
+    <div className="flex h-[60vh]">
+      <div className="w-64 border-r border-muted/40 flex flex-col">
+        <div className="p-4 border-b border-muted/40">
+          <h3 className="font-medium text-sm">Columns</h3>
+          <p className="text-xs text-muted-foreground mt-1">Click to toggle selection</p>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-1">
+            {allColumns.map((col) => {
+              const isSelected = selectedColumns.includes(col)
+              const hasProfile = !!columnProfiles[col]
+              const isActive = activeColumn === col
+              return (
+                <div
+                  key={col}
+                  onClick={() => {
+                    toggleColumnSelection(col)
+                    setActiveColumn(col)
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer transition-colors text-sm",
+                    isActive && "bg-primary/10 border-l-2 border-primary",
+                    !isActive && isSelected && "bg-muted/50",
+                    !isActive && !isSelected && "hover:bg-muted/30 opacity-60"
+                  )}
+                >
+                  {isSelected ? <Check className="w-4 h-4 text-green-500 shrink-0" /> : <X className="w-4 h-4 text-muted-foreground shrink-0" />}
+                  <span className="truncate">{col}</span>
+                  {!hasProfile && isSelected && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
+                </div>
+              )
+            })}
+          </div>
+        </ScrollArea>
+        <div className="p-3 border-t border-muted/40 text-xs text-muted-foreground">
+          {selectedColumns.length} of {allColumns.length} selected
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col">
+        <div className="p-4 border-b border-muted/40 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold">Column Profiling</h2>
+            <p className="text-sm text-muted-foreground">Review data types and quality metrics</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchProfiling} disabled={loading || !authToken}>
+            <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+
+        <ScrollArea className="flex-1 p-4">
+          {loading && !hasProfiles ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : error ? (
+            <div className="text-center text-destructive p-8">
+              <p>{error}</p>
+              <Button variant="outline" size="sm" className="mt-4" onClick={fetchProfiling}>
+                Retry
+              </Button>
+            </div>
+          ) : !hasProfiles ? (
+            <div className="text-center text-muted-foreground p-8">
+              No profiling data returned. Refresh or adjust column selection.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {selectedColumns.length === 0 ? (
+                <div className="col-span-2 text-center py-12">
+                  <p className="text-muted-foreground">No columns selected for profiling</p>
+                  <p className="text-sm text-muted-foreground mt-2">Go back to select columns</p>
+                </div>
+              ) : selectedColumns.map((col) => {
+                  const profile = columnProfiles[col]
+                  if (!profile) return null
+                  return (
+                    <div
+                      key={col}
+                      className={cn("border border-muted rounded-lg p-4 space-y-3", activeColumn === col && "border-primary")}
+                      onClick={() => setActiveColumn(col)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">{col}</h4>
+                        <Badge variant="outline">
+                          {profile.type_guess}
+                          {profile.type_confidence && (
+                            <span className="ml-1 opacity-70">{Math.round(profile.type_confidence * 100)}%</span>
+                          )}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Null Rate:</span>
+                          <span className={profile.null_rate > 0.1 ? "text-yellow-500" : "text-green-500"}>
+                            {(profile.null_rate * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                        {profile.unique_ratio !== undefined && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Unique:</span>
+                            <span>{(profile.unique_ratio * 100).toFixed(1)}%</span>
+                          </div>
+                        )}
+                      </div>
+                      {profile.rules && profile.rules.length > 0 && (
+                        <div className="text-xs">
+                          <span className="text-muted-foreground">Auto Rules: </span>
+                          {profile.rules.filter((r: any) => r.decision === "auto").map((r: any) => r.rule_id).join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+        </ScrollArea>
+
+        {requiredColumns.length > 0 && (
+          <div className="px-4 py-3 bg-muted/30 border-t border-muted/40">
+            <div className="text-sm">
+              <span className="text-muted-foreground">Required Columns: </span>
+              <span className="font-medium">{requiredColumns.join(", ")}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="p-4 border-t border-muted/40 flex items-center justify-between">
+          <Button variant="outline" onClick={prevStep}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <Button onClick={nextStep} disabled={!canProceed}>
+            Next: Settings
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}

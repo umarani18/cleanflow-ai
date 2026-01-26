@@ -16,6 +16,8 @@ const ENDPOINTS = {
   FILES_PROFILING: (id: string) => `/files/${id}/profiling`, // GET - column profiling data
   FILES_PROFILING_PREVIEW: (id: string) => `/files/${id}/profiling-preview`, // GET - column profiling preview
   FILES_CUSTOM_RULE_SUGGEST: (id: string) => `/files/${id}/custom-rule-suggest`, // POST - custom rule suggestion
+  SETTINGS_PRESETS: '/settings/presets',
+  SETTINGS_PRESET: (id: string) => `/settings/presets/${id}`,
 }
 
 // Response Types
@@ -305,6 +307,8 @@ class FileManagementAPI {
       disable_rules?: Record<string, string[]>
       column_rules_override?: Record<string, string[]>
       custom_rules?: CustomRuleDefinition[]
+      preset_id?: string
+      preset_overrides?: Record<string, any>
     }
   ): Promise<any> {
     console.log('Starting processing:', uploadId, options?.custom_rules?.length ? '(with custom rules)' : '')
@@ -339,6 +343,14 @@ class FileManagementAPI {
       payload.custom_rules = options.custom_rules
     }
 
+    if (options?.preset_id) {
+      payload.preset_id = options.preset_id
+    }
+
+    if (options?.preset_overrides && Object.keys(options.preset_overrides).length > 0) {
+      payload.preset_overrides = options.preset_overrides
+    }
+
     return this.makeRequest(ENDPOINTS.FILES_PROCESS(uploadId), authToken, {
       method: "POST",
       body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined
@@ -358,6 +370,33 @@ class FileManagementAPI {
 
   async getFileColumns(uploadId: string, authToken: string): Promise<{ columns: string[] }> {
     return this.makeRequest(ENDPOINTS.FILES_COLUMNS(uploadId), authToken, { method: 'GET' })
+  }
+
+  async getSettingsPresets(authToken: string): Promise<{ presets: any[] }> {
+    try {
+      return await this.makeRequest(ENDPOINTS.SETTINGS_PRESETS, authToken, { method: "GET" })
+    } catch (error) {
+      // Gracefully degrade if server has no presets yet
+      const message = (error as Error)?.message || ""
+      if (message.toLowerCase().includes("not found")) {
+        return { presets: [] }
+      }
+      console.warn("⚠️ Falling back to empty presets due to error:", message)
+      return { presets: [] }
+    }
+  }
+
+  async getSettingsPreset(presetId: string, authToken: string): Promise<any> {
+    try {
+      return await this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, { method: "GET" })
+    } catch (error) {
+      const message = (error as Error)?.message || ""
+      if (message.toLowerCase().includes("not found")) {
+        return { preset_id: presetId, preset_name: presetId, config: {} }
+      }
+      console.warn("⚠️ Falling back to empty preset due to error:", message)
+      return { preset_id: presetId, preset_name: presetId, config: {} }
+    }
   }
   async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine' | 'raw' | 'original' | 'all', authToken: string, targetErp?: string): Promise<Blob> {
     let endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}`

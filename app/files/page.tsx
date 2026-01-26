@@ -36,6 +36,7 @@ import { DownloadFormatModal } from "@/components/files/download-format-modal"
 import { ColumnExportDialog } from "@/components/files/column-export-dialog"
 import { ERPTransformationModal } from "@/components/files/erp-transformation-modal"
 import { FileDetailsDialog } from "@/components/files/file-details-dialog"
+import { WizardDialog } from "@/components/processing/WizardDialog"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -207,6 +208,9 @@ function FilesPageContent() {
   const [customRuleSuggestion, setCustomRuleSuggestion] = useState<CustomRuleSuggestionResponse | null>(null)
   const [customRuleSuggesting, setCustomRuleSuggesting] = useState(false)
   const [customRuleSuggestError, setCustomRuleSuggestError] = useState<string | null>(null)
+  // Wizard
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardFile, setWizardFile] = useState<FileStatusResponse | null>(null)
   // Column Export Dialog state
   const [showColumnExportModal, setShowColumnExportModal] = useState(false)
   const [columnExportFile, setColumnExportFile] = useState<FileStatusResponse | null>(null)
@@ -489,58 +493,21 @@ function FilesPageContent() {
 
   const handleStartProcessing = async (file: FileStatusResponse) => {
     if (!idToken) return
+    setWizardFile(file)
+    setWizardOpen(true)
+  }
 
-    setColumnModalFile(file)
-    setColumnModalOpen(true)
-    setColumnsLoading(true)
-    setColumnsError(null)
-    setSelectionFileError(null)
-    setSelectionProfilingData(null)
-    setSelectionProfilingError(null)
-    setSelectionProfilingLoading(true)
-    setRulesConfirmed(false)
-    setGlobalDisabledRules([])
-    setRequiredColumns(new Set())
-    setDisableRulesByColumn({})
-    setOverrideRulesByColumn({})
-    setRulesDisableColumn("")
-    setRulesOverrideColumn("")
-    setCustomRules([])
-    setCustomRuleColumn("")
-    setCustomRulePrompt("")
-    setCustomRuleSuggestion(null)
-    setCustomRuleSuggesting(false)
-    setCustomRuleSuggestError(null)
-
-    try {
-      const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
-      const cols = resp.columns || []
-      setAvailableColumns(cols)
-      setSelectedColumns(new Set(cols))
-      if (cols.length === 0) {
-        setColumnsError("No columns detected for this file. You can still proceed to process all columns.")
-      }
-      try {
-        const safeColumns = cols && cols.length <= 100 ? cols : undefined
-        const profiling = await fileManagementAPI.getColumnProfilingPreview(
-          file.upload_id,
-          idToken,
-          safeColumns
-        )
-        setSelectionProfilingData(profiling)
-      } catch (error) {
-        console.error("Failed to load profiling preview:", error)
-        setSelectionProfilingError("Failed to load column profiling preview")
-      }
-    } catch (error) {
-      console.error("Failed to fetch columns:", error)
-      setAvailableColumns([])
-      setSelectedColumns(new Set())
-      setColumnsError("Unable to fetch columns. You can proceed to process all columns or cancel.")
-    } finally {
-      setSelectionProfilingLoading(false)
-      setColumnsLoading(false)
+  const handleWizardOpenChange = (open: boolean) => {
+    setWizardOpen(open)
+    if (!open) {
+      setWizardFile(null)
     }
+  }
+
+  const handleWizardComplete = () => {
+    loadFiles()
+    setWizardOpen(false)
+    setWizardFile(null)
   }
 
   const handleColumnConfirm = async () => {
@@ -2139,6 +2106,14 @@ function FilesPageContent() {
               variant: "destructive",
             })
           }}
+        />
+
+        <WizardDialog
+          open={wizardOpen && !!wizardFile}
+          onOpenChange={handleWizardOpenChange}
+          file={wizardFile}
+          authToken={idToken || ""}
+          onComplete={handleWizardComplete}
         />
 
         <ColumnExportDialog
