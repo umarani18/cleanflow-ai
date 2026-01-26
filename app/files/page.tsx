@@ -1309,13 +1309,14 @@ function FilesPageContent() {
             {selectedDestination === "null" && (selectedSource === "local" ||  selectedSource === "unified-bridge") && (
               
               <div className="rounded-lg border bg-card p-4">
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <p className="text-sm font-medium">Custom checks (optional)</p>
                   <p className="text-xs text-muted-foreground">
                     Add custom validations when you start processing a file. You can review and approve them before
                     anything runs.
                   </p>
-                </div>
+                </div> */}
+                
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
