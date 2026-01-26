@@ -18,7 +18,6 @@ import {
   Bar,
   XAxis,
   YAxis,
-  CartesianGrid,
   PieChart,
   Pie,
   Cell,
@@ -545,12 +544,6 @@ export function DqCharts({ files }: DqChartsProps) {
                         layout="vertical"
                         margin={{ left: 0, right: 10 }}
                       >
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          horizontal={true}
-                          vertical={false}
-                          stroke="#E5E7EB"
-                        />
                         <XAxis type="number" stroke="#9CA3AF" fontSize={10} />
                         <YAxis
                           type="category"
@@ -695,7 +688,6 @@ function ProfessionalChartsCarousel() {
         <div className="h-[360px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={trendData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis 
                 dataKey="month" 
                 tick={{ fontSize: 12 }}
@@ -757,7 +749,6 @@ function ProfessionalChartsCarousel() {
                   <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis 
                 dataKey="month" 
                 tick={{ fontSize: 12 }}
@@ -803,7 +794,6 @@ function ProfessionalChartsCarousel() {
         <div className="h-[360px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={processingRateData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
               <XAxis 
                 dataKey="month" 
                 tick={{ fontSize: 12 }}

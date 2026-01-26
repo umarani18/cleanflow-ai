@@ -1302,49 +1302,6 @@ function FilesPageContent() {
               )}
             </div>
 
-
-            
-
-            {/* Custom Rules Section - only show for source, not destination */}
-            {selectedDestination === "null" && (selectedSource === "local" ||  selectedSource === "unified-bridge") && (
-              
-              <div className="rounded-lg border bg-card p-4">
-                {/* <div className="space-y-2">
-                  <p className="text-sm font-medium">Custom checks (optional)</p>
-                  <p className="text-xs text-muted-foreground">
-                    Add custom validations when you start processing a file. You can review and approve them before
-                    anything runs.
-                  </p>
-                </div> */}
-                
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="use-custom-rules"
-                        checked={useCustomRules}
-                        onCheckedChange={(checked) => setUseCustomRules(checked === true)}
-                      />
-                      <Label htmlFor="use-custom-rules" className="text-sm font-medium cursor-pointer">
-                        Use custom rules
-                      </Label>
-                    </div>
-                    <div className="rounded-full bg-gradient-to-br from-blue-400 to-purple-500 p-1.5">
-                      <Sparkles className="h-4 w-4 text-white" />
-                    </div>
-                  </div>
-                  <Textarea
-                    className="min-h-[80px] text-sm resize-none"
-                    disabled={!useCustomRules}
-                    placeholder="Example: For any row where product_type is a TV and tv_cost < 10000, add invalid_tv_price and set status to Suspended."
-                    value={customRulePrompt}
-                    onChange={(e) => setCustomRulePrompt(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-
-
             {/* Content Area - MUTUALLY EXCLUSIVE: Either Source OR Destination */}
             {selectedDestination === "null" ? (
               // ========= SOURCE SECTION =========
@@ -1785,7 +1742,7 @@ function FilesPageContent() {
                                     <Columns className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Export with Column Selection</TooltipContent>
+                                <TooltipContent>Export Required Fields</TooltipContent>
                               </Tooltip>
                             )}
                             {(file.status === "DQ_FIXED" || file.status === "COMPLETED") && (

@@ -154,20 +154,27 @@ export function ColumnExportDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[80vh] flex flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Columns className="h-5 w-5" />
-            Export with Column Selection
+      <DialogContent className="sm:max-w-2xl max-h-[92vh] h-[92vh] flex flex-col overflow-hidden">
+        <DialogHeader className="border-b pb-4">
+          <DialogTitle className="flex items-center gap-3 text-lg">
+            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
+              <Columns className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            Export Required Fields
           </DialogTitle>
-          <DialogDescription>
-            Select and rename columns for: {fileName}
+          <DialogDescription className="text-sm mt-2">
+            Configure columns and export format
           </DialogDescription>
+          <div className="text-xs mt-3 p-2 rounded bg-muted text-muted-foreground">
+            File: <span className="font-mono font-medium text-foreground">{fileName}</span>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-2 flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="space-y-5 py-4 flex-1 min-h-0 flex flex-col overflow-hidden">
           {/* Format and Data Type Row */}
-          <div className="grid grid-cols-2 gap-4 shrink-0">
+          <div className="space-y-3 shrink-0">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Export Settings</div>
+            <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Format</Label>
               <Select
@@ -213,31 +220,37 @@ export function ColumnExportDialog({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          {/* Column Selection Header */}
-          <div className="flex items-center justify-between shrink-0">
-            <Label className="text-sm font-medium">
-              Columns ({selectedColumns.length}/{columns.length} selected)
-              {renamedCount > 0 && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  • {renamedCount} renamed
-                </span>
-              )}
-            </Label>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={handleSelectAll} disabled={exporting}>
-                Select All
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleDeselectAll} disabled={exporting}>
-                Deselect All
-              </Button>
             </div>
           </div>
 
-          {/* Column List - scrollable area with reduced height */}
-          <ScrollArea className="border rounded-lg h-[200px]">
-            <div className="p-2 space-y-1">
+          {/* Column Selection Header */}
+          <div className="space-y-3 shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Column Selection</div>
+                <div className="text-sm font-medium mt-2">
+                  {selectedColumns.length} of {columns.length} columns selected
+                  {renamedCount > 0 && (
+                    <span className="ml-3 text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                      ({renamedCount} renamed)
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleSelectAll} disabled={exporting} className="text-xs h-8">
+                Select All
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleDeselectAll} disabled={exporting} className="text-xs h-8">
+                Clear All
+              </Button>
+            </div>
+            </div>
+          </div>
+
+          {/* Column List - scrollable area with flexible height */}
+          <ScrollArea className="border rounded-lg bg-muted/30 flex-1 min-h-0">
+            <div className="p-3 space-y-2">
                 {columns.map((col) => {
                   const state = columnStates[col] || { selected: true, exportName: col, isEditing: false }
                   const isRenamed = state.exportName !== col
@@ -245,9 +258,12 @@ export function ColumnExportDialog({
                   return (
                     <div 
                       key={col} 
-                      className={`flex items-center gap-2 p-2 rounded-md hover:bg-accent/50 transition-colors ${
-                        !state.selected ? 'opacity-50' : ''
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                        state.selected
+                          ? 'bg-blue-100/60 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700/50 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 shadow-sm'
+                          : 'bg-muted/30 border-muted/50 hover:bg-muted/50'
                       }`}
+                      onClick={() => !exporting && handleToggleColumn(col)}
                     >
                       <Checkbox
                         checked={state.selected}
@@ -255,44 +271,64 @@ export function ColumnExportDialog({
                         disabled={exporting}
                       />
                       
-                      <div className="flex-1 min-w-0 flex items-center gap-2">
-                        <span className={`text-sm truncate ${isRenamed ? 'text-muted-foreground line-through' : 'font-medium'}`}>
-                          {col}
-                        </span>
-                        
-                        {isRenamed && (
-                          <>
-                            <span className="text-muted-foreground">→</span>
-                          </>
-                        )}
-                        
+                      <div className="flex-1 min-w-0">
                         {state.isEditing ? (
-                          <div className="flex items-center gap-1 flex-1">
+                          <div className="flex items-center gap-2">
                             <Input
                               value={state.exportName}
                               onChange={(e) => handleNameChange(col, e.target.value)}
-                              className="h-7 text-sm"
+                              className="h-8 text-sm flex-1"
                               autoFocus
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') handleEndEdit(col)
                                 if (e.key === 'Escape') handleResetName(col)
                               }}
                             />
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEndEdit(col)}>
-                              <Check className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleResetName(col)}>
-                              <X className="h-3 w-3" />
+                            {state.exportName !== col && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30" 
+                                onClick={() => handleEndEdit(col)}
+                                title="Confirm"
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" 
+                              onClick={() => handleResetName(col)}
+                              title="Cancel"
+                            >
+                              <X className="h-4 w-4" />
                             </Button>
                           </div>
                         ) : (
-                          <>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-medium truncate ${
+                              state.selected
+                                ? isRenamed ? 'text-blue-700 dark:text-blue-300 line-through' : 'text-blue-900 dark:text-blue-100 font-semibold'
+                                : isRenamed ? 'text-muted-foreground line-through' : 'text-foreground'
+                            }`}>
+                              {col}
+                            </span>
                             {isRenamed && (
-                              <span className="text-sm font-medium text-green-600 dark:text-green-400 truncate">
-                                {state.exportName}
-                              </span>
+                              <>
+                                <span className={`text-xs font-medium ${
+                                  state.selected ? 'text-blue-600 dark:text-blue-300' : 'text-muted-foreground'
+                                }`}>→</span>
+                                <span className={`text-sm font-medium truncate px-2 py-0.5 rounded ${
+                                  state.selected 
+                                    ? 'text-green-700 dark:text-green-200 bg-green-200/50 dark:bg-green-900/50'
+                                    : 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20'
+                                }`}>
+                                  {state.exportName}
+                                </span>
+                              </>
                             )}
-                          </>
+                          </div>
                         )}
                       </div>
 
@@ -301,21 +337,29 @@ export function ColumnExportDialog({
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-7 w-7" 
-                            onClick={() => handleStartEdit(col)}
+                            className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30" 
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleStartEdit(col)
+                            }}
                             disabled={exporting}
+                            title="Rename"
                           >
-                            <Edit2 className="h-3 w-3" />
+                            <Edit2 className="h-4 w-4" />
                           </Button>
                           {isRenamed && (
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="h-7 w-7" 
-                              onClick={() => handleResetName(col)}
+                              className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30" 
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleResetName(col)
+                              }}
                               disabled={exporting}
+                              title="Reset"
                             >
-                              <Undo className="h-3 w-3" />
+                              <Undo className="h-4 w-4" />
                             </Button>
                           )}
                         </div>
@@ -326,30 +370,20 @@ export function ColumnExportDialog({
               </div>
             </ScrollArea>
 
-          {/* Preview Info - fixed at bottom */}
-          <div className="rounded-lg border bg-muted/50 p-3 text-sm shrink-0">
-            <p className="text-muted-foreground">
-              Export will include <strong>{selectedColumns.length}</strong> columns
-              {renamedCount > 0 && (
-                <> with <strong>{renamedCount}</strong> renamed column{renamedCount > 1 ? 's' : ''}</>
-              )}
-              {' '}in <strong>{selectedFormat.toUpperCase()}</strong> format
-            </p>
-          </div>
-
           {/* Action Buttons - fixed at bottom */}
-          <div className="flex justify-end gap-2 shrink-0">
+          <div className="flex justify-end gap-3 shrink-0 pt-4 border-t">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={exporting}
+              className="px-6"
             >
               Cancel
             </Button>
             <Button
               onClick={handleExport}
               disabled={exporting || selectedColumns.length === 0}
-              className="gap-2"
+              className="gap-2 px-6 bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
             >
               {exporting ? (
                 <>
