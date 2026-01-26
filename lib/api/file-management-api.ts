@@ -16,6 +16,9 @@ const ENDPOINTS = {
   FILES_PROFILING: (id: string) => `/files/${id}/profiling`, // GET - column profiling data
   FILES_PROFILING_PREVIEW: (id: string) => `/files/${id}/profiling-preview`, // GET - column profiling preview
   FILES_CUSTOM_RULE_SUGGEST: (id: string) => `/files/${id}/custom-rule-suggest`, // POST - custom rule suggestion
+  // Settings presets API
+  SETTINGS: '/settings',                                  // GET - list presets, POST - create preset
+  SETTINGS_BY_ID: (id: string) => `/settings/${id}`,     // GET/PUT/DELETE - preset by ID
 }
 
 // Response Types
@@ -143,6 +146,21 @@ export interface CustomRuleSuggestionResponse {
   suggestion?: CustomRuleDefinition & { confidence?: number }
   executable?: boolean
   error?: string
+}
+
+export interface SettingsPreset {
+  preset_id: string
+  preset_name: string
+  config: {
+    currency_values?: string[]
+    uom_values?: string[]
+    date_formats?: string[]
+    custom_patterns?: Record<string, string>
+    required_columns?: string[]
+  }
+  is_default?: boolean
+  created_at?: string
+  updated_at?: string
 }
 
 export interface ColumnProfile {
@@ -1115,6 +1133,77 @@ class FileManagementAPI {
     } catch {
       return { success: false, message: 'Invalid URL format' }
     }
+  }
+
+  // ==================== Settings Presets API ====================
+
+  /**
+   * Get all user settings presets
+   */
+  async getSettingsPresets(): Promise<{ presets: SettingsPreset[]; count: number }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS, token, { method: 'GET' })
+  }
+
+  /**
+   * Get a specific settings preset
+   */
+  async getSettingsPreset(presetId: string): Promise<SettingsPreset> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'GET' })
+  }
+
+  /**
+   * Create a new settings preset
+   */
+  async createSettingsPreset(preset: { preset_name: string; config: any; is_default?: boolean }): Promise<{ preset_id: string; message: string }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS, token, {
+      method: 'POST',
+      body: JSON.stringify(preset)
+    })
+  }
+
+  /**
+   * Update a settings preset
+   */
+  async updateSettingsPreset(presetId: string, updates: { preset_name?: string; config?: any; is_default?: boolean }): Promise<{ message: string }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    })
+  }
+
+  /**
+   * Delete a settings preset
+   */
+  async deleteSettingsPreset(presetId: string): Promise<{ message: string }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'DELETE' })
+  }
+
+  // ==================== LLM Custom Rule Suggestion ====================
+
+  /**
+   * Suggest a custom rule using LLM for a specific column
+   */
+  async suggestCustomRule(uploadId: string, column: string, prompt: string): Promise<CustomRuleSuggestionResponse> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.FILES_CUSTOM_RULE_SUGGEST(uploadId), token, {
+      method: 'POST',
+      body: JSON.stringify({ column, prompt })
+    })
+  }
+
+  // Helper to get auth token
+  private async getAuth(): Promise<string> {
+    // Use the Cognito auth from the window context
+    if (typeof window !== 'undefined' && (window as any).__AUTH_TOKEN__) {
+      return (window as any).__AUTH_TOKEN__
+    }
+    // Fallback - components should pass token
+    return ''
   }
 }
 
