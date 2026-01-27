@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ArrowLeft, Play, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Loader2, Code } from "lucide-react"
+import { ArrowLeft, Play, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Loader2, Code, ArrowRight } from "lucide-react"
 import { useProcessingWizard, type RuleWithState } from "../WizardContext"
 import { fileManagementAPI, type CustomRuleDefinition } from "@/lib/api/file-management-api"
 import { cn } from "@/lib/utils"
@@ -287,9 +287,8 @@ export function RulesStep() {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
-        <Button onClick={nextStep} className="bg-green-600 hover:bg-green-700" disabled={!canProceed}>
-          <Play className="w-4 h-4 mr-2" />
-          Start Processing
+        <Button onClick={nextStep} disabled={!canProceed}>
+          <ArrowRight className="w-4 h-4" />
         </Button>
       </div>
     </div>

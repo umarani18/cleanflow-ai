@@ -90,11 +90,15 @@ export function ColumnSelectionStep() {
 
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="outline" size="sm" onClick={handleSelectAll}>
-          <Checkbox checked={allSelected} className="mr-2 pointer-events-none" />
+          {allSelected ? (
+            <CheckSquare className="w-4 h-4 mr-2 text-primary" />
+          ) : (
+            <Square className="w-4 h-4 mr-2 text-muted-foreground" />
+          )}
           Select All
         </Button>
         <Button variant="outline" size="sm" onClick={handleDeselectAll}>
-          <Checkbox checked={false} className="mr-2 pointer-events-none" />
+          <Square className="w-4 h-4 mr-2 text-muted-foreground" />
           Deselect All
         </Button>
         <div className="relative">

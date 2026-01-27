@@ -416,25 +416,7 @@ export function SettingsStep() {
         )}
       </div>
 
-      <div className="border border-muted rounded-lg p-4 space-y-3">
-        <h3 className="font-medium">Required Columns</h3>
-        <p className="text-sm text-muted-foreground">Mark columns as required; they will be checked for null values.</p>
-        <div className="flex flex-wrap gap-2">
-          {selectedColumns.map((col) => {
-            const isRequired = requiredColumns.includes(col)
-            return (
-              <Badge
-                key={col}
-                variant={isRequired ? "default" : "outline"}
-                className={cn("cursor-pointer transition-colors", isRequired ? "bg-primary" : "hover:bg-muted")}
-                onClick={() => toggleRequired(col)}
-              >
-                {col}
-              </Badge>
-            )
-          })}
-        </div>
-      </div>
+
 
       <Dialog open={showNewPresetDialog} onOpenChange={setShowNewPresetDialog}>
         <DialogContent className="max-w-md">
