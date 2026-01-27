@@ -35,6 +35,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -309,6 +317,10 @@ export function OrganizationSettings() {
   const [invites, setInvites] = useState<OrgInvite[]>([]);
   const [isLoadingOrg, setIsLoadingOrg] = useState(true);
   const [logoDataUrl, setLogoDataUrl] = useState<string>("");
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<AppRole>("Data Steward");
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
 
   const mapMemberToRow = (member: OrgMembership) => {
@@ -416,6 +428,9 @@ export function OrganizationSettings() {
   const canInviteMembers = currentUserRole === "Super Admin" || currentUserRole === "Admin";
   const canChangeAllRoles = currentUserRole === "Super Admin";
   const canManageDataStewards = currentUserRole === "Admin";
+  const allowedInviteRoles: AppRole[] = canChangeAllRoles
+    ? ["Admin", "Data Steward"]
+    : ["Data Steward"];
 
   const inviteHelpText = useMemo(() => {
     if (currentUserRole === "Super Admin") {
@@ -632,47 +647,48 @@ export function OrganizationSettings() {
       });
       return;
     }
+    setInviteEmail("");
+    setInviteRole(allowedInviteRoles[allowedInviteRoles.length - 1]);
+    setIsInviteDialogOpen(true);
+  };
 
-    const allowedRoles: AppRole[] = canChangeAllRoles
-      ? ["Admin", "Data Steward"]
-      : ["Data Steward"];
-
-    const emailInput = window.prompt(
-      `Invite member (${allowedRoles.join(" or ")}) - enter email:`
-    );
-    const email = (emailInput || "").trim().toLowerCase();
+  const handleSubmitInvite = async () => {
+    const email = inviteEmail.trim().toLowerCase();
     if (!email) {
+      toast({
+        title: "Email required",
+        description: "Enter a valid email address to send the invite.",
+      });
       return;
     }
-
-    const roleInput = window.prompt(
-      `Enter role (${allowedRoles.join(", ")}):`,
-      allowedRoles[allowedRoles.length - 1]
-    );
-    const role = (roleInput || "").trim() as AppRole;
-    if (!allowedRoles.includes(role)) {
+    if (!allowedInviteRoles.includes(inviteRole)) {
       toast({
         title: "Invalid role",
-        description: `Allowed roles: ${allowedRoles.join(", ")}`,
+        description: `Allowed roles: ${allowedInviteRoles.join(", ")}`,
       });
       return;
     }
 
-    orgAPI
-      .createInvite(email, role)
-      .then(async () => {
-        await loadInvites();
-        toast({
-          title: "Invite sent",
-          description: `${email} invited as ${role}.`,
-        });
-      })
-      .catch((err: any) => {
-        toast({
-          title: "Failed to invite",
-          description: err?.message || "Could not create invite.",
-        });
+    setIsSendingInvite(true);
+    try {
+      const result = await orgAPI.createInvite(email, inviteRole);
+      await loadInvites();
+      toast({
+        title: "Invite created",
+        description:
+          result?.email_sent === false
+            ? "Invite saved, but email was not sent. Check SES setup."
+            : `${email} invited as ${inviteRole}.`,
       });
+      setIsInviteDialogOpen(false);
+    } catch (err: any) {
+      toast({
+        title: "Failed to invite",
+        description: err?.message || "Could not create invite.",
+      });
+    } finally {
+      setIsSendingInvite(false);
+    }
   };
 
   const handleLogoUploadClick = () => {
@@ -744,6 +760,60 @@ export function OrganizationSettings() {
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite Member</DialogTitle>
+            <DialogDescription>
+              Send an invitation to join your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">Email</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="name@company.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                disabled={isSendingInvite}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={inviteRole}
+                onValueChange={(value) => setInviteRole(value as AppRole)}
+                disabled={isSendingInvite}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allowedInviteRoles.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsInviteDialogOpen(false)}
+              disabled={isSendingInvite}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitInvite} disabled={isSendingInvite}>
+              {isSendingInvite ? "Sending..." : "Send Invite"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Centered Tabs Header */}
       <div className="flex justify-center pt-2 pb-4 overflow-x-auto">
         <TabsList className="inline-flex h-10 sm:h-12 items-center justify-center rounded-xl bg-muted p-1 sm:p-1.5 gap-1">

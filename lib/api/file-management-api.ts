@@ -16,8 +16,8 @@ const ENDPOINTS = {
   FILES_PROFILING: (id: string) => `/files/${id}/profiling`, // GET - column profiling data
   FILES_PROFILING_PREVIEW: (id: string) => `/files/${id}/profiling-preview`, // GET - column profiling preview
   FILES_CUSTOM_RULE_SUGGEST: (id: string) => `/files/${id}/custom-rule-suggest`, // POST - custom rule suggestion
-  SETTINGS_PRESETS: '/settings/presets',
-  SETTINGS_PRESET: (id: string) => `/settings/presets/${id}`,
+  SETTINGS: '/settings',
+  SETTINGS_BY_ID: (id: string) => `/settings/${id}`,
 }
 
 // Response Types
@@ -427,7 +427,7 @@ class FileManagementAPI {
 
   async getSettingsPresets(authToken: string): Promise<{ presets: any[] }> {
     try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS_PRESETS, authToken, { method: "GET" })
+      return await this.makeRequest(ENDPOINTS.SETTINGS, authToken, { method: "GET" })
     } catch (error) {
       // Gracefully degrade if server has no presets yet
       const message = (error as Error)?.message || ""
@@ -441,7 +441,7 @@ class FileManagementAPI {
 
   async getSettingsPreset(presetId: string, authToken: string): Promise<any> {
     try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, { method: "GET" })
+      return await this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), authToken, { method: "GET" })
     } catch (error) {
       const message = (error as Error)?.message || ""
       if (message.toLowerCase().includes("not found")) {
@@ -1254,11 +1254,26 @@ class FileManagementAPI {
 
   // Helper to get auth token
   private async getAuth(): Promise<string> {
-    // Use the Cognito auth from the window context
-    if (typeof window !== 'undefined' && (window as any).__AUTH_TOKEN__) {
+    if (typeof window === 'undefined') {
+      return ''
+    }
+
+    // Primary: use stored authTokens from localStorage (idToken preferred)
+    try {
+      const raw = window.localStorage.getItem('authTokens')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        return parsed?.idToken || parsed?.accessToken || ''
+      }
+    } catch {
+      // ignore
+    }
+
+    // Fallback: use the global auth token if present
+    if ((window as any).__AUTH_TOKEN__) {
       return (window as any).__AUTH_TOKEN__
     }
-    // Fallback - components should pass token
+
     return ''
   }
 }
