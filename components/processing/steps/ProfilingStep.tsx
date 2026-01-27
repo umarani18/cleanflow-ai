@@ -221,8 +221,7 @@ export function ProfilingStep() {
             Back
           </Button>
           <Button onClick={nextStep} disabled={!canProceed}>
-            Next: Settings
-            <ArrowRight className="w-4 h-4 ml-2" />
+            <ArrowRight className="w-4 h-4" />
           </Button>
         </div>
       </div>

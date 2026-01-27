@@ -473,8 +473,7 @@ export function SettingsStep() {
           Back
         </Button>
         <Button onClick={nextStep}>
-          Next: Configure Rules
-          <ArrowRight className="w-4 h-4 ml-2" />
+          <ArrowRight className="w-4 h-4" />
         </Button>
       </div>
     </div>

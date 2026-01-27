@@ -1,21 +1,50 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Search, Upload, CheckSquare, Square, ArrowRight } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn }
+ from "@/lib/utils"
 import { useProcessingWizard } from "../WizardContext"
 
 export function ColumnSelectionStep() {
   const { allColumns, selectedColumns, setSelectedColumns, fileName, nextStep } = useProcessingWizard()
   const [search, setSearch] = useState("")
+  const [savedState, setSavedState] = useState<string[]>([])
+  const [isAllSelected, setIsAllSelected] = useState(false)
+
+  // Initialize saved state when component mounts
+  useEffect(() => {
+    setSavedState([...selectedColumns])
+    // Check if all columns are already selected on mount
+    if (selectedColumns.length === allColumns.length) {
+      setIsAllSelected(true)
+    }
+  }, []) // Only run once on mount
 
   const filtered = allColumns.filter((c) => c.toLowerCase().includes(search.toLowerCase()))
 
-  const selectAll = () => setSelectedColumns([...allColumns])
-  const deselectAll = () => setSelectedColumns([])
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      // If already all selected, restore the saved state
+      setSelectedColumns([...savedState])
+      setIsAllSelected(false)
+    } else {
+      // Save current state before selecting all
+      setSavedState([...selectedColumns])
+      setSelectedColumns([...allColumns])
+      setIsAllSelected(true)
+    }
+  }
+
+  const handleDeselectAll = () => {
+    setSelectedColumns([])
+    setIsAllSelected(false)
+    setSavedState([]) // Clear saved state when deselecting all
+  }
+
   const toggle = (col: string) => {
     setSelectedColumns((prev) => {
       if (prev.includes(col)) {
@@ -23,6 +52,8 @@ export function ColumnSelectionStep() {
       }
       return [...prev, col]
     })
+    // Reset the "all selected" state when manually toggling
+    setIsAllSelected(false)
   }
 
   const handleUploadSelection = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,12 +70,14 @@ export function ColumnSelectionStep() {
       }
       const valid = columns.filter((c) => allColumns.includes(c))
       setSelectedColumns(valid)
+      setIsAllSelected(false)
     } catch (err) {
       console.error("Failed to parse selection file:", err)
     }
   }
 
   const canProceed = selectedColumns.length > 0
+  const allSelected = selectedColumns.length === allColumns.length
 
   return (
     <div className="p-6 space-y-6">
@@ -56,12 +89,12 @@ export function ColumnSelectionStep() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" onClick={selectAll}>
-          <CheckSquare className="w-4 h-4 mr-2" />
+        <Button variant="outline" size="sm" onClick={handleSelectAll}>
+          <Checkbox checked={allSelected} className="mr-2 pointer-events-none" />
           Select All
         </Button>
-        <Button variant="outline" size="sm" onClick={deselectAll}>
-          <Square className="w-4 h-4 mr-2" />
+        <Button variant="outline" size="sm" onClick={handleDeselectAll}>
+          <Checkbox checked={false} className="mr-2 pointer-events-none" />
           Deselect All
         </Button>
         <div className="relative">
@@ -119,8 +152,7 @@ export function ColumnSelectionStep() {
           Selected: <span className="font-medium text-foreground">{selectedColumns.length}</span> of {allColumns.length} columns
         </div>
         <Button onClick={nextStep} disabled={!canProceed}>
-          Next: Profile Columns
-          <ArrowRight className="w-4 h-4 ml-2" />
+          <ArrowRight className="w-4 h-4" />
         </Button>
       </div>
     </div>
