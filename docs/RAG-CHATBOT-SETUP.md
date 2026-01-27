@@ -13,7 +13,7 @@ The chatbot uses:
 ## Prerequisites
 
 1. **Groq Account**: Sign up at https://console.groq.com (FREE)
-2. **Pinecone Account**: Sign up at https://www.pinecone.io (FREE tier available)
+2. **Pinecone Account**: Sign up at  (FREE tier available)
 3. **HuggingFace Account** (OPTIONAL): For higher rate limits at https://huggingface.co
 
 ## Setup Steps

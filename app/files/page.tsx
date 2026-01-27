@@ -22,6 +22,7 @@ import {
   ArrowUp,
   ArrowDown,
   Brain,
+  Sparkles,
   Menu,
   Columns,
 } from "lucide-react"
@@ -42,7 +43,7 @@ import { DownloadFormatModal } from "@/components/files/download-format-modal"
 import { ColumnExportDialog } from "@/components/files/column-export-dialog"
 import { ERPTransformationModal } from "@/components/files/erp-transformation-modal"
 import { FileDetailsDialog } from "@/components/files/file-details-dialog"
-import { WizardDialog } from "@/components/processing/WizardDialog"
+import { WizardDialog } from "@/components/processing"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -99,6 +100,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RULE_IDS, getRuleMeta } from "@/lib/rule-metadata"
+
 
 const STATUS_OPTIONS = [
   { label: "All", value: "all", type: "status" },
@@ -194,6 +196,10 @@ function FilesPageContent() {
   const [showPushToErpModal, setShowPushToErpModal] = useState(false)
   const [pushToErpFile, setPushToErpFile] = useState<FileStatusResponse | null>(null)
 
+  // Wizard state
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardFile, setWizardFile] = useState<FileStatusResponse | null>(null)
+
   // Profiling state
   const [profilingFileId, setProfilingFileId] = useState<string | null>(null)
   const [profilingData, setProfilingData] = useState<ProfilingResponse | null>(null)
@@ -215,6 +221,7 @@ function FilesPageContent() {
   const [columnsError, setColumnsError] = useState<string | null>(null)
   const [selectionFileError, setSelectionFileError] = useState<string | null>(null)
   const [displayColumnModalOpen, setDisplayColumnModalOpen] = useState(false)
+  const [useCustomRules, setUseCustomRules] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set([
     "file",
     "score",
@@ -260,10 +267,7 @@ function FilesPageContent() {
   const [customRuleSuggestion, setCustomRuleSuggestion] = useState<CustomRuleSuggestionResponse | null>(null)
   const [customRuleSuggesting, setCustomRuleSuggesting] = useState(false)
   const [customRuleSuggestError, setCustomRuleSuggestError] = useState<string | null>(null)
-  const [useCustomRules, setUseCustomRules] = useState(false)
-  // Wizard
-  const [wizardOpen, setWizardOpen] = useState(false)
-  const [wizardFile, setWizardFile] = useState<FileStatusResponse | null>(null)
+
   // Column Export Dialog state
   const [showColumnExportModal, setShowColumnExportModal] = useState(false)
   const [columnExportFile, setColumnExportFile] = useState<FileStatusResponse | null>(null)
@@ -542,6 +546,7 @@ function FilesPageContent() {
     }
   }
 
+
   const handleWizardComplete = () => {
     loadFiles()
     if (wizardFile) {
@@ -752,7 +757,6 @@ function FilesPageContent() {
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`
     return `${seconds}s`
   }
-
   const handleConfirmColumnsCancel = () => {
     setConfirmColumnsOpen(false)
     setConfirmColumns([])
@@ -1135,31 +1139,29 @@ function FilesPageContent() {
 
       if (!response.ok) throw new Error(`Download failed: ${response.statusText}`)
 
-      // Check if response is JSON (presigned URL response) vs direct file content
+      // Check if response is JSON (presigned URL for large files) or direct file
       const contentType = response.headers.get('Content-Type') || ''
-      let blob: Blob
-      
+
       if (contentType.includes('application/json')) {
-        // Response may contain presigned URL - parse and fetch from S3
+        // Parse JSON to get presigned URL
         const data = await response.json()
         if (data.presigned_url) {
-          console.log('📥 Fetching from presigned URL:', data.filename || 'file')
-          const s3Response = await fetch(data.presigned_url)
-          if (!s3Response.ok) {
-            throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
-          }
-          blob = await s3Response.blob()
-        } else if (data.error) {
-          throw new Error(data.error)
-        } else {
-          // Fallback - return JSON as blob
-          blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+          // Open presigned URL directly - browser will download the file
+          console.log('📥 Opening presigned URL for download:', data.filename || 'file')
+          window.open(data.presigned_url, '_blank')
+          toast({
+            title: "Success",
+            description: targetErp ? `Downloaded with ${targetErp}` : "File download started",
+          })
+          return
         }
-      } else {
-        // Direct blob response
-        blob = await response.blob()
+        if (data.error) {
+          throw new Error(data.error)
+        }
       }
 
+      // For small files, get blob directly
+      const blob = await response.blob()
       const baseFilename = (file.original_filename || file.filename || "file").replace(/\.[^/.]+$/, "")
       const extension = format === "excel" ? ".xlsx" : format === "json" ? ".json" : ".csv"
       const erpSuffix = targetErp ? `_${targetErp.replace(/\s+/g, "_").toLowerCase()}` : ""
@@ -1369,6 +1371,7 @@ function FilesPageContent() {
             )}
 
 
+
             {/* Content Area - MUTUALLY EXCLUSIVE: Either Source OR Destination */}
             {selectedDestination === "null" ? (
               // ========= SOURCE SECTION =========
@@ -1432,6 +1435,7 @@ function FilesPageContent() {
                 ) : selectedSource === "erp" && selectedErp === "quickbooks" ? (
                   <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
                     <QuickBooksImport
+                      mode="source"
                       onImportComplete={handleQuickBooksImportComplete}
                       onNotification={(message, type) => {
                         toast({
@@ -1497,9 +1501,9 @@ function FilesPageContent() {
                     />
                   </div>
                 ) : selectedDestination === "erp" && selectedDestinationErp === "quickbooks" ? (
-                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
                     <QuickBooksImport
-                      onImportComplete={handleQuickBooksImportComplete}
+                      mode="destination"
                       onNotification={(message, type) => {
                         toast({
                           title: type === "success" ? "Success" : "Error",
@@ -1825,7 +1829,7 @@ function FilesPageContent() {
                                     <Columns className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Export with Column Selection</TooltipContent>
+                                <TooltipContent>Export Required Fields</TooltipContent>
                               </Tooltip>
                             )}
                             {(file.status === "DQ_FIXED" || file.status === "COMPLETED") && (
@@ -2519,6 +2523,19 @@ function FilesPageContent() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Processing Wizard Dialog */}
+        <WizardDialog
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          file={wizardFile}
+          authToken={idToken || ""}
+          onComplete={() => {
+            setWizardOpen(false)
+            setWizardFile(null)
+            loadFiles() // Refresh file list after processing
+          }}
+        />
       </div>
     </TooltipProvider>
   )

@@ -154,6 +154,21 @@ export interface CustomRuleSuggestionResponse {
   error?: string
 }
 
+export interface SettingsPreset {
+  preset_id: string
+  preset_name: string
+  config: {
+    currency_values?: string[]
+    uom_values?: string[]
+    date_formats?: string[]
+    custom_patterns?: Record<string, string>
+    required_columns?: string[]
+  }
+  is_default?: boolean
+  created_at?: string
+  updated_at?: string
+}
+
 export interface ColumnProfile {
   type_guess: string
   type_confidence: number
@@ -196,6 +211,37 @@ export interface MonthlyDqStats {
   rows_quarantined: number
   violation_counts?: Record<string, number>
   top_issues?: TopIssue[]
+}
+
+// Column Response (GET /files/{id}/columns)
+export interface ColumnResponse {
+  columns: string[]
+}
+
+// Preview Data Response (GET /files/{id}/preview-data)
+export interface PreviewDataResponse {
+  headers: string[]
+  sample_data: Record<string, any>[]
+  total_rows: number
+  returned_rows: number
+}
+
+// Download URLs Response (GET /files/{id}/preview)
+export interface DownloadUrlsResponse {
+  upload_id: string
+  status: string
+  dq_score: number
+  download_urls: {
+    clean_data: string
+    quarantine_data: string
+    dq_report: string
+  }
+}
+
+// Export Response (GET/POST /files/{id}/export)
+export interface ExportResponse {
+  presigned_url: string
+  filename: string
 }
 
 class FileManagementAPI {
@@ -423,6 +469,7 @@ class FileManagementAPI {
 
     // Check if response is JSON (presigned URL response) vs direct file content
     const contentType = response.headers.get('Content-Type') || ''
+
 
     if (contentType.includes('application/json')) {
       // Response may contain presigned URL - parse and fetch from S3
@@ -1155,6 +1202,64 @@ class FileManagementAPI {
     } catch {
       return { success: false, message: 'Invalid URL format' }
     }
+  }
+
+  // ==================== Settings Presets API ====================
+
+  /**
+   * Get all user settings presets
+   */
+  async getSettingsPresets(): Promise<{ presets: SettingsPreset[]; count: number }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS, token, { method: 'GET' })
+  }
+
+  /**
+   * Get a specific settings preset
+   */
+  async getSettingsPreset(presetId: string): Promise<SettingsPreset> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'GET' })
+  }
+
+  /**
+   * Create a new settings preset
+   */
+  async createSettingsPreset(preset: { preset_name: string; config: any; is_default?: boolean }): Promise<{ preset_id: string; message: string }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS, token, {
+      method: 'POST',
+      body: JSON.stringify(preset)
+    })
+  }
+
+  /**
+   * Update a settings preset
+   */
+  async updateSettingsPreset(presetId: string, updates: { preset_name?: string; config?: any; is_default?: boolean }): Promise<{ message: string }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    })
+  }
+
+  /**
+   * Delete a settings preset
+   */
+  async deleteSettingsPreset(presetId: string): Promise<{ message: string }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'DELETE' })
+  }
+
+  // Helper to get auth token
+  private async getAuth(): Promise<string> {
+    // Use the Cognito auth from the window context
+    if (typeof window !== 'undefined' && (window as any).__AUTH_TOKEN__) {
+      return (window as any).__AUTH_TOKEN__
+    }
+    // Fallback - components should pass token
+    return ''
   }
 }
 

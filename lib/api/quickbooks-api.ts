@@ -52,7 +52,8 @@ class QuickBooksService {
   private async makeRequest<T>(
     endpoint: string,
     options: RequestInit = {},
-    skipAuth: boolean = false
+    skipAuth: boolean = false,
+    retries: number = 0
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`
     const headers: Record<string, string> = {
@@ -71,7 +72,17 @@ class QuickBooksService {
     console.log('📡 QuickBooks API Request:', url, options.method || 'GET')
 
     try {
-      const response = await fetch(url, { ...options, headers })
+      // Create abort controller with timeout (60 seconds for export operations)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60000)
+
+      const response = await fetch(url, { 
+        ...options, 
+        headers,
+        signal: controller.signal 
+      })
+      
+      clearTimeout(timeoutId)
       console.log('📥 Response:', response.status)
 
       if (!response.ok) {
@@ -82,6 +93,15 @@ class QuickBooksService {
       return await response.json()
     } catch (error) {
       console.error('❌ QuickBooks API Error:', error)
+      
+      // Retry logic for timeout errors
+      if ((error as Error).name === 'AbortError' && retries < 2) {
+        console.log(`⏱️ Request timed out, retrying... (attempt ${retries + 1}/2)`)
+        // Exponential backoff: 2s, then 4s
+        await new Promise(resolve => setTimeout(resolve, (retries + 1) * 2000))
+        return this.makeRequest<T>(endpoint, options, skipAuth, retries + 1)
+      }
+      
       throw error
     }
   }

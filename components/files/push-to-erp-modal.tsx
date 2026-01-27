@@ -54,6 +54,7 @@ export function PushToERPModal({
   const [pushing, setPushing] = useState(false)
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<string>('')
 
   const handlePush = async () => {
     if (!file) return
@@ -68,20 +69,26 @@ export function PushToERPModal({
     setPushing(true)
     setError(null)
     setResult(null)
+    setStatus('Preparing export...')
 
     try {
       if (selectedERP === 'quickbooks') {
         // Check connection first
+        setStatus('Checking QuickBooks connection...')
         const connectionStatus = await quickBooksAPI.getConnectionStatus()
         
         if (!connectionStatus.connected) {
           const msg = 'QuickBooks is not connected. Please connect your QuickBooks account first.'
           setError(msg)
           onError?.(msg)
+          setPushing(false)
           return
         }
 
+        setStatus('Exporting data to QuickBooks (this may take a moment)...')
         const response = await quickBooksAPI.exportToQuickBooks(file.upload_id)
+        
+        setStatus('')
         setResult({
           success: response.success,
           message: response.message || `Successfully exported ${response.records_exported || 0} records to QuickBooks`,
@@ -91,16 +98,29 @@ export function PushToERPModal({
     } catch (err) {
       console.error('Push to ERP error:', err)
       const msg = (err as Error).message || 'Failed to push to ERP'
-      setError(msg)
-      onError?.(msg)
+      
+      // Provide helpful messages for common errors
+      let displayMsg = msg
+      if (msg.includes('AbortError') || msg.includes('timed out')) {
+        displayMsg = 'The export took too long. Please try again. If this persists, check your network connection and try again.'
+      } else if (msg.includes('NoSuchKey') || msg.includes('does not exist')) {
+        displayMsg = 'Failed to read processed data: The cleaned data file could not be found. Please process the file again and try exporting.'
+      } else if (msg.includes('specified key does not exist')) {
+        displayMsg = 'The cleaned data file is missing from storage. Please reprocess the file and try again.'
+      }
+      
+      setError(displayMsg)
+      onError?.(displayMsg)
     } finally {
       setPushing(false)
+      setStatus('')
     }
   }
 
   const handleClose = () => {
     setResult(null)
     setError(null)
+    setStatus('')
     onOpenChange(false)
   }
 
@@ -178,6 +198,13 @@ export function PushToERPModal({
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {status && (
+            <Alert className="border-blue-200 bg-blue-50">
+              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+              <AlertDescription className="text-blue-900 ml-2">{status}</AlertDescription>
             </Alert>
           )}
 

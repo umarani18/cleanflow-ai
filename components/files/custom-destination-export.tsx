@@ -101,13 +101,7 @@ export default function CustomDestinationExport({
     const baseName = file.original_filename?.replace(/\.[^/.]+$/, '') || 'export'
     setDownloadFilename(`${baseName}_processed`)
 
-    // If file is already processed, skip to download
-    if (file.status === 'DQ_FIXED' || file.status === 'COMPLETED') {
-      setShowDownloadModal(true)
-      return
-    }
-
-    // Show column picker for unprocessed files
+    // Always show column picker for column selection before export
     if (!idToken) return
     
     setColumnModalOpen(true)
@@ -120,13 +114,13 @@ export default function CustomDestinationExport({
       setAvailableColumns(cols)
       setSelectedColumns(new Set(cols)) // Select all columns by default
       if (cols.length === 0) {
-        setColumnsError('No columns detected for this file. You can still proceed to process all columns.')
+        setColumnsError('No columns detected for this file. You can still proceed with export.')
       }
     } catch (error) {
       console.error('Failed to fetch columns:', error)
       setAvailableColumns([])
       setSelectedColumns(new Set())
-      setColumnsError('Unable to fetch columns. You can proceed to process all columns or cancel.')
+      setColumnsError('Unable to fetch columns. You can proceed without column selection.')
     } finally {
       setColumnsLoading(false)
     }
@@ -137,6 +131,14 @@ export default function CustomDestinationExport({
     if (!selectedFile || !idToken) return
 
     setColumnModalOpen(false)
+
+    // If file is already processed, go directly to download
+    if (selectedFile.status === 'DQ_FIXED' || selectedFile.status === 'COMPLETED') {
+      setShowDownloadModal(true)
+      return
+    }
+
+    // For unprocessed files, start processing with selected columns
     setProcessing(true)
 
     try {
@@ -341,7 +343,7 @@ export default function CustomDestinationExport({
         {/* Format Selection */}
         {selectedFile && !processing && (
           <div className="w-full max-w-md space-y-4">
-            <div className="space-y-2">
+            {/*<div className="space-y-2">
               <Label>Export Format</Label>
               <div className="flex flex-wrap gap-3 justify-center">
                 <Button
@@ -372,7 +374,7 @@ export default function CustomDestinationExport({
                   SQL
                 </Button>
               </div>
-            </div>
+            </div>*/}
 
             {(selectedFile.status === 'DQ_FIXED' || selectedFile.status === 'COMPLETED') && (
               <Button
@@ -392,9 +394,9 @@ export default function CustomDestinationExport({
       <AlertDialog open={columnModalOpen} onOpenChange={setColumnModalOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Select columns to process</AlertDialogTitle>
+            <AlertDialogTitle>Select Columns to Export</AlertDialogTitle>
             <AlertDialogDescription>
-              Choose which columns should be included for this run. All columns are selected by default.
+              Choose which columns from {selectedFile?.original_filename || selectedFile?.filename} should be included in the export. All columns are selected by default.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3">
@@ -405,7 +407,7 @@ export default function CustomDestinationExport({
               </div>
             ) : (
               <>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 py-2 border-b">
                   <Checkbox
                     id="select-all-columns"
                     checked={
@@ -414,7 +416,7 @@ export default function CustomDestinationExport({
                     }
                     onCheckedChange={(checked) => handleToggleAllColumns(Boolean(checked))}
                   />
-                  <Label htmlFor="select-all-columns" className="text-sm">
+                  <Label htmlFor="select-all-columns" className="text-sm font-medium cursor-pointer">
                     Select all
                   </Label>
                 </div>
@@ -426,18 +428,22 @@ export default function CustomDestinationExport({
                         checked={selectedColumns.has(col)}
                         onCheckedChange={(checked) => handleToggleColumn(col, Boolean(checked))}
                       />
-                      <Label htmlFor={`col-${col}`} className="text-sm">
+                      <Label htmlFor={`col-${col}`} className="text-sm cursor-pointer flex-1 truncate">
                         {col}
                       </Label>
                     </div>
                   ))}
                   {availableColumns.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Columns could not be detected automatically. You can still proceed to process all columns.
+                    <p className="text-sm text-muted-foreground py-2">
+                      No columns detected. You can proceed without column selection.
                     </p>
                   )}
                 </div>
-                {columnsError && <p className="text-sm text-destructive">{columnsError}</p>}
+                {columnsError && (
+                  <Alert variant="destructive" className="py-2">
+                    <AlertDescription className="text-xs">{columnsError}</AlertDescription>
+                  </Alert>
+                )}
               </>
             )}
           </div>
@@ -445,9 +451,12 @@ export default function CustomDestinationExport({
             <AlertDialogCancel onClick={() => setColumnModalOpen(false)}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleColumnConfirm} 
-              disabled={columnsLoading}
+              disabled={columnsLoading || selectedColumns.size === 0}
+              className="gap-2"
             >
-              Proceed
+              {selectedFile?.status === 'DQ_FIXED' || selectedFile?.status === 'COMPLETED' 
+                ? 'Download File' 
+                : 'Process & Continue'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

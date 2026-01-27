@@ -61,8 +61,19 @@ export function PushToQuickBooksModal({
     } catch (err) {
       console.error('Push to QuickBooks error:', err)
       const msg = (err as Error).message || 'Failed to push to QuickBooks'
-      setError(msg)
-      onError?.(msg)
+      
+      // Provide helpful messages for common errors
+      let displayMsg = msg
+      if (msg.includes('AbortError') || msg.includes('timed out')) {
+        displayMsg = 'The export took too long. Please try again. If this persists, check your network connection.'
+      } else if (msg.includes('NoSuchKey') || msg.includes('does not exist')) {
+        displayMsg = 'Failed to read processed data: The cleaned data file could not be found. Please process the file again and try exporting.'
+      } else if (msg.includes('specified key does not exist')) {
+        displayMsg = 'The cleaned data file is missing from storage. Please reprocess the file and try again.'
+      }
+      
+      setError(displayMsg)
+      onError?.(displayMsg)
     } finally {
       setPushing(false)
     }

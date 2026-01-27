@@ -223,8 +223,7 @@ export function AppSidebar() {
 								</Button>
 							)}
 							<div className="text-xs text-muted-foreground text-center">
-								<div className="font-medium">CleanFlowAI Platform</div>
-								<div className="mt-1">Data Transformation</div>
+								<div>@copyright CleanFlowAI</div>
 							</div>
 						</div>
 					)}
