@@ -21,6 +21,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import QRCode from 'qrcode'
+import { orgAPI } from "@/lib/api/org-api"
+import { useToast } from "@/hooks/use-toast"
 
 export function LoginForm() {
   const [email, setEmail] = useState('')
@@ -46,6 +48,7 @@ export function LoginForm() {
   const [copiedSecret, setCopiedSecret] = useState(false)
 
   const { login, verifyMfaCode, setupMfaWithSession, confirmMfaSetupWithSession, mfaRequired, mfaSession, cancelMfa } = useAuth()
+  const { toast } = useToast()
 
   useEffect(() => {
     setMounted(true)
@@ -69,6 +72,24 @@ export function LoginForm() {
     const middleLength = localPart.length - 3
     const masked = '*'.repeat(Math.max(middleLength, 4))
     return `${firstPart}${masked}${lastChar}@${domain}`
+  }
+
+  const redirectAfterLogin = async () => {
+    try {
+      await orgAPI.getMe()
+      window.location.href = "/dashboard"
+    } catch (err: any) {
+      const message = err?.message || ""
+      if (message.includes("Organization membership required")) {
+        toast({
+          title: "Organization setup required",
+          description: "Please create your organization to continue.",
+        })
+        window.location.href = "/create-organization"
+        return
+      }
+      window.location.href = "/dashboard"
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -98,7 +119,7 @@ export function LoginForm() {
         setSuccess('Login successful!')
         setIsVerifying(true)
         setTimeout(() => {
-          window.location.href = '/dashboard'
+          redirectAfterLogin()
         }, 1500)
       }
     } catch (err: any) {
@@ -155,7 +176,7 @@ export function LoginForm() {
       if (result.success) {
         setIsVerifying(true)
         setTimeout(() => {
-          window.location.href = '/dashboard'
+          redirectAfterLogin()
         }, 1500)
       }
     } catch (err: any) {
@@ -211,7 +232,7 @@ export function LoginForm() {
       if (result.success) {
         setIsVerifying(true)
         setTimeout(() => {
-          window.location.href = '/dashboard'
+          redirectAfterLogin()
         }, 1500)
       }
     } catch (err: any) {

@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useAuth } from "@/components/providers/auth-provider"
+import { orgAPI } from "@/lib/api/org-api"
+import { useToast } from "@/hooks/use-toast"
 
 export function SignUpForm() {
   const [fullName, setFullName] = useState('')
@@ -25,7 +27,8 @@ export function SignUpForm() {
   const [success, setSuccess] = useState('')
   const [showVerification, setShowVerification] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const { signup } = useAuth()
+  const { signup, login } = useAuth()
+  const { toast } = useToast()
 
   useEffect(() => {
     setMounted(true)
@@ -50,9 +53,42 @@ export function SignUpForm() {
     }
   }
 
-  const handleVerificationComplete = () => {
-    setShowVerification(false)
-    window.location.href = '/dashboard'
+  const handleVerificationComplete = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const loginResult = await login(email, password)
+      if (loginResult?.mfaRequired || loginResult?.mfaSetupRequired) {
+        const message =
+          "MFA is required. Please log in and complete MFA setup, then register your organization in Admin."
+        toast({
+          title: "MFA required",
+          description: message,
+        })
+        setSuccess(message)
+        setTimeout(() => {
+          window.location.href = "/login"
+        }, 900)
+        return
+      }
+
+      try {
+        await orgAPI.getMe()
+        window.location.href = "/dashboard"
+      } catch (orgErr: any) {
+        const message = orgErr?.message || ""
+        if (message.includes("Organization membership required")) {
+          window.location.href = "/create-organization"
+          return
+        }
+        window.location.href = "/dashboard"
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to finish signup.')
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleBackToSignup = () => {
@@ -110,7 +146,13 @@ export function SignUpForm() {
   if (!mounted) return null
 
   if (showVerification) {
-    return <EmailVerification email={email} onVerified={handleVerificationComplete} onBack={handleBackToSignup} />
+    return (
+      <EmailVerification
+        email={email}
+        onVerified={handleVerificationComplete}
+        onBack={handleBackToSignup}
+      />
+    )
   }
 
   return (

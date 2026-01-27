@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth'
 
 interface EmailVerificationProps {
   email: string
-  onVerified: () => void
+  onVerified: () => Promise<void> | void
   onBack: () => void
 }
 
@@ -50,10 +50,24 @@ export function EmailVerification({ email, onVerified, onBack }: EmailVerificati
       const result = await confirmSignup(email, code)
       setSuccess(result.message)
       setTimeout(() => {
-        onVerified()
-      }, 2000)
+        Promise.resolve(onVerified()).catch((err: any) => {
+          setError(err?.message || "Verification succeeded but post-setup failed.")
+        })
+      }, 1000)
     } catch (err: any) {
-      setError(err.message)
+      const message = err?.message || "Verification failed"
+      // Cognito returns an error if the user is already confirmed.
+      // In that case, we should continue the post-verify flow anyway.
+      if (message.toUpperCase().includes("CONFIRMED")) {
+        setSuccess("Email already verified. Continuing setup...")
+        setTimeout(() => {
+          Promise.resolve(onVerified()).catch((postErr: any) => {
+            setError(postErr?.message || "Post-setup failed after confirmation.")
+          })
+        }, 600)
+      } else {
+        setError(message)
+      }
     } finally {
       setIsLoading(false)
     }
