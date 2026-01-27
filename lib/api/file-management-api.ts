@@ -280,7 +280,7 @@ class FileManagementAPI {
     return this.makeRequest(ENDPOINTS.FILES_STATUS(uploadId), authToken, { method: 'GET' })
   }
 
-  async getFilePreview(uploadId: string, authToken: string): Promise<{ headers: string[], sample_data: any[], total_rows: number }> {
+  async getFilePreview(uploadId: string, authToken: string): Promise<{ headers: string[], sample_data: any[], total_rows: number, has_dq_status?: boolean }> {
     // Use dedicated preview-data endpoint that returns only first N rows
     try {
       const endpoint = `${ENDPOINTS.FILES_PREVIEW_DATA(uploadId)}?limit=50`
@@ -538,7 +538,7 @@ class FileManagementAPI {
     return response.blob()
   }
 
-  async getFilePreviewFromS3(uploadId: string, authToken: string, maxRows: number = 20): Promise<{ headers: string[], sample_data: any[], total_rows: number }> {
+  async getFilePreviewFromS3(uploadId: string, authToken: string, maxRows: number = 20): Promise<{ headers: string[], sample_data: any[], total_rows: number, has_dq_status?: boolean }> {
     try {
       // Download the original file from S3 via export endpoint
       const blob = await this.downloadFile(uploadId, 'csv', 'all', authToken)

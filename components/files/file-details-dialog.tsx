@@ -49,7 +49,7 @@ interface FileDetailsDialogProps {
 export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialogProps) {
   const ISSUES_PAGE_SIZE = 50
   const [activeTab, setActiveTab] = useState<'details' | 'preview' | 'dq-report'>('details')
-  const [previewData, setPreviewData] = useState<{ headers: string[], sample_data: any[], total_rows: number } | null>(null)
+  const [previewData, setPreviewData] = useState<{ headers: string[], sample_data: any[], total_rows: number, has_dq_status?: boolean } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [dqReport, setDqReport] = useState<DqReportResponse | null>(null)
@@ -430,16 +430,53 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                         </thead>
                         <tbody>
                           {previewData.sample_data?.map((row, idx) => (
-                            <tr key={idx} className="border-b hover:bg-muted/50 transition-colors">
-                              {previewData.headers?.map((header) => (
-                                <td 
-                                  key={header} 
-                                  className="px-4 py-2.5 whitespace-nowrap border-r last:border-r-0 max-w-[300px] truncate"
-                                  title={row && typeof row === 'object' ? String(row[header] ?? '') : ''}
-                                >
-                                  {row && typeof row === 'object' ? String(row[header] ?? '') : ''}
-                                </td>
-                              ))}
+                            <tr
+                              key={idx}
+                              className="border-b transition-colors hover:bg-muted/30"
+                              title={row?.dq_violations || row?.dq_status || ""}
+                            >
+                              {previewData.headers?.map((header) => {
+                                const value = row && typeof row === 'object' ? row[header] : ''
+                                const status = String(row?.dq_status || "").toLowerCase()
+                                const cellStatus = row?.cell_status ? row.cell_status[header] : undefined
+                                const resolvedStatus = (cellStatus || status) as string
+                                const isStatusCell = header === 'dq_status'
+                                const isViolationCell = header === 'dq_violations'
+                                const cellClass =
+                                  isStatusCell
+                                    ? status === 'clean'
+                                      ? "bg-emerald-500/10 text-emerald-700"
+                                      : status === 'fixed'
+                                        ? "bg-amber-500/10 text-amber-700"
+                                        : status === 'quarantined'
+                                          ? "bg-red-500/10 text-red-700"
+                                          : ""
+                                    : isViolationCell
+                                      ? status === 'quarantined'
+                                        ? "bg-red-500/10 text-red-800"
+                                        : status === 'fixed'
+                                          ? "bg-amber-500/10 text-amber-800"
+                                          : ""
+                                      : resolvedStatus === 'quarantined'
+                                        ? "bg-red-500/10 text-red-800"
+                                        : resolvedStatus === 'fixed'
+                                          ? "bg-amber-500/10 text-amber-800"
+                                          : resolvedStatus === 'clean'
+                                            ? "bg-emerald-500/5 text-emerald-800"
+                                            : ""
+                                return (
+                                  <td 
+                                    key={header} 
+                                    className={cn(
+                                      "px-4 py-2.5 whitespace-nowrap border-r last:border-r-0 max-w-[260px] truncate",
+                                      cellClass
+                                    )}
+                                    title={value !== undefined ? String(value ?? '') : ''}
+                                  >
+                                    {value !== undefined ? String(value ?? '') : ''}
+                                  </td>
+                                )
+                              })}
                             </tr>
                           ))}
                         </tbody>
