@@ -1428,42 +1428,6 @@ function FilesPageContent() {
                         })
                       }}
                     />
-=======
-            {/* Custom Rules Section */}
-            <div className="rounded-lg border bg-card p-4">
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Custom checks (optional)</p>
-                <p className="text-xs text-muted-foreground">
-                  Add custom validations when you start processing a file. You can review and approve them before
-                  anything runs.
-                </p>
-              </div>
-            </div>
-
-            {/* Content Area */}
-            {selectedSource === "local" ? (
-              <div
-                className={cn(
-                  "flex flex-col items-center justify-center rounded-xl border-2 border-dashed min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 transition-all cursor-pointer",
-                  dragActive
-                    ? "border-primary bg-primary/5 scale-[1.01]"
-                    : "border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50"
-                )}
-                onDragEnter={handleDrag}
-                onDragOver={handleDrag}
-                onDragLeave={handleDrag}
-                onDrop={handleDrop}
-                onClick={() => !uploading && fileInputRef.current?.click()}
-              >
-                {uploading ? (
-                  <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
-                    <Loader2 className="h-12 w-12 sm:h-16 sm:w-16 lg:h-20 lg:w-20 animate-spin text-primary" />
-                    <div className="text-center">
-                      <p className="text-base sm:text-lg font-medium">Uploading...</p>
-                      <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">{uploadProgress}%</p>
-                    </div>
-                    <Progress value={uploadProgress} className="w-48 sm:w-60 lg:w-72 h-2 sm:h-3" />
->>>>>>> origin/asfar_temp_frontend
                   </div>
                 ) : selectedSource === "erp" && selectedErp === "quickbooks" ? (
                   <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
@@ -1491,7 +1455,24 @@ function FilesPageContent() {
                     </p>
                     <Button disabled size="lg" className="px-6 sm:px-8 py-4 sm:py-6 text-sm sm:text-base">Connect</Button>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6 text-center">
+                    <div className="rounded-full bg-primary/10 p-4 sm:p-6 lg:p-8">
+                      <Upload className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-primary" />
+                    </div>
+                    <div className="space-y-1 sm:space-y-2">
+                      <p className="text-base sm:text-lg lg:text-xl font-medium">Upload your data for transformation</p>
+                      <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">Drag & drop or click to browse</p>
+                    </div>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls,.json,.sql"
+                  className="hidden"
+                  onChange={handleFileInput}
+                />
               </div>
             ) : (
               // ========= DESTINATION SECTION =========
