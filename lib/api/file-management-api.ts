@@ -12,6 +12,12 @@ const ENDPOINTS = {
   FILES_COLUMNS: (id: string) => `/files/${id}/columns`, // GET - discover columns
   FILES_EXPORT: (id: string) => `/files/${id}/export`,   // GET - download files
   FILES_ISSUES: (id: string) => `/files/${id}/issues`,   // GET - paged outstanding issues
+  FILES_PREVIEW_DATA: (id: string) => `/files/${id}/preview-data`, // GET - first N rows as JSON
+  FILES_PROFILING: (id: string) => `/files/${id}/profiling`, // GET - column profiling data
+  FILES_PROFILING_PREVIEW: (id: string) => `/files/${id}/profiling-preview`, // GET - column profiling preview
+  FILES_CUSTOM_RULE_SUGGEST: (id: string) => `/files/${id}/custom-rule-suggest`, // POST - custom rule suggestion
+  SETTINGS_PRESETS: '/settings/presets',
+  SETTINGS_PRESET: (id: string) => `/settings/presets/${id}`,
 }
 
 // Response Types
@@ -123,6 +129,51 @@ export interface IssuesResponse {
   applied_filters?: string[]
 }
 
+export interface ColumnProfileRule {
+  rule_id: string
+  rule_name?: string
+  confidence: number
+  decision: 'auto' | 'human'
+  reasoning: string
+}
+
+export interface CustomRuleDefinition {
+  rule_id?: string
+  column: string
+  template: string
+  code?: string  // LLM-generated Python code (when template="code")
+  params?: Record<string, any>
+  rule_name?: string
+  explanation?: string
+  severity?: "critical" | "warning" | "info"
+}
+
+export interface CustomRuleSuggestionResponse {
+  suggestion?: CustomRuleDefinition & { confidence?: number }
+  executable?: boolean
+  error?: string
+}
+
+export interface ColumnProfile {
+  type_guess: string
+  type_confidence: number
+  null_rate: number
+  unique_ratio: number
+  rules: ColumnProfileRule[]
+  profile_time_sec?: number
+  llm_time_sec?: number
+}
+
+export interface ProfilingResponse {
+  summary: {
+    total_columns: number
+    total_rules: number
+    processed_at: string
+    engine_version: string
+  }
+  profiles: Record<string, ColumnProfile>
+}
+
 // Overall DQ Report (per-user aggregated)
 export interface OverallDqReportResponse {
   user_id: string
@@ -211,29 +262,64 @@ class FileManagementAPI {
     }
   }
 
+  async getColumnProfiling(fileId: string, authToken: string): Promise<ProfilingResponse> {
+    return this.makeRequest(ENDPOINTS.FILES_PROFILING(fileId), authToken, { method: 'GET' })
+  }
+
+  async getColumnProfilingPreview(
+    fileId: string,
+    authToken: string,
+    columns?: string[],
+    sampleSize: number = 500
+  ): Promise<ProfilingResponse> {
+    const params = new URLSearchParams()
+    if (columns && columns.length > 0) {
+      params.set('columns', columns.join(','))
+    }
+    if (sampleSize) {
+      params.set('sample', String(sampleSize))
+    }
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    return this.makeRequest(`${ENDPOINTS.FILES_PROFILING_PREVIEW(fileId)}${qs}`, authToken, { method: 'GET' })
+  }
+
   async getFileStatus(uploadId: string, authToken: string): Promise<FileStatusResponse> {
     return this.makeRequest(ENDPOINTS.FILES_STATUS(uploadId), authToken, { method: 'GET' })
   }
 
-  async getFilePreview(uploadId: string, authToken: string): Promise<{ headers: string[], sample_data: any[], total_rows: number }> {
-    // Fetch preview from S3 (top 20 rows)
-    return this.getFilePreviewFromS3(uploadId, authToken, 20)
+  async getFilePreview(uploadId: string, authToken: string): Promise<{ headers: string[], sample_data: any[], total_rows: number, has_dq_status?: boolean }> {
+    // Use dedicated preview-data endpoint that returns only first N rows
+    try {
+      const endpoint = `${ENDPOINTS.FILES_PREVIEW_DATA(uploadId)}?limit=50`
+      const data = await this.makeRequest(endpoint, authToken, { method: 'GET' })
+      return {
+        headers: data.headers || [],
+        sample_data: data.sample_data || [],
+        total_rows: data.total_rows || 0
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch preview data:', error)
+      // Fallback to S3 method if new endpoint fails
+      return this.getFilePreviewFromS3(uploadId, authToken, 20)
+    }
   }
 
   async startProcessing(
     uploadId: string,
     authToken: string,
-    options?: { use_custom_rules?: boolean; custom_rule_prompt?: string | null; selected_columns?: string[] }
-  ): Promise<any> {
-    console.log('Starting processing:', uploadId, options?.use_custom_rules ? '(with custom rules)' : '')
-    const payload: Record<string, any> = {}
-
-    if (options?.use_custom_rules) {
-      payload.use_custom_rules = true
-      if (options.custom_rule_prompt) {
-        payload.custom_rule_prompt = options.custom_rule_prompt
-      }
+    options?: {
+      selected_columns?: string[]
+      required_columns?: string[]
+      global_disabled_rules?: string[]
+      disable_rules?: Record<string, string[]>
+      column_rules_override?: Record<string, string[]>
+      custom_rules?: CustomRuleDefinition[]
+      preset_id?: string
+      preset_overrides?: Record<string, any>
     }
+  ): Promise<any> {
+    console.log('Starting processing:', uploadId, options?.custom_rules?.length ? '(with custom rules)' : '')
+    const payload: Record<string, any> = {}
 
     if (options?.selected_columns && Array.isArray(options.selected_columns)) {
       const filtered = options.selected_columns
@@ -244,14 +330,80 @@ class FileManagementAPI {
       }
     }
 
+    if (options?.required_columns) {
+      payload.required_columns = options.required_columns
+    }
+
+    if (options?.global_disabled_rules) {
+      payload.global_disabled_rules = options.global_disabled_rules
+    }
+
+    if (options?.disable_rules) {
+      payload.disable_rules = options.disable_rules
+    }
+
+    if (options?.column_rules_override) {
+      payload.column_rules_override = options.column_rules_override
+    }
+
+    if (options?.custom_rules) {
+      payload.custom_rules = options.custom_rules
+    }
+
+    if (options?.preset_id) {
+      payload.preset_id = options.preset_id
+    }
+
+    if (options?.preset_overrides && Object.keys(options.preset_overrides).length > 0) {
+      payload.preset_overrides = options.preset_overrides
+    }
+
     return this.makeRequest(ENDPOINTS.FILES_PROCESS(uploadId), authToken, {
       method: "POST",
       body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined
     })
   }
 
+  async suggestCustomRule(
+    uploadId: string,
+    authToken: string,
+    payload: { column: string; prompt: string }
+  ): Promise<CustomRuleSuggestionResponse> {
+    return this.makeRequest(ENDPOINTS.FILES_CUSTOM_RULE_SUGGEST(uploadId), authToken, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    })
+  }
+
   async getFileColumns(uploadId: string, authToken: string): Promise<{ columns: string[] }> {
     return this.makeRequest(ENDPOINTS.FILES_COLUMNS(uploadId), authToken, { method: 'GET' })
+  }
+
+  async getSettingsPresets(authToken: string): Promise<{ presets: any[] }> {
+    try {
+      return await this.makeRequest(ENDPOINTS.SETTINGS_PRESETS, authToken, { method: "GET" })
+    } catch (error) {
+      // Gracefully degrade if server has no presets yet
+      const message = (error as Error)?.message || ""
+      if (message.toLowerCase().includes("not found")) {
+        return { presets: [] }
+      }
+      console.warn("⚠️ Falling back to empty presets due to error:", message)
+      return { presets: [] }
+    }
+  }
+
+  async getSettingsPreset(presetId: string, authToken: string): Promise<any> {
+    try {
+      return await this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, { method: "GET" })
+    } catch (error) {
+      const message = (error as Error)?.message || ""
+      if (message.toLowerCase().includes("not found")) {
+        return { preset_id: presetId, preset_name: presetId, config: {} }
+      }
+      console.warn("⚠️ Falling back to empty preset due to error:", message)
+      return { preset_id: presetId, preset_name: presetId, config: {} }
+    }
   }
   async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine' | 'raw' | 'original' | 'all', authToken: string, targetErp?: string): Promise<Blob> {
     let endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}`
@@ -271,7 +423,7 @@ class FileManagementAPI {
 
     // Check if response is JSON (presigned URL response) vs direct file content
     const contentType = response.headers.get('Content-Type') || ''
-    
+
     if (contentType.includes('application/json')) {
       // Response may contain presigned URL - parse and fetch from S3
       const data = await response.json()
@@ -304,7 +456,96 @@ class FileManagementAPI {
     return response.blob()
   }
 
-  async getFilePreviewFromS3(uploadId: string, authToken: string, maxRows: number = 20): Promise<{ headers: string[], sample_data: any[], total_rows: number }> {
+  /**
+   * Export file with column selection and optional renaming.
+   * Uses POST method to send columns array and column_mapping object.
+   */
+  async exportWithColumns(
+    uploadId: string,
+    authToken: string,
+    options: {
+      format: 'csv' | 'excel' | 'json'
+      data: 'all' | 'clean' | 'quarantine'
+      columns?: string[]
+      columnMapping?: Record<string, string>
+      erp?: string
+      entity?: string
+    }
+  ): Promise<Blob> {
+    const url = `${this.baseURL}${ENDPOINTS.FILES_EXPORT(uploadId)}`
+
+    const body: Record<string, any> = {
+      format: options.format,
+      data: options.data,
+    }
+
+    if (options.columns && options.columns.length > 0) {
+      body.columns = options.columns
+    }
+
+    if (options.columnMapping && Object.keys(options.columnMapping).length > 0) {
+      body.column_mapping = options.columnMapping
+    }
+
+    if (options.erp) {
+      body.erp = options.erp
+    }
+
+    if (options.entity) {
+      body.entity = options.entity
+    }
+
+    console.log('📤 Export with columns:', { uploadId, ...options })
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `Export failed: ${response.statusText}`)
+    }
+
+    // Check if response is JSON (presigned URL response) vs direct file content
+    const contentType = response.headers.get('Content-Type') || ''
+    console.log('🔍 Response Content-Type:', contentType)
+
+    if (contentType.includes('application/json')) {
+      // Response contains presigned URL - parse and fetch from S3
+      const data = await response.json()
+      if (data.presigned_url) {
+        console.log('📥 Fetching from presigned URL:', data.filename)
+        // Fetch the actual file from S3 presigned URL
+        const s3Response = await fetch(data.presigned_url)
+        if (!s3Response.ok) {
+          throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
+        }
+        return s3Response.blob()
+      }
+      // If no presigned_url, might be an error - throw
+      if (data.error) {
+        throw new Error(data.error)
+      }
+    }
+
+    // Log headers for debugging
+    const columnSelection = response.headers.get('X-Column-Selection')
+    if (columnSelection === 'true') {
+      console.log('Column selection applied:', {
+        selected: response.headers.get('X-Selected-Columns'),
+        renamed: response.headers.get('X-Renamed-Columns'),
+      })
+    }
+
+    return response.blob()
+  }
+
+  async getFilePreviewFromS3(uploadId: string, authToken: string, maxRows: number = 20): Promise<{ headers: string[], sample_data: any[], total_rows: number, has_dq_status?: boolean }> {
     try {
       // Download the original file from S3 via export endpoint
       const blob = await this.downloadFile(uploadId, 'csv', 'all', authToken)
@@ -924,10 +1165,17 @@ export interface FtpIngestionConfig {
   port?: number
   username?: string
   password?: string
-  protocol: 'ftp' | 'sftp'
+  protocol: 'ftp' | 'ftps' | 'ftps_implicit' | 'sftp'
   remote_path: string
   filename: string
-  private_key?: string
+  auth?: {
+    type: 'password' | 'ssh_key'
+    private_key?: string
+    key_passphrase?: string
+  }
+  tls?: {
+    verify_cert?: boolean
+  }
 }
 
 export interface TcpIngestionConfig {
@@ -938,6 +1186,20 @@ export interface TcpIngestionConfig {
   max_size_bytes?: number
   request_data?: string
   filename: string
+  tls?: {
+    enabled?: boolean
+    verify_cert?: boolean
+    ca_cert?: string
+    client_cert?: string
+    client_key?: string
+  }
+  auth?: {
+    type: 'none' | 'token' | 'userpass'
+    token?: string
+    username?: string
+    password?: string
+    auth_command?: string
+  }
 }
 
 export interface HttpIngestionConfig {
@@ -946,12 +1208,22 @@ export interface HttpIngestionConfig {
   headers?: Record<string, string>
   body?: Record<string, any> | string
   auth?: {
-    type: 'none' | 'bearer' | 'api_key' | 'basic'
+    type: 'none' | 'bearer' | 'api_key' | 'basic' | 'hmac' | 'cookie' | 'oidc'
     token?: string
     api_key?: string
     username?: string
     password?: string
     header_name?: string
+    // HMAC auth
+    access_key?: string
+    secret_key?: string
+    // Cookie auth
+    cookie?: string
+    // OIDC auth
+    token_url?: string
+    client_id?: string
+    client_secret?: string
+    scope?: string
   }
   timeout_seconds?: number
   filename: string
