@@ -36,6 +36,7 @@ export function RulesStep() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [pendingSuggestion, setPendingSuggestion] = useState<CustomRuleDefinition | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [rawResponse, setRawResponse] = useState<string | null>(null)
 
   useEffect(() => {
     // Seed rules from profiles if not already set
@@ -94,17 +95,22 @@ export function RulesStep() {
     if (!customRuleColumn || !customRulePrompt.trim() || !authToken) return
     setIsGenerating(true)
     setError(null)
+    setRawResponse(null)
     try {
       const response = await fileManagementAPI.suggestCustomRule(uploadId, authToken, {
         column: customRuleColumn,
         prompt: customRulePrompt.trim(),
       })
-      if (response.error) {
-        setError(response.error)
+      if (response?.raw_response) {
+        const raw = typeof response.raw_response === "string" ? response.raw_response : JSON.stringify(response.raw_response, null, 2)
+        setRawResponse(raw)
       }
-      if (response.suggestion) {
-        setPendingSuggestion(response.suggestion)
+      if (response?.error || !response?.suggestion) {
+        setError(response?.error || "LLM did not return a usable rule. Please adjust the prompt.")
+        setPendingSuggestion(null)
+        return
       }
+      setPendingSuggestion(response.suggestion)
     } catch (err: any) {
       setError(err.message || "Failed to generate rule")
     } finally {
@@ -231,11 +237,11 @@ export function RulesStep() {
                     {customRuleColumn === col ? (
                       <div className="p-3 border border-dashed border-muted rounded-md space-y-3">
                         <Textarea value={customRulePrompt} onChange={(e) => setCustomRulePrompt(e.target.value)} placeholder="Describe your rule in natural language..." rows={2} />
-                        {pendingSuggestion && (
-                          <div className="p-2 border border-primary/30 rounded bg-primary/5">
-                            <div className="font-medium text-sm">{pendingSuggestion.rule_name}</div>
-                            <p className="text-xs text-muted-foreground">{pendingSuggestion.explanation}</p>
-                            <div className="flex gap-2 mt-2">
+                    {pendingSuggestion && (
+                      <div className="p-2 border border-primary/30 rounded bg-primary/5">
+                        <div className="font-medium text-sm">{pendingSuggestion.rule_name}</div>
+                        <p className="text-xs text-muted-foreground">{pendingSuggestion.explanation}</p>
+                        <div className="flex gap-2 mt-2">
                               <Button size="sm" onClick={handleApproveCustomRule}>
                                 Approve
                               </Button>
@@ -246,6 +252,12 @@ export function RulesStep() {
                           </div>
                         )}
                         {error && <p className="text-sm text-destructive">{error}</p>}
+                        {rawResponse && (
+                          <div className="text-xs bg-muted/40 border rounded p-2 max-h-32 overflow-y-auto text-muted-foreground">
+                            <div className="font-medium text-foreground mb-1">LLM raw response</div>
+                            <pre className="whitespace-pre-wrap break-all">{rawResponse}</pre>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <Button size="sm" onClick={handleGenerateCustomRule} disabled={isGenerating || !customRulePrompt.trim()}>
                             {isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}

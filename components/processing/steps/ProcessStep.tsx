@@ -20,6 +20,7 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
     presetOverrides,
     setProcessing,
     setProcessingError,
+    prevStep,
   } = useProcessingWizard()
 
   const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
@@ -133,10 +134,15 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
               <span className="font-medium">{customRules.length}</span>
             </div>
           </div>
-          <Button size="lg" onClick={handleStart} className="bg-green-600 hover:bg-green-700" disabled={!authToken}>
-            <Play className="w-5 h-5 mr-2" />
-            Start Processing
-          </Button>
+          <div className="flex items-center justify-center gap-3">
+            <Button variant="outline" size="lg" onClick={prevStep}>
+              Back
+            </Button>
+            <Button size="lg" onClick={handleStart} className="bg-green-600 hover:bg-green-700" disabled={!authToken}>
+              <Play className="w-5 h-5 mr-2" />
+              Start Processing
+            </Button>
+          </div>
         </div>
       )}
 

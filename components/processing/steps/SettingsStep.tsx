@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, ArrowRight, Loader2, Plus, Settings, Star, Shield, ToggleLeft, ToggleRight, Sliders, Wand2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Loader2, Plus, Settings, Star, Shield, ToggleLeft, ToggleRight, Sliders } from "lucide-react"
 import { useProcessingWizard, type SettingsPreset } from "../WizardContext"
 import { fileManagementAPI } from "@/lib/api/file-management-api"
 import { cn } from "@/lib/utils"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 const DEFAULT_PRESET: SettingsPreset & { config: Record<string, any> } = {
   preset_id: "default_dq_rules",
@@ -78,6 +80,9 @@ export function SettingsStep() {
   const [placeholders, setPlaceholders] = useState("")
   const [statusEnums, setStatusEnums] = useState("")
   const [maxTextLen, setMaxTextLen] = useState<number | string>(255)
+  const [activeTab, setActiveTab] = useState("policies")
+  const [showNewPresetDialog, setShowNewPresetDialog] = useState(false)
+  const [newPresetName, setNewPresetName] = useState("")
 
   useEffect(() => {
     fetchPresets()
@@ -196,7 +201,7 @@ export function SettingsStep() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Settings Configuration</h2>
-          <p className="text-sm text-muted-foreground mt-1">Select a preset or customize policy, lookups, and hygiene defaults for this file.</p>
+          <p className="text-sm text-muted-foreground mt-1">Select a preset or customize policy, lookups, thresholds, and required fields for this file.</p>
         </div>
       </div>
 
@@ -222,7 +227,7 @@ export function SettingsStep() {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" className="mt-6">
+        <Button variant="outline" size="sm" className="mt-6" onClick={() => setShowNewPresetDialog(true)}>
           <Plus className="w-4 h-4 mr-2" />
           New Preset
         </Button>
@@ -264,68 +269,109 @@ export function SettingsStep() {
 
         {editMode ? (
           <div className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm">Strictness</Label>
-                <Select value={strictness} onValueChange={setStrictness}>
-                  <SelectTrigger><SelectValue placeholder="Select strictness" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="lenient">Lenient</SelectItem>
-                    <SelectItem value="balanced">Balanced</SelectItem>
-                    <SelectItem value="strict">Strict</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm flex items-center gap-2">Auto-fix</Label>
-                <Button type="button" variant="outline" className="w-full justify-between" onClick={() => setAllowAutofix(!allowAutofix)}>
-                  <span>{allowAutofix ? "Enabled" : "Disabled"}</span>
-                  {allowAutofix ? <ToggleRight className="w-4 h-4 text-green-500" /> : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Unknown Column Behavior</Label>
-                <Select value={unknownBehavior} onValueChange={setUnknownBehavior}>
-                  <SelectTrigger><SelectValue placeholder="Select behavior" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="safe_cleanup_only">Safe cleanup only</SelectItem>
-                    <SelectItem value="quarantine">Quarantine unknowns</SelectItem>
-                    <SelectItem value="ignore">Ignore</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid grid-cols-4 w-full mb-4">
+                <TabsTrigger value="policies">Policies</TabsTrigger>
+                <TabsTrigger value="lookups">Lookups</TabsTrigger>
+                <TabsTrigger value="thresholds">Thresholds</TabsTrigger>
+                <TabsTrigger value="required">Required</TabsTrigger>
+              </TabsList>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm">Valid Currencies (comma-separated)</Label>
-                <Input value={currencyValues} onChange={(e) => setCurrencyValues(e.target.value)} placeholder="USD, EUR, GBP, INR..." />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Valid UOM Values (comma-separated)</Label>
-                <Input value={uomValues} onChange={(e) => setUomValues(e.target.value)} placeholder="EA, PCS, KG, LBS..." />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Status Enum (comma-separated)</Label>
-                <Input value={statusEnums} onChange={(e) => setStatusEnums(e.target.value)} placeholder="DRAFT, SUBMITTED, APPROVED..." />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Placeholders treated as missing</Label>
-                <Input value={placeholders} onChange={(e) => setPlaceholders(e.target.value)} placeholder="na, n/a, null, -, --" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Date Formats (comma-separated)</Label>
-                <Input value={dateFormats} onChange={(e) => setDateFormats(e.target.value)} placeholder="ISO, DMY, MDY" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm">Max text length</Label>
-                <Input type="number" min={1} value={maxTextLen} onChange={(e) => setMaxTextLen(e.target.value)} />
-              </div>
-            </div>
+              <TabsContent value="policies" className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Strictness</Label>
+                    <Select value={strictness} onValueChange={setStrictness}>
+                      <SelectTrigger><SelectValue placeholder="Select strictness" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="lenient">Lenient</SelectItem>
+                        <SelectItem value="balanced">Balanced</SelectItem>
+                        <SelectItem value="strict">Strict</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm flex items-center gap-2">Auto-fix</Label>
+                    <Button type="button" variant="outline" className="w-full justify-between" onClick={() => setAllowAutofix(!allowAutofix)}>
+                      <span>{allowAutofix ? "Enabled" : "Disabled"}</span>
+                      {allowAutofix ? <ToggleRight className="w-4 h-4 text-green-500" /> : <ToggleLeft className="w-4 h-4 text-muted-foreground" />}
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Unknown Column Behavior</Label>
+                    <Select value={unknownBehavior} onValueChange={setUnknownBehavior}>
+                      <SelectTrigger><SelectValue placeholder="Select behavior" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="safe_cleanup_only">Safe cleanup only</SelectItem>
+                        <SelectItem value="quarantine">Quarantine unknowns</SelectItem>
+                        <SelectItem value="ignore">Ignore</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </TabsContent>
 
-            <Button size="sm" onClick={handleSaveOverrides}>
-              Save Changes
-            </Button>
+              <TabsContent value="lookups" className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Currencies (comma-separated)</Label>
+                    <Input value={currencyValues} onChange={(e) => setCurrencyValues(e.target.value)} placeholder="USD, EUR, GBP, INR..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">UOM (comma-separated)</Label>
+                    <Input value={uomValues} onChange={(e) => setUomValues(e.target.value)} placeholder="EA, PCS, KG, LBS..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Status Enum (comma-separated)</Label>
+                    <Input value={statusEnums} onChange={(e) => setStatusEnums(e.target.value)} placeholder="DRAFT, SUBMITTED, APPROVED..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Placeholders treated as missing</Label>
+                    <Input value={placeholders} onChange={(e) => setPlaceholders(e.target.value)} placeholder="na, n/a, null, -, --" />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="thresholds" className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Max text length</Label>
+                    <Input type="number" min={1} value={maxTextLen} onChange={(e) => setMaxTextLen(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Date formats (comma-separated)</Label>
+                    <Input value={dateFormats} onChange={(e) => setDateFormats(e.target.value)} placeholder="ISO, DMY, MDY" />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="required" className="space-y-3">
+                <p className="text-sm text-muted-foreground">Mark columns as required; they will be checked for null values.</p>
+                {selectedColumns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Select columns first.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+                    {selectedColumns.map((col) => (
+                      <label key={col} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={requiredColumns.includes(col)}
+                          onChange={() => toggleRequired(col)}
+                          className="h-4 w-4"
+                        />
+                        <span>{col}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleSaveOverrides}>
+                Save Changes
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -389,6 +435,37 @@ export function SettingsStep() {
           })}
         </div>
       </div>
+
+      <Dialog open={showNewPresetDialog} onOpenChange={setShowNewPresetDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Preset</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              placeholder="Preset name (e.g., Automobile DQ Settings)"
+              value={newPresetName}
+              onChange={(e) => setNewPresetName(e.target.value)}
+            />
+            <Button
+              onClick={() => {
+                if (!newPresetName.trim()) return
+                const preset: SettingsPreset = {
+                  preset_id: newPresetName.trim().toLowerCase().replace(/\s+/g, "_"),
+                  preset_name: newPresetName.trim(),
+                  config: {},
+                }
+                setPresets([preset, ...presets])
+                setSelectedPreset(preset)
+                setShowNewPresetDialog(false)
+                setNewPresetName("")
+              }}
+            >
+              Create Preset
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center justify-between pt-4 border-t border-muted/40">
         <Button variant="outline" onClick={prevStep}>

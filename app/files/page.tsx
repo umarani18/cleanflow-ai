@@ -506,6 +506,10 @@ function FilesPageContent() {
 
   const handleWizardComplete = () => {
     loadFiles()
+    if (wizardFile) {
+      setSelectedFile(wizardFile)
+      setDetailsOpen(true)
+    }
     setWizardOpen(false)
     setWizardFile(null)
   }
