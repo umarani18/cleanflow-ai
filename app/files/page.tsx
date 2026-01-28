@@ -325,6 +325,9 @@ function FilesPageContent() {
     useState<FileStatusResponse | null>(null);
   const [columnExportColumns, setColumnExportColumns] = useState<string[]>([]);
   const [columnExportLoading, setColumnExportLoading] = useState(false);
+  const [actionsDialogOpen, setActionsDialogOpen] = useState(false);
+  const [actionsDialogFile, setActionsDialogFile] =
+    useState<FileStatusResponse | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectionFileInputRef = useRef<HTMLInputElement>(null);
@@ -1094,6 +1097,11 @@ function FilesPageContent() {
   const handleDownloadClick = (file: FileStatusResponse) => {
     setDownloadModalFile(file);
     setShowDownloadModal(true);
+  };
+
+  const openActionsDialog = (file: FileStatusResponse) => {
+    setActionsDialogFile(file);
+    setActionsDialogOpen(true);
   };
 
   const handleColumnExportClick = async (file: FileStatusResponse) => {
@@ -2154,7 +2162,7 @@ function FilesPageContent() {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 sm:h-8 sm:w-8"
-                                    onClick={() => handleDownloadClick(file)}
+                                    onClick={() => openActionsDialog(file)}
                                     disabled={downloading === file.upload_id}
                                   >
                                     {downloading === file.upload_id ? (
@@ -2164,47 +2172,8 @@ function FilesPageContent() {
                                     )}
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Download</TooltipContent>
+                                <TooltipContent>Download / Export</TooltipContent>
                               </Tooltip>
-                              {(file.status === "DQ_FIXED" ||
-                                file.status === "COMPLETED") && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                      onClick={() =>
-                                        handleColumnExportClick(file)
-                                      }
-                                      disabled={downloading === file.upload_id}
-                                    >
-                                      <Columns className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    Export Required Fields
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
-                              {(file.status === "DQ_FIXED" ||
-                                file.status === "COMPLETED") && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-7 w-7 sm:h-8 sm:w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                      onClick={() =>
-                                        handlePushToQuickBooks(file)
-                                      }
-                                    >
-                                      <CloudUpload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Export Data</TooltipContent>
-                                </Tooltip>
-                              )}
 
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2997,6 +2966,76 @@ function FilesPageContent() {
             downloading === columnExportFile?.upload_id || columnExportLoading
           }
         />
+
+        <Dialog open={actionsDialogOpen} onOpenChange={setActionsDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Download & Export</DialogTitle>
+              <DialogDescription>
+                Choose an action for{" "}
+                <span className="font-medium text-foreground">
+                  {actionsDialogFile?.original_filename ||
+                    actionsDialogFile?.filename ||
+                    "this file"}
+                </span>
+                .
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-3">
+              <Button
+                variant="outline"
+                className="justify-start"
+                onClick={() => {
+                  if (!actionsDialogFile) return;
+                  setActionsDialogOpen(false);
+                  handleDownloadClick(actionsDialogFile);
+                }}
+                disabled={!actionsDialogFile}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start"
+                onClick={() => {
+                  if (!actionsDialogFile) return;
+                  setActionsDialogOpen(false);
+                  void handleColumnExportClick(actionsDialogFile);
+                }}
+                disabled={
+                  !actionsDialogFile ||
+                  !(
+                    actionsDialogFile.status === "DQ_FIXED" ||
+                    actionsDialogFile.status === "COMPLETED"
+                  )
+                }
+              >
+                <Columns className="mr-2 h-4 w-4" />
+                Export Required Fields
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start"
+                onClick={() => {
+                  if (!actionsDialogFile) return;
+                  setActionsDialogOpen(false);
+                  handlePushToQuickBooks(actionsDialogFile);
+                }}
+                disabled={
+                  !actionsDialogFile ||
+                  !(
+                    actionsDialogFile.status === "DQ_FIXED" ||
+                    actionsDialogFile.status === "COMPLETED"
+                  )
+                }
+              >
+                <CloudUpload className="mr-2 h-4 w-4" />
+                Export Data
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog
           open={!!profilingFileId}

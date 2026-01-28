@@ -67,7 +67,12 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { orgAPI, type OrgInvite, type OrgMembership, type OrgRole } from "@/lib/api/org-api";
+import {
+  orgAPI,
+  type OrgInvite,
+  type OrgMembership,
+  type OrgRole,
+} from "@/lib/api/org-api";
 
 type AppRole = OrgRole;
 
@@ -229,7 +234,7 @@ const deriveNameFromEmail = (email?: string, userId?: string) => {
 };
 
 const mergePermissionsFromServer = (
-  permissionsByRole: Record<string, Record<string, boolean>> | undefined
+  permissionsByRole: Record<string, Record<string, boolean>> | undefined,
 ): PermissionRow[] => {
   const superAdminPerms = permissionsByRole?.["Super Admin"] || {};
   const adminPerms = permissionsByRole?.["Admin"] || {};
@@ -284,7 +289,8 @@ export function OrganizationSettings() {
   const { toast } = useToast();
 
   // Current user role (for RBAC in this demo UI)
-  const [currentUserRole, setCurrentUserRole] = useState<AppRole>("Super Admin");
+  const [currentUserRole, setCurrentUserRole] =
+    useState<AppRole>("Super Admin");
   useEffect(() => {
     try {
       const storedRole = window.localStorage.getItem(ROLE_STORAGE_KEY);
@@ -307,7 +313,7 @@ export function OrganizationSettings() {
 
   // Services settings state
   const [servicesSettings, setServicesSettings] = useState(
-    INITIAL_SERVICES_SETTINGS
+    INITIAL_SERVICES_SETTINGS,
   );
   const [isSavingServices, setIsSavingServices] = useState(false);
 
@@ -381,7 +387,7 @@ export function OrganizationSettings() {
         me.organization?.subscription_plan || prev.subscriptionPlan,
     }));
     setLogoDataUrl(
-      me.organization?.logo_url || me.organization?.logo_data_url || ""
+      me.organization?.logo_url || me.organization?.logo_data_url || "",
     );
 
     await Promise.all([loadMembers(), loadInvites(), loadPermissions()]);
@@ -399,14 +405,13 @@ export function OrganizationSettings() {
         console.error("Failed to load org context", err);
         const message = err?.message || "Could not load organization data.";
         const missingMembership = message.includes(
-          "Organization membership required"
+          "Organization membership required",
         );
         toast({
           title: "Organization not ready",
-          description:
-            missingMembership
-              ? "You are not in an organization yet. Register your organization first."
-              : message,
+          description: missingMembership
+            ? "You are not in an organization yet. Register your organization first."
+            : message,
         });
         if (missingMembership) {
           window.location.href = "/create-organization";
@@ -425,7 +430,8 @@ export function OrganizationSettings() {
   }, []);
 
   const canManageOrganization = currentUserRole === "Super Admin";
-  const canInviteMembers = currentUserRole === "Super Admin" || currentUserRole === "Admin";
+  const canInviteMembers =
+    currentUserRole === "Super Admin" || currentUserRole === "Admin";
   const canChangeAllRoles = currentUserRole === "Super Admin";
   const canManageDataStewards = currentUserRole === "Admin";
   const allowedInviteRoles: AppRole[] = canChangeAllRoles
@@ -452,7 +458,8 @@ export function OrganizationSettings() {
     if (!canManageOrganization) {
       toast({
         title: "Super Admin Only",
-        description: "Only the Super Admin can register or update organization settings.",
+        description:
+          "Only the Super Admin can register or update organization settings.",
       });
       return;
     }
@@ -499,7 +506,7 @@ export function OrganizationSettings() {
   // Toggle permission
   const togglePermission = (
     permissionId: string,
-    role: "superadmin" | "admin" | "dataSteward"
+    role: "superadmin" | "admin" | "dataSteward",
   ) => {
     // RBAC: Super Admin can change all permissions. Admin can change Data Steward permissions only.
     const isAllowed =
@@ -515,7 +522,7 @@ export function OrganizationSettings() {
     }
 
     setPermissions((prev) =>
-      prev.map((p) => (p.id === permissionId ? { ...p, [role]: !p[role] } : p))
+      prev.map((p) => (p.id === permissionId ? { ...p, [role]: !p[role] } : p)),
     );
   };
 
@@ -524,7 +531,8 @@ export function OrganizationSettings() {
     if (!canChangeAllRoles && !canManageDataStewards) {
       toast({
         title: "Not allowed",
-        description: "Only Super Admins and Admins can save permission changes.",
+        description:
+          "Only Super Admins and Admins can save permission changes.",
       });
       return;
     }
@@ -534,12 +542,15 @@ export function OrganizationSettings() {
         Object.fromEntries(permissions.map((p) => [p.id, Boolean(p[key])]));
 
       if (canChangeAllRoles) {
-        await orgAPI.updateRolePermissions("Admin", buildRolePermissions("admin"));
+        await orgAPI.updateRolePermissions(
+          "Admin",
+          buildRolePermissions("admin"),
+        );
       }
       // Both Super Admins and Admins can update Data Steward permissions.
       await orgAPI.updateRolePermissions(
         "Data Steward",
-        buildRolePermissions("dataSteward")
+        buildRolePermissions("dataSteward"),
       );
 
       await reloadOrgData();
@@ -592,7 +603,8 @@ export function OrganizationSettings() {
       if (newRole !== "Data Steward") {
         toast({
           title: "Not allowed",
-          description: "Only the Super Admin can assign Admin or Super Admin roles.",
+          description:
+            "Only the Super Admin can assign Admin or Super Admin roles.",
         });
         return;
       }
@@ -628,7 +640,7 @@ export function OrganizationSettings() {
           title: "Not allowed",
           description: "Admins can only remove Data Stewards.",
         });
-          return;
+        return;
       }
     }
 
@@ -859,7 +871,7 @@ export function OrganizationSettings() {
               Organization Details
             </CardTitle>
             <CardDescription>
-              Manage your organization's basic information and preferences
+              Manage your organization's information and preferences
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -986,7 +998,10 @@ export function OrganizationSettings() {
             <Separator />
 
             <div className="flex justify-end">
-              <Button onClick={handleSaveOrg} disabled={isSavingOrg || !canManageOrganization}>
+              <Button
+                onClick={handleSaveOrg}
+                disabled={isSavingOrg || !canManageOrganization}
+              >
                 {isSavingOrg && (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 )}
@@ -1004,11 +1019,8 @@ export function OrganizationSettings() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Users className="w-5 h-5" />
-                Team Members
+                Members & Roles
               </CardTitle>
-              <CardDescription>
-                Manage your team members and their roles
-              </CardDescription>
             </div>
             <Button
               className="flex items-center gap-2"
@@ -1049,7 +1061,9 @@ export function OrganizationSettings() {
                 )}
                 {!isLoadingOrg &&
                   members.map((member) => {
-                    const isSelf = Boolean(currentUserId && member.id === currentUserId);
+                    const isSelf = Boolean(
+                      currentUserId && member.id === currentUserId,
+                    );
                     return (
                       <TableRow key={member.id}>
                         <TableCell>
@@ -1109,7 +1123,11 @@ export function OrganizationSettings() {
                                 size="icon"
                                 className="h-8 w-8"
                                 disabled={isSelf}
-                                title={isSelf ? "You cannot change your own role here." : undefined}
+                                title={
+                                  isSelf
+                                    ? "You cannot change your own role here."
+                                    : undefined
+                                }
                               >
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
@@ -1120,7 +1138,10 @@ export function OrganizationSettings() {
                                   <>
                                     <DropdownMenuItem
                                       onClick={() =>
-                                        updateMemberRole(member.id, "Super Admin")
+                                        updateMemberRole(
+                                          member.id,
+                                          "Super Admin",
+                                        )
                                       }
                                     >
                                       Make Super Admin
@@ -1134,7 +1155,10 @@ export function OrganizationSettings() {
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={() =>
-                                        updateMemberRole(member.id, "Data Steward")
+                                        updateMemberRole(
+                                          member.id,
+                                          "Data Steward",
+                                        )
                                       }
                                     >
                                       Make Data Steward
@@ -1145,14 +1169,20 @@ export function OrganizationSettings() {
                                   member.role === "Data Steward" && (
                                     <DropdownMenuItem
                                       onClick={() =>
-                                        updateMemberRole(member.id, "Data Steward")
+                                        updateMemberRole(
+                                          member.id,
+                                          "Data Steward",
+                                        )
                                       }
                                     >
                                       Keep Data Steward
                                     </DropdownMenuItem>
                                   )}
                                 {!canChangeAllRoles &&
-                                  !(canManageDataStewards && member.role === "Data Steward") && (
+                                  !(
+                                    canManageDataStewards &&
+                                    member.role === "Data Steward"
+                                  ) && (
                                     <DropdownMenuItem disabled>
                                       Only Super Admin can change this role
                                     </DropdownMenuItem>
@@ -1163,7 +1193,10 @@ export function OrganizationSettings() {
                                   disabled={
                                     isSelf ||
                                     (!canChangeAllRoles &&
-                                      !(canManageDataStewards && member.role === "Data Steward"))
+                                      !(
+                                        canManageDataStewards &&
+                                        member.role === "Data Steward"
+                                      ))
                                   }
                                 >
                                   <Trash2 className="w-4 h-4 mr-2" />
@@ -1190,10 +1223,6 @@ export function OrganizationSettings() {
               <Shield className="w-5 h-5" />
               Role Permissions
             </CardTitle>
-            <CardDescription>
-              Configure what each role can access and do within the
-              organization. Click to toggle permissions.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -1274,7 +1303,9 @@ export function OrganizationSettings() {
                           onClick={() =>
                             togglePermission(permission.id, "dataSteward")
                           }
-                          disabled={!canChangeAllRoles && !canManageDataStewards}
+                          disabled={
+                            !canChangeAllRoles && !canManageDataStewards
+                          }
                           className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-80"
                         >
                           {permission.dataSteward ? (
@@ -1299,7 +1330,10 @@ export function OrganizationSettings() {
             <div className="flex justify-end">
               <Button
                 onClick={handleSavePermissions}
-                disabled={isSavingPermissions || (!canChangeAllRoles && !canManageDataStewards)}
+                disabled={
+                  isSavingPermissions ||
+                  (!canChangeAllRoles && !canManageDataStewards)
+                }
               >
                 {isSavingPermissions && (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -1358,7 +1392,7 @@ export function OrganizationSettings() {
                       onChange={(e) =>
                         handleServicesChange(
                           "customInputErpName",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       className="flex-1"
@@ -1402,7 +1436,7 @@ export function OrganizationSettings() {
                       onChange={(e) =>
                         handleServicesChange(
                           "customExportErpName",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                       className="flex-1"
