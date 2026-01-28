@@ -7,12 +7,117 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ArrowLeft, ArrowRight, Loader2, Plus, Settings, Star, Shield, ToggleLeft, ToggleRight, Sliders } from "lucide-react"
+import { ArrowLeft, ArrowRight, Loader2, Plus, Settings, Star, Shield, ToggleLeft, ToggleRight, Sliders, X } from "lucide-react"
 import { useProcessingWizard, type SettingsPreset } from "../WizardContext"
 import { fileManagementAPI } from "@/lib/api/file-management-api"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+
+const parseListValue = (value: string) =>
+  value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+const setListValue = (setter: (value: string) => void, items: string[]) => {
+  setter(items.join(", "))
+}
+
+const addListItems = (
+  currentValue: string,
+  setter: (value: string) => void,
+  inputValue: string,
+  clearInput: () => void
+) => {
+  const incoming = inputValue
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+  if (incoming.length === 0) return
+  const current = parseListValue(currentValue)
+  const merged = [...current]
+  incoming.forEach((item) => {
+    if (!merged.includes(item)) merged.push(item)
+  })
+  setListValue(setter, merged)
+  clearInput()
+}
+
+const removeListItem = (
+  currentValue: string,
+  setter: (value: string) => void,
+  item: string
+) => {
+  const filtered = parseListValue(currentValue).filter((entry) => entry !== item)
+  setListValue(setter, filtered)
+}
+
+const ChipInput = ({
+  label,
+  value,
+  setValue,
+  inputValue,
+  setInputValue,
+  placeholder,
+}: {
+  label: string
+  value: string
+  setValue: (value: string) => void
+  inputValue: string
+  setInputValue: (value: string) => void
+  placeholder: string
+}) => {
+  const items = parseListValue(value)
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm">{label}</Label>
+      <div className="rounded-lg border border-muted bg-muted/20 p-3">
+        <div className="flex flex-wrap gap-2">
+          {items.length === 0 && (
+            <span className="text-xs text-muted-foreground">No values added</span>
+          )}
+          {items.map((item) => (
+            <span
+              key={`${label}-${item}`}
+              className="flex items-center gap-1 rounded-full border border-muted bg-background px-2 py-1 text-xs"
+            >
+              {item}
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => removeListItem(value, setValue, item)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <Input
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={placeholder}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                addListItems(value, setValue, inputValue, () => setInputValue(""))
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => addListItems(value, setValue, inputValue, () => setInputValue(""))}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            Add
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const DEFAULT_PRESET: SettingsPreset & { config: Record<string, any> } = {
   preset_id: "default_dq_rules",
@@ -85,6 +190,11 @@ export function SettingsStep() {
   const [showNewPresetDialog, setShowNewPresetDialog] = useState(false)
   const [newPresetName, setNewPresetName] = useState("")
   const [copySourceId, setCopySourceId] = useState<string>("current")
+  const [currencyInput, setCurrencyInput] = useState("")
+  const [uomInput, setUomInput] = useState("")
+  const [statusInput, setStatusInput] = useState("")
+  const [placeholderInput, setPlaceholderInput] = useState("")
+
 
   useEffect(() => {
     fetchPresets()
@@ -267,7 +377,7 @@ export function SettingsStep() {
   }
 
   return (
-    <div className="flex flex-col h-[60vh]">
+    <div className="flex flex-col h-full">
       <ScrollArea className="flex-1 overflow-y-auto p-6 pb-2">
         <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -404,22 +514,38 @@ export function SettingsStep() {
 
               <TabsContent value="lookups" className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm">Currencies</Label>
-                    <Input value={currencyValues} onChange={(e) => setCurrencyValues(e.target.value)} placeholder="USD, EUR, GBP, INR..." />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">UOM</Label>
-                    <Input value={uomValues} onChange={(e) => setUomValues(e.target.value)} placeholder="EA, PCS, KG, LBS..." />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">Status Enum</Label>
-                    <Input value={statusEnums} onChange={(e) => setStatusEnums(e.target.value)} placeholder="DRAFT, SUBMITTED, APPROVED..." />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">Placeholders treated as missing</Label>
-                    <Input value={placeholders} onChange={(e) => setPlaceholders(e.target.value)} placeholder="na, n/a, null, -, --" />
-                  </div>
+                  <ChipInput
+                    label="Currencies"
+                    value={currencyValues}
+                    setValue={setCurrencyValues}
+                    inputValue={currencyInput}
+                    setInputValue={setCurrencyInput}
+                    placeholder="Type USD, EUR, etc. and press Enter"
+                  />
+                  <ChipInput
+                    label="UOM"
+                    value={uomValues}
+                    setValue={setUomValues}
+                    inputValue={uomInput}
+                    setInputValue={setUomInput}
+                    placeholder="Type EA, PCS, KG, etc. and press Enter"
+                  />
+                  <ChipInput
+                    label="Status Enum"
+                    value={statusEnums}
+                    setValue={setStatusEnums}
+                    inputValue={statusInput}
+                    setInputValue={setStatusInput}
+                    placeholder="Type DRAFT, APPROVED, etc. and press Enter"
+                  />
+                  <ChipInput
+                    label="Placeholders treated as missing"
+                    value={placeholders}
+                    setValue={setPlaceholders}
+                    inputValue={placeholderInput}
+                    setInputValue={setPlaceholderInput}
+                    placeholder="Type na, n/a, null, -, -- and press Enter"
+                  />
                 </div>
               </TabsContent>
 
