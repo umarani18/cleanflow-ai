@@ -4,7 +4,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Building2,
   Check,
-  Crown,
   Edit,
   Loader2,
   Mail,
@@ -36,6 +35,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -58,8 +65,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { orgAPI, type OrgInvite, type OrgMembership, type OrgRole } from "@/lib/api/org-api";
+
+type AppRole = OrgRole;
+
+const ROLE_STORAGE_KEY = "cleanflowai.currentRole";
+
+const normalizeRole = (value: string | null | undefined): AppRole => {
+  if (value === "Admin") {
+    return "Admin";
+  }
+  if (value === "Data Steward") {
+    return "Data Steward";
+  }
+  return "Super Admin";
+};
 
 // ERP Options
 const ERP_OPTIONS = [
@@ -80,10 +102,10 @@ const ERP_OPTIONS = [
 
 // Initial organization settings
 const INITIAL_ORG_SETTINGS = {
-  name: "Infiniqon",
-  email: "contact@infiniqon.com",
-  phone: "+91 63 4567 8900",
-  address: "Chennai, Tamil Nadu, 600044",
+  name: "",
+  email: "",
+  phone: "",
+  address: "",
   subscriptionPlan: "standard",
 };
 
@@ -99,89 +121,17 @@ const INITIAL_SERVICES_SETTINGS = {
   preferredFormat: "csv",
 };
 
-// Initial members data
-const INITIAL_MEMBERS = [
-  {
-    id: 1,
-    name: "Umashankar Sudarsan",
-    email: "usudarsan@infiniqon.com",
-    role: "Admin",
-    status: "Active",
-    avatar: "",
-    joinedAt: "Jan 15, 2024",
-    lastLogin: "Dec 6, 2024, 9:32 AM",
-  },
-  {
-    id: 2,
-    name: "Aashish Sankar",
-    email: "asankar@infiniqon.com",
-    role: "Admin",
-    status: "Active",
-    avatar: "",
-    joinedAt: "Jan 20, 2024",
-    lastLogin: "Dec 6, 2024, 10:15 AM",
-  },
-  {
-    id: 3,
-    name: "Sakthi Mahendran",
-    email: "smahendran@infiniqon.com",
-    role: "Admin",
-    status: "Active",
-    avatar: "",
-    joinedAt: "Feb 5, 2024",
-    lastLogin: "Online Now",
-  },
-  {
-    id: 4,
-    name: "Kiran Parthiban",
-    email: "kparthiban@infiniqon.com",
-    role: "Super Admin",
-    status: "Active",
-    avatar: "",
-    joinedAt: "Feb 10, 2024",
-    lastLogin: "15 mins ago",
-  },
-  {
-    id: 5,
-    name: "Priya Venkatesh",
-    email: "pvenkatesh@infiniqon.com",
-    role: "Data Steward",
-    status: "Active",
-    avatar: "",
-    joinedAt: "Mar 15, 2024",
-    lastLogin: "Dec 4, 2024, 2:30 PM",
-  },
-  {
-    id: 6,
-    name: "Rahul Krishnan",
-    email: "rkrishnan@infiniqon.com",
-    role: "Data Steward",
-    status: "Active",
-    avatar: "",
-    joinedAt: "Apr 1, 2024",
-    lastLogin: "Dec 3, 2024, 11:00 AM",
-  },
-  {
-    id: 7,
-    name: "Ananya Sharma",
-    email: "asharma@infiniqon.com",
-    role: "Data Steward",
-    status: "Pending",
-    avatar: "",
-    joinedAt: "Nov 28, 2024",
-    lastLogin: "Never",
-  },
-  {
-    id: 8,
-    name: "Vikram Nair",
-    email: "vnair@infiniqon.com",
-    role: "Data Steward",
-    status: "Inactive",
-    avatar: "",
-    joinedAt: "May 12, 2024",
-    lastLogin: "Oct 15, 2024, 3:00 PM",
-  },
-];
+// Initial members data (loaded from backend)
+const INITIAL_MEMBERS: Array<{
+  id: string;
+  name: string;
+  email: string;
+  role: AppRole;
+  status: string;
+  avatar: string;
+  joinedAt?: string;
+  lastLogin?: string;
+}> = [];
 
 // Initial permissions configuration
 const INITIAL_PERMISSIONS = [
@@ -189,93 +139,124 @@ const INITIAL_PERMISSIONS = [
     id: "files",
     name: "File Management",
     description: "Upload, download, and manage files",
-    owner: true,
     superadmin: true,
     admin: true,
-    editor: true,
-    viewer: false,
+    dataSteward: true,
   },
   {
     id: "transform",
     name: "Data Transformation",
     description: "Run and configure data transformations",
-    owner: true,
     superadmin: true,
     admin: true,
-    editor: true,
-    viewer: false,
+    dataSteward: true,
   },
   {
     id: "export",
     name: "Export Data",
     description: "Export transformed data to various formats",
-    owner: true,
     superadmin: true,
     admin: true,
-    editor: true,
-    viewer: true,
+    dataSteward: true,
   },
   {
     id: "members",
     name: "Manage Members",
     description: "Invite, remove, and manage team members",
-    owner: true,
     superadmin: true,
     admin: true,
-    editor: false,
-    viewer: false,
+    dataSteward: false,
   },
   {
     id: "billing",
     name: "Billing & Subscription",
     description: "View and manage billing information",
-    owner: true,
     superadmin: true,
     admin: false,
-    editor: false,
-    viewer: false,
+    dataSteward: false,
   },
   {
     id: "settings",
     name: "Organization Settings",
     description: "Modify organization details and preferences",
-    owner: true,
     superadmin: true,
     admin: true,
-    editor: false,
-    viewer: false,
+    dataSteward: false,
   },
   {
     id: "api",
     name: "API Access",
     description: "Generate and manage API keys",
-    owner: true,
     superadmin: true,
     admin: true,
-    editor: false,
-    viewer: false,
+    dataSteward: false,
   },
   {
     id: "audit",
     name: "Audit Logs",
     description: "View activity and audit logs",
-    owner: true,
     superadmin: true,
     admin: true,
-    editor: false,
-    viewer: false,
+    dataSteward: false,
   },
 ];
 
+type PermissionRow = (typeof INITIAL_PERMISSIONS)[number];
+
+const formatStatus = (status?: string) => {
+  const value = (status || "").toUpperCase();
+  if (value === "ACTIVE") return "Active";
+  if (value === "PENDING") return "Pending";
+  if (value === "INACTIVE") return "Inactive";
+  return status || "Unknown";
+};
+
+const formatDateTime = (value?: string) => {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString();
+};
+
+const deriveNameFromEmail = (email?: string, userId?: string) => {
+  if (email && email.includes("@")) {
+    return email.split("@")[0];
+  }
+  if (userId) {
+    return userId.slice(0, 8);
+  }
+  return "Member";
+};
+
+const mergePermissionsFromServer = (
+  permissionsByRole: Record<string, Record<string, boolean>> | undefined
+): PermissionRow[] => {
+  const superAdminPerms = permissionsByRole?.["Super Admin"] || {};
+  const adminPerms = permissionsByRole?.["Admin"] || {};
+  const dataStewardPerms = permissionsByRole?.["Data Steward"] || {};
+
+  return INITIAL_PERMISSIONS.map((row) => ({
+    ...row,
+    superadmin:
+      typeof superAdminPerms[row.id] === "boolean"
+        ? superAdminPerms[row.id]
+        : row.superadmin,
+    admin:
+      typeof adminPerms[row.id] === "boolean" ? adminPerms[row.id] : row.admin,
+    dataSteward:
+      typeof dataStewardPerms[row.id] === "boolean"
+        ? dataStewardPerms[row.id]
+        : row.dataSteward,
+  }));
+};
+
 const getRoleBadgeVariant = (role: string) => {
   switch (role) {
-    case "Owner":
-      return "default";
     case "Super Admin":
       return "destructive";
     case "Admin":
       return "secondary";
-    case "Editor":
+    case "Data Steward":
       return "outline";
     default:
       return "outline";
@@ -283,12 +264,15 @@ const getRoleBadgeVariant = (role: string) => {
 };
 
 const getStatusBadgeVariant = (status: string) => {
-  switch (status) {
+  switch ((status || "").toLowerCase()) {
     case "Active":
+    case "active":
       return "default";
     case "Pending":
+    case "pending":
       return "secondary";
     case "Inactive":
+    case "inactive":
       return "outline";
     default:
       return "outline";
@@ -298,6 +282,17 @@ const getStatusBadgeVariant = (status: string) => {
 export function OrganizationSettings() {
   const [activeTab, setActiveTab] = useState("organization");
   const { toast } = useToast();
+
+  // Current user role (for RBAC in this demo UI)
+  const [currentUserRole, setCurrentUserRole] = useState<AppRole>("Super Admin");
+  useEffect(() => {
+    try {
+      const storedRole = window.localStorage.getItem(ROLE_STORAGE_KEY);
+      setCurrentUserRole(normalizeRole(storedRole));
+    } catch {
+      setCurrentUserRole("Super Admin");
+    }
+  }, []);
 
   // Organization settings state
   const [orgSettings, setOrgSettings] = useState(INITIAL_ORG_SETTINGS);
@@ -316,6 +311,137 @@ export function OrganizationSettings() {
   );
   const [isSavingServices, setIsSavingServices] = useState(false);
 
+  // Org context
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [invites, setInvites] = useState<OrgInvite[]>([]);
+  const [isLoadingOrg, setIsLoadingOrg] = useState(true);
+  const [logoDataUrl, setLogoDataUrl] = useState<string>("");
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<AppRole>("Data Steward");
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+
+  const mapMemberToRow = (member: OrgMembership) => {
+    const email = member.email || "";
+    return {
+      id: member.user_id,
+      name: deriveNameFromEmail(email, member.user_id),
+      email,
+      role: member.role,
+      status: formatStatus(member.status),
+      avatar: "",
+      joinedAt: formatDateTime(member.created_at),
+      lastLogin: formatDateTime(member.updated_at),
+    };
+  };
+
+  const loadMembers = async () => {
+    const response = await orgAPI.listMembers();
+    const items = (response.members || []).map(mapMemberToRow);
+    setMembers(items);
+  };
+
+  const loadInvites = async () => {
+    try {
+      const response = await orgAPI.listInvites();
+      setInvites(response.invites || []);
+    } catch (err) {
+      console.error("Failed to load invites", err);
+    }
+  };
+
+  const loadPermissions = async () => {
+    const response = await orgAPI.listPermissions();
+    setPermissions(mergePermissionsFromServer(response.permissions_by_role));
+  };
+
+  const reloadOrgData = async () => {
+    const me = await orgAPI.getMe();
+
+    const nextOrgId = me.organization?.org_id || null;
+    const nextUserId = me.membership?.user_id || null;
+    const nextRole = me.membership?.role || "Super Admin";
+
+    setOrgId(nextOrgId);
+    setCurrentUserId(nextUserId);
+    setCurrentUserRole(nextRole);
+    try {
+      window.localStorage.setItem(ROLE_STORAGE_KEY, nextRole);
+    } catch {}
+
+    setOrgSettings((prev) => ({
+      ...prev,
+      name: me.organization?.name || prev.name,
+      email: me.organization?.email || prev.email,
+      phone: me.organization?.phone || prev.phone,
+      address: me.organization?.address || prev.address,
+      subscriptionPlan:
+        me.organization?.subscription_plan || prev.subscriptionPlan,
+    }));
+    setLogoDataUrl(
+      me.organization?.logo_url || me.organization?.logo_data_url || ""
+    );
+
+    await Promise.all([loadMembers(), loadInvites(), loadPermissions()]);
+    return me;
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadOrgData = async () => {
+      setIsLoadingOrg(true);
+      try {
+        const me = await reloadOrgData();
+        if (!isMounted) return;
+      } catch (err: any) {
+        console.error("Failed to load org context", err);
+        const message = err?.message || "Could not load organization data.";
+        const missingMembership = message.includes(
+          "Organization membership required"
+        );
+        toast({
+          title: "Organization not ready",
+          description:
+            missingMembership
+              ? "You are not in an organization yet. Register your organization first."
+              : message,
+        });
+        if (missingMembership) {
+          window.location.href = "/create-organization";
+        }
+      } finally {
+        if (isMounted) setIsLoadingOrg(false);
+      }
+    };
+
+    loadOrgData();
+    return () => {
+      isMounted = false;
+    };
+    // We intentionally run this once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const canManageOrganization = currentUserRole === "Super Admin";
+  const canInviteMembers = currentUserRole === "Super Admin" || currentUserRole === "Admin";
+  const canChangeAllRoles = currentUserRole === "Super Admin";
+  const canManageDataStewards = currentUserRole === "Admin";
+  const allowedInviteRoles: AppRole[] = canChangeAllRoles
+    ? ["Admin", "Data Steward"]
+    : ["Data Steward"];
+
+  const inviteHelpText = useMemo(() => {
+    if (currentUserRole === "Super Admin") {
+      return "You can invite Admins and Data Stewards.";
+    }
+    if (currentUserRole === "Admin") {
+      return "You can invite Data Stewards only.";
+    }
+    return "Only Super Admins and Admins can invite members.";
+  }, [currentUserRole]);
+
   // Handle organization settings change
   const handleOrgChange = (field: string, value: string) => {
     setOrgSettings((prev) => ({ ...prev, [field]: value }));
@@ -323,21 +449,71 @@ export function OrganizationSettings() {
 
   // Save organization settings
   const handleSaveOrg = async () => {
+    if (!canManageOrganization) {
+      toast({
+        title: "Super Admin Only",
+        description: "Only the Super Admin can register or update organization settings.",
+      });
+      return;
+    }
+    const name = orgSettings.name.trim();
+    const email = orgSettings.email.trim();
+    const phone = orgSettings.phone.trim();
+    const address = orgSettings.address.trim();
+
+    if (!name || !email || !phone || !address) {
+      toast({
+        title: "Organization details required",
+        description:
+          "Enter organization name, email, contact number, and address before registering.",
+      });
+      return;
+    }
+
     setIsSavingOrg(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSavingOrg(false);
-    toast({
-      title: "Settings saved",
-      description: "Organization settings have been updated successfully.",
-    });
+    try {
+      await orgAPI.registerOrg({
+        name,
+        email,
+        phone,
+        address,
+        subscriptionPlan: orgSettings.subscriptionPlan,
+      });
+      await reloadOrgData();
+      toast({
+        title: orgId ? "Organization updated" : "Organization registered",
+        description: orgId
+          ? "Your organization details were updated successfully."
+          : "Your organization details were saved and you are the Super Admin.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to save",
+        description: err?.message || "Could not register the organization.",
+      });
+    } finally {
+      setIsSavingOrg(false);
+    }
   };
 
   // Toggle permission
   const togglePermission = (
     permissionId: string,
-    role: "superadmin" | "admin" | "editor" | "viewer"
+    role: "superadmin" | "admin" | "dataSteward"
   ) => {
+    // RBAC: Super Admin can change all permissions. Admin can change Data Steward permissions only.
+    const isAllowed =
+      canChangeAllRoles || (canManageDataStewards && role === "dataSteward");
+
+    if (!isAllowed) {
+      toast({
+        title: "Not allowed",
+        description:
+          "Only the Super Admin can change Admin permissions. Admins can change Data Steward permissions.",
+      });
+      return;
+    }
+
     setPermissions((prev) =>
       prev.map((p) => (p.id === permissionId ? { ...p, [role]: !p[role] } : p))
     );
@@ -345,34 +521,224 @@ export function OrganizationSettings() {
 
   // Save permissions
   const handleSavePermissions = async () => {
+    if (!canChangeAllRoles && !canManageDataStewards) {
+      toast({
+        title: "Not allowed",
+        description: "Only Super Admins and Admins can save permission changes.",
+      });
+      return;
+    }
     setIsSavingPermissions(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSavingPermissions(false);
-    toast({
-      title: "Permissions saved",
-      description: "Role permissions have been updated successfully.",
-    });
+    try {
+      const buildRolePermissions = (key: "admin" | "dataSteward") =>
+        Object.fromEntries(permissions.map((p) => [p.id, Boolean(p[key])]));
+
+      if (canChangeAllRoles) {
+        await orgAPI.updateRolePermissions("Admin", buildRolePermissions("admin"));
+      }
+      // Both Super Admins and Admins can update Data Steward permissions.
+      await orgAPI.updateRolePermissions(
+        "Data Steward",
+        buildRolePermissions("dataSteward")
+      );
+
+      await reloadOrgData();
+      toast({
+        title: "Permissions saved",
+        description: "Role permissions have been updated successfully.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to save permissions",
+        description: err?.message || "Could not update role permissions.",
+      });
+    } finally {
+      setIsSavingPermissions(false);
+    }
   };
 
   // Update member role
-  const updateMemberRole = (memberId: number, newRole: string) => {
-    setMembers((prev) =>
-      prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m))
-    );
-    toast({
-      title: "Role updated",
-      description: "Member role has been updated successfully.",
-    });
+  const updateMemberRole = async (memberId: string, newRole: AppRole) => {
+    if (currentUserId && memberId === currentUserId) {
+      toast({
+        title: "Not allowed",
+        description: "You cannot change your own role here.",
+      });
+      return;
+    }
+
+    const targetMember = members.find((m) => m.id === memberId);
+    if (!targetMember) {
+      return;
+    }
+
+    const targetRole = targetMember.role;
+
+    // RBAC:
+    // - Super Admin can change any non-owner role.
+    // - Admin can only manage Data Stewards and cannot promote to Admin/Super Admin.
+    if (!canChangeAllRoles) {
+      const canAdminManageThisMember =
+        canManageDataStewards && targetRole === "Data Steward";
+
+      if (!canAdminManageThisMember) {
+        toast({
+          title: "Not allowed",
+          description: "Admins can only manage Data Stewards.",
+        });
+        return;
+      }
+
+      if (newRole !== "Data Steward") {
+        toast({
+          title: "Not allowed",
+          description: "Only the Super Admin can assign Admin or Super Admin roles.",
+        });
+        return;
+      }
+    }
+
+    try {
+      await orgAPI.updateMemberRole(memberId, newRole);
+      await reloadOrgData();
+      toast({
+        title: "Role updated",
+        description: "Member role has been updated successfully.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to update role",
+        description: err?.message || "Could not update the member role.",
+      });
+    }
   };
 
   // Remove member
-  const removeMember = (memberId: number) => {
-    setMembers((prev) => prev.filter((m) => m.id !== memberId));
+  const removeMember = (memberId: string) => {
+    const targetMember = members.find((m) => m.id === memberId);
+    if (!targetMember) {
+      return;
+    }
+
+    if (!canChangeAllRoles) {
+      const canAdminRemove =
+        canManageDataStewards && targetMember.role === "Data Steward";
+      if (!canAdminRemove) {
+        toast({
+          title: "Not allowed",
+          description: "Admins can only remove Data Stewards.",
+        });
+          return;
+      }
+    }
+
     toast({
-      title: "Member removed",
-      description: "Team member has been removed from the organization.",
+      title: "Not implemented",
+      description:
+        "Member removal is not implemented in the backend yet. Use role changes instead.",
     });
+  };
+
+  const handleInviteMember = () => {
+    if (!canInviteMembers) {
+      toast({
+        title: "Not allowed",
+        description: "Only Super Admins and Admins can invite members.",
+      });
+      return;
+    }
+    setInviteEmail("");
+    setInviteRole(allowedInviteRoles[allowedInviteRoles.length - 1]);
+    setIsInviteDialogOpen(true);
+  };
+
+  const handleSubmitInvite = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!email) {
+      toast({
+        title: "Email required",
+        description: "Enter a valid email address to send the invite.",
+      });
+      return;
+    }
+    if (!allowedInviteRoles.includes(inviteRole)) {
+      toast({
+        title: "Invalid role",
+        description: `Allowed roles: ${allowedInviteRoles.join(", ")}`,
+      });
+      return;
+    }
+
+    setIsSendingInvite(true);
+    try {
+      const result = await orgAPI.createInvite(email, inviteRole);
+      await loadInvites();
+      toast({
+        title: "Invite created",
+        description:
+          result?.email_sent === false
+            ? "Invite saved, but email was not sent. Check SES setup."
+            : `${email} invited as ${inviteRole}.`,
+      });
+      setIsInviteDialogOpen(false);
+    } catch (err: any) {
+      toast({
+        title: "Failed to invite",
+        description: err?.message || "Could not create invite.",
+      });
+    } finally {
+      setIsSendingInvite(false);
+    }
+  };
+
+  const handleLogoUploadClick = () => {
+    if (!canManageOrganization) {
+      toast({
+        title: "Super Admin Only",
+        description: "Only the Super Admin can update the organization logo.",
+      });
+      return;
+    }
+    logoInputRef.current?.click();
+  };
+
+  const handleLogoSelected = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const result = String(reader.result || "");
+      if (!result.startsWith("data:image/")) {
+        toast({
+          title: "Invalid file",
+          description: "Please choose an image file.",
+        });
+        return;
+      }
+      try {
+        const response = await orgAPI.uploadLogo(result);
+        setLogoDataUrl(response?.logo_url || result);
+        toast({
+          title: "Logo updated",
+          description: "Your organization logo was saved.",
+        });
+      } catch (err: any) {
+        toast({
+          title: "Logo upload failed",
+          description: err?.message || "Could not upload the logo.",
+        });
+      } finally {
+        if (logoInputRef.current) {
+          logoInputRef.current.value = "";
+        }
+      }
+    };
+    reader.onerror = () => {
+      toast({
+        title: "Logo upload failed",
+        description: "Could not read the selected file.",
+      });
+    };
+    reader.readAsDataURL(file);
   };
 
   // Handle services settings change
@@ -394,6 +760,60 @@ export function OrganizationSettings() {
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite Member</DialogTitle>
+            <DialogDescription>
+              Send an invitation to join your organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="invite-email">Email</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="name@company.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                disabled={isSendingInvite}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={inviteRole}
+                onValueChange={(value) => setInviteRole(value as AppRole)}
+                disabled={isSendingInvite}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allowedInviteRoles.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsInviteDialogOpen(false)}
+              disabled={isSendingInvite}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitInvite} disabled={isSendingInvite}>
+              {isSendingInvite ? "Sending..." : "Send Invite"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Centered Tabs Header */}
       <div className="flex justify-center pt-2 pb-4 overflow-x-auto">
         <TabsList className="inline-flex h-10 sm:h-12 items-center justify-center rounded-xl bg-muted p-1 sm:p-1.5 gap-1">
@@ -445,15 +865,36 @@ export function OrganizationSettings() {
           <CardContent className="space-y-6">
             {/* Logo Section */}
             <div className="flex items-center gap-6">
-              <div className="w-20 h-20 bg-muted rounded-xl flex items-center justify-center border-2 border-dashed border-muted-foreground/30">
-                <Building2 className="w-8 h-8 text-muted-foreground" />
+              <div className="w-20 h-20 bg-muted rounded-xl flex items-center justify-center border-2 border-dashed border-muted-foreground/30 overflow-hidden">
+                {logoDataUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={logoDataUrl}
+                    alt="Organization logo"
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <Building2 className="w-8 h-8 text-muted-foreground" />
+                )}
               </div>
               <div className="space-y-2">
                 <h4 className="font-medium">Organization Logo</h4>
                 <p className="text-sm text-muted-foreground">
                   Upload a logo for your organization
                 </p>
-                <Button variant="outline" size="sm">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleLogoSelected(e.target.files?.[0])}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogoUploadClick}
+                  disabled={!canManageOrganization}
+                >
                   Upload Logo
                 </Button>
               </div>
@@ -470,6 +911,7 @@ export function OrganizationSettings() {
                   placeholder="Infiniqon"
                   value={orgSettings.name}
                   onChange={(e) => handleOrgChange("name", e.target.value)}
+                  disabled={!canManageOrganization}
                 />
               </div>
               <div className="space-y-2">
@@ -482,6 +924,7 @@ export function OrganizationSettings() {
                     placeholder="contact@infiniqon.com"
                     value={orgSettings.email}
                     onChange={(e) => handleOrgChange("email", e.target.value)}
+                    disabled={!canManageOrganization}
                   />
                 </div>
               </div>
@@ -495,6 +938,7 @@ export function OrganizationSettings() {
                     placeholder="+91 63 4567 8900"
                     value={orgSettings.phone}
                     onChange={(e) => handleOrgChange("phone", e.target.value)}
+                    disabled={!canManageOrganization}
                   />
                 </div>
               </div>
@@ -508,6 +952,7 @@ export function OrganizationSettings() {
                     placeholder="Ekkaduthangal, Chennai, Tamil Nadu"
                     value={orgSettings.address}
                     onChange={(e) => handleOrgChange("address", e.target.value)}
+                    disabled={!canManageOrganization}
                   />
                 </div>
               </div>
@@ -524,6 +969,7 @@ export function OrganizationSettings() {
                   onValueChange={(value) =>
                     handleOrgChange("subscriptionPlan", value)
                   }
+                  disabled={!canManageOrganization}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select plan" />
@@ -540,7 +986,7 @@ export function OrganizationSettings() {
             <Separator />
 
             <div className="flex justify-end">
-              <Button onClick={handleSaveOrg} disabled={isSavingOrg}>
+              <Button onClick={handleSaveOrg} disabled={isSavingOrg || !canManageOrganization}>
                 {isSavingOrg && (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 )}
@@ -564,7 +1010,12 @@ export function OrganizationSettings() {
                 Manage your team members and their roles
               </CardDescription>
             </div>
-            <Button className="flex items-center gap-2">
+            <Button
+              className="flex items-center gap-2"
+              onClick={handleInviteMember}
+              disabled={!canInviteMembers}
+              title={inviteHelpText}
+            >
               <UserPlus className="w-4 h-4" />
               Invite Member
             </Button>
@@ -582,117 +1033,149 @@ export function OrganizationSettings() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {members.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="w-9 h-9">
-                          <AvatarImage src={member.avatar} />
-                          <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                            {member.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium flex items-center gap-2">
-                            {member.name}
-                            {member.role === "Owner" && (
-                              <Crown className="w-3.5 h-3.5 text-amber-500" />
-                            )}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {member.email}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getRoleBadgeVariant(member.role)}>
-                        {member.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={getStatusBadgeVariant(member.status)}
-                        className={
-                          member.status === "Active"
-                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
-                            : ""
-                        }
-                      >
-                        {member.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {member.joinedAt}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {member.lastLogin}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                          >
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {member.role !== "Owner" && (
-                            <>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  updateMemberRole(member.id, "Super Admin")
-                                }
-                              >
-                                Make Super Admin
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  updateMemberRole(member.id, "Admin")
-                                }
-                              >
-                                Make Admin
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  updateMemberRole(member.id, "Editor")
-                                }
-                              >
-                                Make Editor
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  updateMemberRole(member.id, "Viewer")
-                                }
-                              >
-                                Make Viewer
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => removeMember(member.id)}
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Remove Member
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                          {member.role === "Owner" && (
-                            <DropdownMenuItem disabled>
-                              <Crown className="w-4 h-4 mr-2" />
-                              Organization Owner
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                {isLoadingOrg && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted-foreground">
+                      Loading members...
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
+                {!isLoadingOrg && members.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted-foreground">
+                      No members yet. Use “Invite Member” to add your team.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isLoadingOrg &&
+                  members.map((member) => {
+                    const isSelf = Boolean(currentUserId && member.id === currentUserId);
+                    return (
+                      <TableRow key={member.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="w-9 h-9">
+                              <AvatarImage src={member.avatar} />
+                              <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                                {member.name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium flex items-center gap-2">
+                                {member.name}
+                                {isSelf && (
+                                  <Badge variant="outline" className="text-xs">
+                                    You
+                                  </Badge>
+                                )}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {member.email}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getRoleBadgeVariant(member.role)}>
+                            {member.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={getStatusBadgeVariant(member.status)}
+                            className={
+                              member.status === "Active"
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                                : ""
+                            }
+                          >
+                            {member.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {member.joinedAt || "-"}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {member.lastLogin || "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={isSelf}
+                                title={isSelf ? "You cannot change your own role here." : undefined}
+                              >
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <>
+                                {canChangeAllRoles && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        updateMemberRole(member.id, "Super Admin")
+                                      }
+                                    >
+                                      Make Super Admin
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        updateMemberRole(member.id, "Admin")
+                                      }
+                                    >
+                                      Make Admin
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        updateMemberRole(member.id, "Data Steward")
+                                      }
+                                    >
+                                      Make Data Steward
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {canManageDataStewards &&
+                                  member.role === "Data Steward" && (
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        updateMemberRole(member.id, "Data Steward")
+                                      }
+                                    >
+                                      Keep Data Steward
+                                    </DropdownMenuItem>
+                                  )}
+                                {!canChangeAllRoles &&
+                                  !(canManageDataStewards && member.role === "Data Steward") && (
+                                    <DropdownMenuItem disabled>
+                                      Only Super Admin can change this role
+                                    </DropdownMenuItem>
+                                  )}
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => removeMember(member.id)}
+                                  disabled={
+                                    isSelf ||
+                                    (!canChangeAllRoles &&
+                                      !(canManageDataStewards && member.role === "Data Steward"))
+                                  }
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Remove Member
+                                </DropdownMenuItem>
+                              </>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
               </TableBody>
             </Table>
           </CardContent>
@@ -748,7 +1231,9 @@ export function OrganizationSettings() {
                           onClick={() =>
                             togglePermission(permission.id, "superadmin")
                           }
-                          className="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                          disabled
+                          title="Super Admin permissions are fixed"
+                          className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {permission.superadmin ? (
                             <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
@@ -768,7 +1253,8 @@ export function OrganizationSettings() {
                           onClick={() =>
                             togglePermission(permission.id, "admin")
                           }
-                          className="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                          disabled={!canChangeAllRoles}
+                          className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-80"
                         >
                           {permission.admin ? (
                             <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
@@ -786,11 +1272,12 @@ export function OrganizationSettings() {
                       <div className="flex justify-center">
                         <button
                           onClick={() =>
-                            togglePermission(permission.id, "editor")
+                            togglePermission(permission.id, "dataSteward")
                           }
-                          className="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                          disabled={!canChangeAllRoles && !canManageDataStewards}
+                          className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-80"
                         >
-                          {permission.editor ? (
+                          {permission.dataSteward ? (
                             <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
                               <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                             </div>
@@ -812,7 +1299,7 @@ export function OrganizationSettings() {
             <div className="flex justify-end">
               <Button
                 onClick={handleSavePermissions}
-                disabled={isSavingPermissions}
+                disabled={isSavingPermissions || (!canChangeAllRoles && !canManageDataStewards)}
               >
                 {isSavingPermissions && (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

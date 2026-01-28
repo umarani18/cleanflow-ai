@@ -16,9 +16,9 @@ const ENDPOINTS = {
   FILES_PROFILING: (id: string) => `/files/${id}/profiling`, // GET - column profiling data
   FILES_PROFILING_PREVIEW: (id: string) => `/files/${id}/profiling-preview`, // GET - column profiling preview
   FILES_CUSTOM_RULE_SUGGEST: (id: string) => `/files/${id}/custom-rule-suggest`, // POST - custom rule suggestion
+  SETTINGS: '/settings',
+  SETTINGS_BY_ID: (id: string) => `/settings/${id}`,
   FILES_DQ_MATRIX: (id: string) => `/files/${id}/dq-matrix`, // GET - dq_matrix slices
-  SETTINGS_PRESETS: '/settings',
-  SETTINGS_PRESET: (id: string) => `/settings/${id}`,
 }
 
 // Response Types
@@ -441,7 +441,7 @@ class FileManagementAPI {
 
   async getSettingsPresets(authToken: string): Promise<{ presets: any[] }> {
     try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS_PRESETS, authToken, { method: "GET" })
+      return await this.makeRequest(ENDPOINTS.SETTINGS, authToken, { method: "GET" })
     } catch (error) {
       const message = (error as Error)?.message || ""
       if (message.toLowerCase().includes("not found")) return { presets: [] }
@@ -452,7 +452,7 @@ class FileManagementAPI {
 
   async getSettingsPreset(presetId: string, authToken: string): Promise<any> {
     try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, { method: "GET" })
+      return await this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), authToken, { method: "GET" })
     } catch (error) {
       const message = (error as Error)?.message || ""
       // Silently return fallback for "not found" or other errors
@@ -1257,7 +1257,76 @@ class FileManagementAPI {
     }
   }
 
+  /**
+   * Get all user settings presets
+   */
+  async getSettingsPresets(): Promise<{ presets: SettingsPreset[]; count: number }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS, token, { method: 'GET' })
+  }
 
+  /**
+   * Get a specific settings preset
+   */
+  async getSettingsPreset(presetId: string): Promise<SettingsPreset> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'GET' })
+  }
+
+  /**
+   * Create a new settings preset
+   */
+  async createSettingsPreset(preset: { preset_name: string; config: any; is_default?: boolean }): Promise<{ preset_id: string; message: string }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS, token, {
+      method: 'POST',
+      body: JSON.stringify(preset)
+    })
+  }
+
+  /**
+   * Update a settings preset
+   */
+  async updateSettingsPreset(presetId: string, updates: { preset_name?: string; config?: any; is_default?: boolean }): Promise<{ message: string }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    })
+  }
+
+  /**
+   * Delete a settings preset
+   */
+  async deleteSettingsPreset(presetId: string): Promise<{ message: string }> {
+    const token = await this.getAuth()
+    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'DELETE' })
+  }
+
+  // Helper to get auth token
+  private async getAuth(): Promise<string> {
+    if (typeof window === 'undefined') {
+      return ''
+    }
+
+    // Primary: use stored authTokens from localStorage (idToken preferred)
+    try {
+      const raw = window.localStorage.getItem('authTokens')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        return parsed?.idToken || parsed?.accessToken || ''
+      }
+    } catch {
+      // ignore
+    }
+
+    // Fallback: use the global auth token if present
+    if ((window as any).__AUTH_TOKEN__) {
+      return (window as any).__AUTH_TOKEN__
+    }
+
+    return ''
+  }
 }
 
 // ==================== Unified Bridge Ingestion Types ====================

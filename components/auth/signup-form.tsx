@@ -1,116 +1,163 @@
-"use client"
+"use client";
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Eye, EyeOff, Lock, Mail, User } from "lucide-react"
-import { useEffect, useState } from 'react'
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Eye, EyeOff, Lock, Mail, User } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button"
-import { EmailVerification } from "./email-verification"
-import Image from "next/image"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import Link from "next/link"
-import { useAuth } from "@/components/providers/auth-provider"
+import { Button } from "@/components/ui/button";
+import { EmailVerification } from "./email-verification";
+import Image from "next/image";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import Link from "next/link";
+import { useAuth } from "@/components/providers/auth-provider";
+import { orgAPI } from "@/lib/api/org-api";
+import { useToast } from "@/hooks/use-toast";
 
 export function SignUpForm() {
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [showVerification, setShowVerification] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const { signup } = useAuth()
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [showVerification, setShowVerification] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const { signup, login } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    setMounted(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError('')
-    setSuccess('')
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    setSuccess("");
 
     try {
-      const result = await signup(email, password, confirmPassword, fullName || undefined)
-      setSuccess(result.message)
+      const result = await signup(
+        email,
+        password,
+        confirmPassword,
+        fullName || undefined,
+      );
+      setSuccess(result.message);
       if (!result.confirmed) {
-        setShowVerification(true)
+        setShowVerification(true);
       }
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  const handleVerificationComplete = () => {
-    setShowVerification(false)
-    window.location.href = '/dashboard'
-  }
+  const handleVerificationComplete = async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const loginResult = await login(email, password);
+      if (loginResult?.mfaRequired || loginResult?.mfaSetupRequired) {
+        const message =
+          "MFA is required. Please log in and complete MFA setup, then register your organization in Admin.";
+        toast({
+          title: "MFA required",
+          description: message,
+        });
+        setSuccess(message);
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 900);
+        return;
+      }
+
+      try {
+        await orgAPI.getMe();
+        window.location.href = "/dashboard";
+      } catch (orgErr: any) {
+        const message = orgErr?.message || "";
+        if (message.includes("Organization membership required")) {
+          window.location.href = "/create-organization";
+          return;
+        }
+        window.location.href = "/dashboard";
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to finish signup.");
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleBackToSignup = () => {
-    setShowVerification(false)
-    setError('')
-    setSuccess('')
-  }
+    setShowVerification(false);
+    setError("");
+    setSuccess("");
+  };
 
   const getPasswordStrength = (password: string) => {
-    let strength = 0
-    if (password.length >= 8) strength++
-    if (/[A-Z]/.test(password)) strength++
-    if (/[a-z]/.test(password)) strength++
-    if (/[0-9]/.test(password)) strength++
-    if (/[^A-Za-z0-9]/.test(password)) strength++
-    return strength
-  }
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+    return strength;
+  };
 
   const getPasswordStrengthLabel = (strength: number) => {
     switch (strength) {
       case 0:
       case 1:
-        return 'Very Weak'
+        return "Very Weak";
       case 2:
-        return 'Weak'
+        return "Weak";
       case 3:
-        return 'Fair'
+        return "Fair";
       case 4:
-        return 'Good'
+        return "Good";
       case 5:
-        return 'Strong'
+        return "Strong";
       default:
-        return ''
+        return "";
     }
-  }
+  };
 
   const getPasswordStrengthColor = (strength: number) => {
     switch (strength) {
       case 0:
       case 1:
-        return 'bg-red-500'
+        return "bg-red-500";
       case 2:
-        return 'bg-orange-500'
+        return "bg-orange-500";
       case 3:
-        return 'bg-yellow-500'
+        return "bg-yellow-500";
       case 4:
-        return 'bg-blue-500'
+        return "bg-blue-500";
       case 5:
-        return 'bg-green-500'
+        return "bg-green-500";
       default:
-        return 'bg-gray-200'
+        return "bg-gray-200";
     }
-  }
+  };
 
-  if (!mounted) return null
+  if (!mounted) return null;
 
   if (showVerification) {
-    return <EmailVerification email={email} onVerified={handleVerificationComplete} onBack={handleBackToSignup} />
+    return (
+      <EmailVerification
+        email={email}
+        onVerified={handleVerificationComplete}
+        onBack={handleBackToSignup}
+      />
+    );
   }
 
   return (
@@ -141,7 +188,10 @@ export function SignUpForm() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Full Name Field */}
             <div className="space-y-2">
-              <Label htmlFor="fullName" className="text-sm font-medium text-muted-foreground">
+              <Label
+                htmlFor="fullName"
+                className="text-sm font-medium text-muted-foreground"
+              >
                 Full Name
               </Label>
               <div className="relative">
@@ -160,7 +210,10 @@ export function SignUpForm() {
 
             {/* Email Field */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-muted-foreground">
+              <Label
+                htmlFor="email"
+                className="text-sm font-medium text-muted-foreground"
+              >
                 Email
               </Label>
               <div className="relative">
@@ -179,7 +232,10 @@ export function SignUpForm() {
 
             {/* Password Field */}
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-muted-foreground">
+              <Label
+                htmlFor="password"
+                className="text-sm font-medium text-muted-foreground"
+              >
                 Password
               </Label>
               <div className="relative">
@@ -215,7 +271,9 @@ export function SignUpForm() {
                     <div className="flex-1 bg-muted rounded-full h-2">
                       <div
                         className={`h-2 rounded-full transition-all duration-300 ${getPasswordStrengthColor(getPasswordStrength(password))}`}
-                        style={{ width: `${(getPasswordStrength(password) / 5) * 100}%` }}
+                        style={{
+                          width: `${(getPasswordStrength(password) / 5) * 100}%`,
+                        }}
                       />
                     </div>
                     <span className="text-xs text-muted-foreground">
@@ -228,7 +286,10 @@ export function SignUpForm() {
 
             {/* Confirm Password Field */}
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm font-medium text-muted-foreground">
+              <Label
+                htmlFor="confirmPassword"
+                className="text-sm font-medium text-muted-foreground"
+              >
                 Confirm Password
               </Label>
               <div className="relative">
@@ -266,12 +327,15 @@ export function SignUpForm() {
                 required
                 className="h-4 w-4 mt-0.5 rounded border-input text-primary focus:ring-ring"
               />
-              <Label htmlFor="terms" className="text-sm text-muted-foreground leading-5">
-                I agree to the{' '}
+              <Label
+                htmlFor="terms"
+                className="text-sm text-muted-foreground leading-5"
+              >
+                I agree to the{" "}
                 <Link href="/terms" className="text-accent hover:opacity-90">
                   Terms of Service
-                </Link>{' '}
-                and{' '}
+                </Link>{" "}
+                and{" "}
                 <Link href="/privacy" className="text-accent hover:opacity-90">
                   Privacy Policy
                 </Link>
@@ -297,13 +361,13 @@ export function SignUpForm() {
               className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
               disabled={isLoading}
             >
-              {isLoading ? 'Creating account...' : 'Create account'}
+              {isLoading ? "Creating account..." : "Create account"}
             </Button>
           </form>
 
           {/* Sign in link */}
           <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{' '}
+            Already have an account?{" "}
             <Link
               href="/auth/login"
               className="text-accent hover:opacity-90 font-medium"
@@ -314,5 +378,5 @@ export function SignUpForm() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
