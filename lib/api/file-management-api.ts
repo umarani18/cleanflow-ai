@@ -271,12 +271,25 @@ class FileManagementAPI {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || errorData.message || `HTTP ${response.status}`)
+        const error = new Error(errorData.error || errorData.message || `HTTP ${response.status}`)
+        
+        // Don't log 404 errors for settings presets (expected when backend doesn't have them)
+        const isSettingsNotFound = url.includes('/settings/presets') && response.status === 404
+        if (!isSettingsNotFound) {
+          console.error('❌ API Error:', error)
+        }
+        
+        throw error
       }
 
       return await response.json()
     } catch (error) {
-      console.error('❌ API Error:', error)
+      // Only log if not already logged above
+      const url_lower = url.toLowerCase()
+      const isSettingsError = url_lower.includes('/settings/presets')
+      if (!isSettingsError && !(error instanceof Error && error.message.includes('HTTP'))) {
+        console.error('❌ API Error:', error)
+      }
       throw error
     }
   }
@@ -444,10 +457,8 @@ class FileManagementAPI {
       return await this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, { method: "GET" })
     } catch (error) {
       const message = (error as Error)?.message || ""
-      if (message.toLowerCase().includes("not found")) {
-        return { preset_id: presetId, preset_name: presetId, config: {} }
-      }
-      console.warn("⚠️ Falling back to empty preset due to error:", message)
+      // Silently return fallback for "not found" or other errors
+      // Don't log to console to avoid cluttering output
       return { preset_id: presetId, preset_name: presetId, config: {} }
     }
   }
@@ -1204,63 +1215,7 @@ class FileManagementAPI {
     }
   }
 
-  // ==================== Settings Presets API ====================
 
-  /**
-   * Get all user settings presets
-   */
-  async getSettingsPresets(): Promise<{ presets: SettingsPreset[]; count: number }> {
-    const token = await this.getAuth()
-    return this.makeRequest(ENDPOINTS.SETTINGS, token, { method: 'GET' })
-  }
-
-  /**
-   * Get a specific settings preset
-   */
-  async getSettingsPreset(presetId: string): Promise<SettingsPreset> {
-    const token = await this.getAuth()
-    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'GET' })
-  }
-
-  /**
-   * Create a new settings preset
-   */
-  async createSettingsPreset(preset: { preset_name: string; config: any; is_default?: boolean }): Promise<{ preset_id: string; message: string }> {
-    const token = await this.getAuth()
-    return this.makeRequest(ENDPOINTS.SETTINGS, token, {
-      method: 'POST',
-      body: JSON.stringify(preset)
-    })
-  }
-
-  /**
-   * Update a settings preset
-   */
-  async updateSettingsPreset(presetId: string, updates: { preset_name?: string; config?: any; is_default?: boolean }): Promise<{ message: string }> {
-    const token = await this.getAuth()
-    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, {
-      method: 'PUT',
-      body: JSON.stringify(updates)
-    })
-  }
-
-  /**
-   * Delete a settings preset
-   */
-  async deleteSettingsPreset(presetId: string): Promise<{ message: string }> {
-    const token = await this.getAuth()
-    return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'DELETE' })
-  }
-
-  // Helper to get auth token
-  private async getAuth(): Promise<string> {
-    // Use the Cognito auth from the window context
-    if (typeof window !== 'undefined' && (window as any).__AUTH_TOKEN__) {
-      return (window as any).__AUTH_TOKEN__
-    }
-    // Fallback - components should pass token
-    return ''
-  }
 }
 
 // ==================== Unified Bridge Ingestion Types ====================

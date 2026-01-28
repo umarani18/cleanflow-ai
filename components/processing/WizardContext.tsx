@@ -91,6 +91,7 @@ interface WizardActions {
     removeCustomRule: (ruleId: string) => void
 
     // Processing
+    setProcessing: (processing: boolean) => void
     startProcessing: () => void
     setProcessingError: (error: string | null) => void
 
@@ -208,6 +209,8 @@ export function ProcessingWizardProvider({ children }: { children: ReactNode }) 
                 customRules: s.customRules.filter((r) => r.rule_id !== ruleId),
             }))
         },
+
+        setProcessing: (processing) => setState((s) => ({ ...s, isProcessing: processing })),
 
         startProcessing: () => setState((s) => ({ ...s, isProcessing: true, processingError: null })),
 
