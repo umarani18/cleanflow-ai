@@ -266,7 +266,12 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
       toast({ title: "Downloaded", description: `Returned ${data.returned ?? 'some'} rows` })
       setMatrixDialogOpen(false)
     } catch (err: any) {
-      toast({ title: "Download failed", description: err?.message || "Failed to download dq_matrix", variant: "destructive" })
+      const message = err?.message || "Failed to download dq_matrix"
+      const friendly =
+        message.includes("not ready") || message.includes("dq_matrix not found")
+          ? "DQ matrix is not ready yet. Please run processing and wait for DQ_COMPLETE, then try again."
+          : message
+      toast({ title: "Download failed", description: friendly, variant: "destructive" })
     } finally {
       setDownloadingMatrix(false)
     }
@@ -281,6 +286,11 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
     if (s.includes('RUNNING') || s.includes('PROCESSING') || s.includes('QUEUED')) return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
     return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
   }
+
+  const isDqMatrixReady = (() => {
+    const status = (file.status || "").toUpperCase()
+    return status.includes("DQ_COMPLETE") || status.includes("DQ_FIXED") || status.includes("COMPLETED") || status.includes("PROCESSED")
+  })()
 
   return (
     <>
@@ -618,7 +628,7 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                       <div className="flex justify-end">
                         <Button 
                           onClick={openMatrixDialog} 
-                          disabled={downloadingMatrix}
+                          disabled={!isDqMatrixReady || downloadingMatrix}
                           variant="outline"
                           size="sm"
                           className="gap-2"

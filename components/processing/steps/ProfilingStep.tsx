@@ -7,6 +7,7 @@ import { Loader2, ArrowLeft, ArrowRight, RefreshCw, Check, X } from "lucide-reac
 import { cn } from "@/lib/utils"
 import { useProcessingWizard } from "../WizardContext"
 import { fileManagementAPI } from "@/lib/api/file-management-api"
+import { getRuleLabel } from "@/lib/dq-rules"
 
 export function ProfilingStep() {
   const {
@@ -86,7 +87,7 @@ export function ProfilingStep() {
   const canProceed = selectedColumns.length > 0 && hasProfiles && !loading
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex flex-col h-full p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -102,7 +103,7 @@ export function ProfilingStep() {
       </div>
 
       {/* Main content area with two separate scrollable boxes */}
-      <div className="flex gap-4 h-[45vh]">
+      <div className="flex gap-4 flex-1 min-h-0 mt-6">
         {/* Left sidebar - Column list (separate box with internal scrolling) */}
         <div className="w-64 border border-muted rounded-lg flex flex-col overflow-hidden">
           <div className="p-4 border-b border-muted/40 bg-muted/20">
@@ -202,7 +203,10 @@ export function ProfilingStep() {
                         {profile.rules && profile.rules.length > 0 && (
                           <div className="text-xs">
                             <span className="text-muted-foreground">Auto Rules: </span>
-                            {profile.rules.filter((r: any) => r.decision === "auto").map((r: any) => r.rule_id).join(", ")}
+                            {profile.rules
+                              .filter((r: any) => r.decision === "auto")
+                              .map((r: any) => getRuleLabel(r.rule_id))
+                              .join(", ")}
                           </div>
                         )}
                       </div>
@@ -225,7 +229,7 @@ export function ProfilingStep() {
       )}
 
       {/* Footer with navigation buttons - fixed at bottom */}
-      <div className="flex items-center justify-between pt-4 border-t border-muted/40">
+      <div className="flex items-center justify-between pt-4 border-t border-muted/40 mt-6">
         <Button variant="outline" onClick={prevStep}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back

@@ -80,7 +80,7 @@ export function ColumnSelectionStep() {
   const allSelected = selectedColumns.length === allColumns.length
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex flex-col h-full p-6">
       <div>
         <h2 className="text-xl font-semibold">Select Columns to Process</h2>
         <p className="text-sm text-muted-foreground mt-1">
@@ -125,7 +125,7 @@ export function ColumnSelectionStep() {
         </div>
       </div>
 
-      <div className="border border-muted rounded-lg max-h-[40vh] overflow-y-auto">
+      <div className="border border-muted rounded-lg flex-1 overflow-y-auto mt-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 p-2">
           {filtered.map((col) => {
             const isSelected = selectedColumns.includes(col)
@@ -151,7 +151,7 @@ export function ColumnSelectionStep() {
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-muted/40">
+      <div className="flex items-center justify-between pt-4 border-t border-muted/40 mt-6">
         <div className="text-sm text-muted-foreground">
           Selected: <span className="font-medium text-foreground">{selectedColumns.length}</span> of {allColumns.length} columns
         </div>

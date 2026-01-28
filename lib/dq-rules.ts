@@ -1,0 +1,41 @@
+export const DQ_RULE_NAMES: Record<string, string> = {
+  R1: "Missing Required Value",
+  R2: "Duplicate Primary Key",
+  R3: "Duplicate Transaction Row",
+  R4: "Whitespace Issues",
+  R5: "Casing/Formatting",
+  R6: "Encoding/Mojibake",
+  R7: "Special Characters in IDs",
+  R8: "Noise Suffix",
+  R9: "Numeric as Text",
+  R10: "Out-of-Range / Scale Violation",
+  R11: "Unit / Scale Mismatch",
+  R12: "Date Format Inconsistency",
+  R13: "Invalid Calendar Date",
+  R14: "Unparseable Date",
+  R15: "Future-Dated Outside Policy",
+  R16: "Mixed Date Separators",
+  R17: "Hidden Null / Control Characters",
+  R18: "Excessively Long Text",
+  R19: "Status Outside Enum",
+  R20: "Cross-Field Inconsistency",
+  R21: "Reference Integrity Violation",
+  R22: "Unexpected Negative Value",
+  R23: "HTML Injection",
+  R24: "SQL Injection",
+  R25: "Script Injection",
+  R26: "PII Pattern",
+  R27: "Invalid Currency",
+  R28: "Invalid Country Code",
+  R29: "Invalid Fiscal Period",
+  R30: "Invalid UOM",
+  R31: "Invalid Email",
+  R32: "Invalid Phone",
+  R33: "Invalid URL",
+  R34: "Invalid Tax ID",
+}
+
+export const getRuleLabel = (ruleId?: string | null): string => {
+  if (!ruleId) return "Unknown Rule"
+  return DQ_RULE_NAMES[ruleId] || `Rule ${ruleId}`
+}

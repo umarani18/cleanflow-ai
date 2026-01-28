@@ -12,6 +12,7 @@ import { ArrowLeft, Play, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Loa
 import { useProcessingWizard, type RuleWithState } from "../WizardContext"
 import { fileManagementAPI, type CustomRuleDefinition } from "@/lib/api/file-management-api"
 import { cn } from "@/lib/utils"
+import { getRuleLabel } from "@/lib/dq-rules"
 
 export function RulesStep() {
   const {
@@ -56,14 +57,14 @@ export function RulesStep() {
         defaults[col] = [
           ...autoRules.map((id: string) => ({
             rule_id: id,
-            rule_name: `Rule ${id}`,
+            rule_name: getRuleLabel(id),
             category: "auto" as const,
             selected: true,
             column: col,
           })),
           ...humanRules.map((id: string) => ({
             rule_id: id,
-            rule_name: `Rule ${id}`,
+            rule_name: getRuleLabel(id),
             category: "human" as const,
             selected: false,
             column: col,
@@ -139,7 +140,7 @@ export function RulesStep() {
   const totalCustomRules = customRules.length
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex flex-col h-full p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -163,7 +164,7 @@ export function RulesStep() {
       </div>
 
       {/* Main content area with internal scrolling */}
-      <div className="border border-muted rounded-lg overflow-hidden h-[45vh]">
+      <div className="border border-muted rounded-lg overflow-hidden flex-1 min-h-0 mt-6">
         <div className="h-full overflow-y-auto p-4">
           <div className="space-y-3">
             <h3 className="font-medium">Column Rules</h3>
@@ -313,7 +314,7 @@ export function RulesStep() {
       </div>
 
       {/* Footer with navigation buttons - fixed at bottom */}
-      <div className="flex items-center justify-between pt-4 border-t border-muted/40">
+      <div className="flex items-center justify-between pt-4 border-t border-muted/40 mt-6">
         <Button variant="outline" onClick={prevStep}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
