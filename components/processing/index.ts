@@ -1,5 +1,5 @@
-export { ProcessingWizard, ProcessingWizardProvider } from "./ProcessingWizard"
-export { useProcessingWizard, STEP_ORDER } from "./WizardContext"
+export { ProcessingWizard } from "./ProcessingWizard"
+export { useProcessingWizard, STEP_ORDER, ProcessingWizardProvider } from "./WizardContext"
 export type { WizardStep, ColumnInfo, SettingsPreset, RuleWithState, WizardState } from "./WizardContext"
 export { ColumnSelectionStep } from "./steps/ColumnSelectionStep"
 export { ProfilingStep } from "./steps/ProfilingStep"
