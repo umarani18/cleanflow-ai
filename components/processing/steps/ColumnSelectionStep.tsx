@@ -125,7 +125,7 @@ export function ColumnSelectionStep() {
         </div>
       </div>
 
-      <div className="border border-muted rounded-lg max-h-[45vh] overflow-y-auto">
+      <div className="border border-muted rounded-lg max-h-[40vh] overflow-y-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 p-2">
           {filtered.map((col) => {
             const isSelected = selectedColumns.includes(col)

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { ArrowLeft, ArrowRight, Loader2, Plus, Settings, Star, Shield, ToggleLeft, ToggleRight, Sliders } from "lucide-react"
 import { useProcessingWizard, type SettingsPreset } from "../WizardContext"
 import { fileManagementAPI } from "@/lib/api/file-management-api"
@@ -83,6 +84,7 @@ export function SettingsStep() {
   const [activeTab, setActiveTab] = useState("policies")
   const [showNewPresetDialog, setShowNewPresetDialog] = useState(false)
   const [newPresetName, setNewPresetName] = useState("")
+  const [copySourceId, setCopySourceId] = useState<string>("current")
 
   useEffect(() => {
     fetchPresets()
@@ -95,7 +97,13 @@ export function SettingsStep() {
     try {
       const response = await fileManagementAPI.getSettingsPresets(authToken)
       const serverPresets = response.presets || []
-      const finalPresets = serverPresets.length > 0 ? serverPresets : [DEFAULT_PRESET]
+      const hasDefault = serverPresets.some((p: any) => p.is_default)
+      const finalPresets =
+        serverPresets.length === 0
+          ? [DEFAULT_PRESET]
+          : hasDefault
+            ? serverPresets
+            : [...serverPresets, DEFAULT_PRESET]
       setPresets(finalPresets)
       const defaultPreset = finalPresets.find((p: SettingsPreset) => (p as any).is_default)
       if (defaultPreset && !selectedPreset) {
@@ -161,29 +169,31 @@ export function SettingsStep() {
     }
   }
 
+  const buildConfigFromState = (): any => ({
+    currency_values: currencyValues.split(",").map((s) => s.trim()).filter(Boolean),
+    uom_values: uomValues.split(",").map((s) => s.trim()).filter(Boolean),
+    date_formats: dateFormats.split(",").map((s) => s.trim()).filter(Boolean),
+    policies: {
+      allow_autofix: allowAutofix,
+      strictness,
+      unknown_column_behavior: unknownBehavior,
+    },
+    required_fields: {
+      placeholders_treated_as_missing: placeholders.split(",").map((s) => s.trim()).filter(Boolean),
+    },
+    enum_sets: {
+      status: statusEnums.split(",").map((s) => s.trim()).filter(Boolean),
+    },
+    thresholds: {
+      text: {
+        max_len_default: Number(maxTextLen) || 255,
+      },
+    },
+    required_columns: requiredColumns,
+  })
+
   const handleSaveOverrides = () => {
-    const overrides = {
-      currency_values: currencyValues.split(",").map((s) => s.trim()).filter(Boolean),
-      uom_values: uomValues.split(",").map((s) => s.trim()).filter(Boolean),
-      date_formats: dateFormats.split(",").map((s) => s.trim()).filter(Boolean),
-      policies: {
-        allow_autofix: allowAutofix,
-        strictness,
-        unknown_column_behavior: unknownBehavior,
-      },
-      required_fields: {
-        placeholders_treated_as_missing: placeholders.split(",").map((s) => s.trim()).filter(Boolean),
-      },
-      enum_sets: {
-        status: statusEnums.split(",").map((s) => s.trim()).filter(Boolean),
-      },
-      thresholds: {
-        text: {
-          max_len_default: Number(maxTextLen) || 255,
-        },
-      },
-      required_columns: requiredColumns,
-    }
+    const overrides = buildConfigFromState()
     setPresetOverrides(overrides)
     setEditMode(false)
   }
@@ -196,8 +206,70 @@ export function SettingsStep() {
     }
   }
 
+  const handleCreatePreset = async () => {
+    if (!newPresetName.trim() || !authToken) return
+    setIsLoading(true)
+    try {
+      let config = buildConfigFromState()
+      if (copySourceId !== "current") {
+        const source = presets.find((p) => p.preset_id === copySourceId)
+        if (source?.config) config = source.config
+      }
+      const created = await fileManagementAPI.createSettingsPreset(
+        newPresetName.trim(),
+        config,
+        authToken,
+        false
+      )
+      await fetchPresets()
+      const newId = created?.preset_id || newPresetName.trim().toLowerCase().replace(/\s+/g, "_")
+      handleSelectPreset(newId)
+      setShowNewPresetDialog(false)
+      setNewPresetName("")
+      setCopySourceId("current")
+    } catch (err) {
+      console.error("Failed to create preset", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleUpdatePreset = async () => {
+    if (!authToken || !selectedPreset || selectedPreset.preset_id === DEFAULT_PRESET.preset_id) return
+    setIsLoading(true)
+    try {
+      const config = buildConfigFromState()
+      await fileManagementAPI.updateSettingsPreset(
+        selectedPreset.preset_id,
+        { preset_name: selectedPreset.preset_name, config },
+        authToken
+      )
+      await fetchPresets()
+    } catch (err) {
+      console.error("Failed to update preset", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDeletePreset = async () => {
+    if (!authToken || !selectedPreset || selectedPreset.preset_id === DEFAULT_PRESET.preset_id) return
+    setIsLoading(true)
+    try {
+      await fileManagementAPI.deleteSettingsPreset(selectedPreset.preset_id, authToken)
+      await fetchPresets()
+      setSelectedPreset(null)
+    } catch (err) {
+      console.error("Failed to delete preset", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
-    <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+    <div className="flex flex-col h-[60vh]">
+      <ScrollArea className="flex-1 overflow-y-auto p-6 pb-2">
+        <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Settings Configuration</h2>
@@ -227,10 +299,29 @@ export function SettingsStep() {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" className="mt-6" onClick={() => setShowNewPresetDialog(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Preset
-        </Button>
+        <div className="flex items-center gap-2 mt-6">
+          <Button variant="outline" size="sm" onClick={() => setShowNewPresetDialog(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Preset
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!selectedPreset || selectedPreset.preset_id === DEFAULT_PRESET.preset_id || isLoading}
+            onClick={handleUpdatePreset}
+          >
+            {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Save Preset
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={!selectedPreset || selectedPreset.preset_id === DEFAULT_PRESET.preset_id || isLoading}
+            onClick={handleDeletePreset}
+          >
+            Delete
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -314,15 +405,15 @@ export function SettingsStep() {
               <TabsContent value="lookups" className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-sm">Currencies (comma-separated)</Label>
+                    <Label className="text-sm">Currencies</Label>
                     <Input value={currencyValues} onChange={(e) => setCurrencyValues(e.target.value)} placeholder="USD, EUR, GBP, INR..." />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm">UOM (comma-separated)</Label>
+                    <Label className="text-sm">UOM</Label>
                     <Input value={uomValues} onChange={(e) => setUomValues(e.target.value)} placeholder="EA, PCS, KG, LBS..." />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm">Status Enum (comma-separated)</Label>
+                    <Label className="text-sm">Status Enum</Label>
                     <Input value={statusEnums} onChange={(e) => setStatusEnums(e.target.value)} placeholder="DRAFT, SUBMITTED, APPROVED..." />
                   </div>
                   <div className="space-y-2">
@@ -339,7 +430,7 @@ export function SettingsStep() {
                     <Input type="number" min={1} value={maxTextLen} onChange={(e) => setMaxTextLen(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm">Date formats (comma-separated)</Label>
+                    <Label className="text-sm">Date formats</Label>
                     <Input value={dateFormats} onChange={(e) => setDateFormats(e.target.value)} placeholder="ISO, DMY, MDY" />
                   </div>
                 </div>
@@ -350,18 +441,20 @@ export function SettingsStep() {
                 {selectedColumns.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Select columns first.</p>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                    {selectedColumns.map((col) => (
-                      <label key={col} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={requiredColumns.includes(col)}
-                          onChange={() => toggleRequired(col)}
-                          className="h-4 w-4"
-                        />
-                        <span>{col}</span>
-                      </label>
-                    ))}
+                  <div className="border border-muted rounded-lg p-3 max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {selectedColumns.map((col) => (
+                        <label key={col} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/30 p-2 rounded">
+                          <input
+                            type="checkbox"
+                            checked={requiredColumns.includes(col)}
+                            onChange={() => toggleRequired(col)}
+                            className="h-4 w-4"
+                          />
+                          <span>{col}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
               </TabsContent>
@@ -429,27 +522,33 @@ export function SettingsStep() {
               value={newPresetName}
               onChange={(e) => setNewPresetName(e.target.value)}
             />
-            <Button
-              onClick={() => {
-                if (!newPresetName.trim()) return
-                const preset: SettingsPreset = {
-                  preset_id: newPresetName.trim().toLowerCase().replace(/\s+/g, "_"),
-                  preset_name: newPresetName.trim(),
-                  config: {},
-                }
-                setPresets([preset, ...presets])
-                setSelectedPreset(preset)
-                setShowNewPresetDialog(false)
-                setNewPresetName("")
-              }}
-            >
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Start from</Label>
+              <Select value={copySourceId} onValueChange={setCopySourceId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose source preset" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">Current edits</SelectItem>
+                  {presets.map((p) => (
+                    <SelectItem key={p.preset_id} value={p.preset_id}>
+                      {p.preset_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleCreatePreset} disabled={!newPresetName.trim() || isLoading}>
+              {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Create Preset
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+        </div>
+      </ScrollArea>
 
-      <div className="flex items-center justify-between pt-4 border-t border-muted/40">
+      <div className="p-4 border-t border-muted/40 flex items-center justify-between">
         <Button variant="outline" onClick={prevStep}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back

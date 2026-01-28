@@ -223,7 +223,7 @@ export function AppSidebar() {
 								</Button>
 							)}
 							<div className="text-xs text-muted-foreground text-center">
-								<div>@copyright CleanFlowAI</div>
+								<div>© CleanFlowAI</div>
 							</div>
 						</div>
 					)}

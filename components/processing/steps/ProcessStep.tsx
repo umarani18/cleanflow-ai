@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Loader2, CheckCircle, XCircle, Play, RotateCw } from "lucide-react"
 import { useProcessingWizard } from "../WizardContext"
-import { fileManagementAPI } from "@/lib/api/file-management-api"
+import { fileManagementAPI, type FileStatusResponse } from "@/lib/api/file-management-api"
+import { FileDetailsDialog } from "@/components/files/file-details-dialog"
 
 export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
   const {
@@ -26,6 +27,8 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
   const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle")
   const [progress, setProgress] = useState(0)
   const [statusMessage, setStatusMessage] = useState("")
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false)
+  const [fileData, setFileData] = useState<FileStatusResponse | null>(null)
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null
@@ -107,11 +110,21 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
     setProcessingError(null)
   }
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
+    try {
+      if (authToken) {
+        const fileResponse = await fileManagementAPI.getFileStatus(uploadId, authToken)
+        setFileData(fileResponse)
+        setShowDetailsDialog(true)
+      }
+    } catch (err) {
+      console.error("Failed to fetch file data", err)
+    }
     if (onComplete) onComplete()
   }
 
   return (
+    <>
     <div className="flex flex-col items-center justify-center h-[60vh] p-8">
       {status === "idle" && (
         <div className="text-center space-y-6">
@@ -191,5 +204,12 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
         </div>
       )}
     </div>
+
+    <FileDetailsDialog 
+      file={fileData} 
+      open={showDetailsDialog} 
+      onOpenChange={setShowDetailsDialog} 
+    />
+    </>
   )
 }

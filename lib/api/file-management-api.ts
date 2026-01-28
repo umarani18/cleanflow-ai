@@ -18,6 +18,7 @@ const ENDPOINTS = {
   FILES_CUSTOM_RULE_SUGGEST: (id: string) => `/files/${id}/custom-rule-suggest`, // POST - custom rule suggestion
   SETTINGS: '/settings',
   SETTINGS_BY_ID: (id: string) => `/settings/${id}`,
+  FILES_DQ_MATRIX: (id: string) => `/files/${id}/dq-matrix`, // GET - dq_matrix slices
 }
 
 // Response Types
@@ -271,12 +272,25 @@ class FileManagementAPI {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || errorData.message || `HTTP ${response.status}`)
+        const error = new Error(errorData.error || errorData.message || `HTTP ${response.status}`)
+        
+        // Don't log 404 errors for settings presets (expected when backend doesn't have them)
+        const isSettingsNotFound = url.includes('/settings/presets') && response.status === 404
+        if (!isSettingsNotFound) {
+          console.error('❌ API Error:', error)
+        }
+        
+        throw error
       }
 
       return await response.json()
     } catch (error) {
-      console.error('❌ API Error:', error)
+      // Only log if not already logged above
+      const url_lower = url.toLowerCase()
+      const isSettingsError = url_lower.includes('/settings/presets')
+      if (!isSettingsError && !(error instanceof Error && error.message.includes('HTTP'))) {
+        console.error('❌ API Error:', error)
+      }
       throw error
     }
   }
@@ -429,11 +443,8 @@ class FileManagementAPI {
     try {
       return await this.makeRequest(ENDPOINTS.SETTINGS, authToken, { method: "GET" })
     } catch (error) {
-      // Gracefully degrade if server has no presets yet
       const message = (error as Error)?.message || ""
-      if (message.toLowerCase().includes("not found")) {
-        return { presets: [] }
-      }
+      if (message.toLowerCase().includes("not found")) return { presets: [] }
       console.warn("⚠️ Falling back to empty presets due to error:", message)
       return { presets: [] }
     }
@@ -444,12 +455,54 @@ class FileManagementAPI {
       return await this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), authToken, { method: "GET" })
     } catch (error) {
       const message = (error as Error)?.message || ""
-      if (message.toLowerCase().includes("not found")) {
-        return { preset_id: presetId, preset_name: presetId, config: {} }
-      }
-      console.warn("⚠️ Falling back to empty preset due to error:", message)
+      // Silently return fallback for "not found" or other errors
+      // Don't log to console to avoid cluttering output
       return { preset_id: presetId, preset_name: presetId, config: {} }
     }
+  }
+
+  async createSettingsPreset(
+    presetName: string,
+    config: Record<string, any>,
+    authToken: string,
+    isDefault = false
+  ): Promise<any> {
+    return this.makeRequest(ENDPOINTS.SETTINGS_PRESETS, authToken, {
+      method: "POST",
+      body: JSON.stringify({
+        preset_name: presetName,
+        config,
+        is_default: isDefault,
+      }),
+    })
+  }
+
+  async updateSettingsPreset(
+    presetId: string,
+    payload: { preset_name?: string; config?: Record<string, any>; is_default?: boolean },
+    authToken: string
+  ): Promise<any> {
+    return this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    })
+  }
+
+  async deleteSettingsPreset(presetId: string, authToken: string): Promise<any> {
+    return this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, {
+      method: "DELETE",
+    })
+  }
+
+  async getDQMatrix(uploadId: string, authToken: string, options?: { limit?: number; offset?: number; start?: number; end?: number }): Promise<any> {
+    const params = new URLSearchParams()
+    if (options?.limit !== undefined) params.set('limit', String(options.limit))
+    if (options?.offset !== undefined) params.set('offset', String(options.offset))
+    if (options?.start !== undefined) params.set('start', String(options.start))
+    if (options?.end !== undefined) params.set('end', String(options.end))
+    const qs = params.toString()
+    const endpoint = qs ? `${ENDPOINTS.FILES_DQ_MATRIX(uploadId)}?${qs}` : ENDPOINTS.FILES_DQ_MATRIX(uploadId)
+    return this.makeRequest(endpoint, authToken, { method: "GET" })
   }
   async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine' | 'raw' | 'original' | 'all', authToken: string, targetErp?: string): Promise<Blob> {
     let endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}`
@@ -1203,8 +1256,6 @@ class FileManagementAPI {
       return { success: false, message: 'Invalid URL format' }
     }
   }
-
-  // ==================== Settings Presets API ====================
 
   /**
    * Get all user settings presets

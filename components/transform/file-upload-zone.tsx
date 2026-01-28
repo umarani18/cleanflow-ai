@@ -131,7 +131,7 @@ export function FileUploadZone() {
               <div>
                 <div className="text-lg font-medium mb-2">Uploading...</div>
                 <Progress value={uploadProgress} className="w-full max-w-xs mx-auto" />
-                <div className="text-sm text-muted-foreground mt-2">{uploadProgress}% complete</div>
+                <div className="text-sm text-muted-foreground mt-2">{uploadProgress.toFixed(2)}% complete</div>
               </div>
             </div>
           ) : (
