@@ -132,15 +132,39 @@ export function RulesStep() {
 
   const canProceed = true // rules optional
 
-  return (
-    <div className="flex flex-col h-[60vh]">
-      <ScrollArea className="flex-1 p-6">
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-semibold">Rule Configuration</h2>
-            <p className="text-sm text-muted-foreground mt-1">Configure which rules to apply during processing.</p>
-          </div>
+  // Calculate rule statistics
+  const totalAutoRules = Object.values(columnRules).flat().filter(r => r.category === "auto").length
+  const totalHumanRules = Object.values(columnRules).flat().filter(r => r.category === "human").length
+  const totalSelectedRules = Object.values(columnRules).flat().filter(r => r.selected).length
+  const totalCustomRules = customRules.length
 
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Rule Configuration</h2>
+          <p className="text-sm text-muted-foreground mt-1">Configure which rules to apply during processing.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">
+            Auto: {totalAutoRules}
+          </Badge>
+          <Badge variant="outline" className="text-xs">
+            Human: {totalHumanRules}
+          </Badge>
+          <Badge variant="outline" className="text-xs">
+            Custom: {totalCustomRules}
+          </Badge>
+          <Badge variant="default" className="text-xs">
+            Selected: {totalSelectedRules + totalCustomRules}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Main content area with internal scrolling */}
+      <div className="border border-muted rounded-lg overflow-hidden h-[45vh]">
+        <div className="h-full overflow-y-auto p-4">
           <div className="space-y-3">
             <h3 className="font-medium">Column Rules</h3>
             {selectedColumns.length === 0 && (
@@ -280,9 +304,10 @@ export function RulesStep() {
             })}
           </div>
         </div>
-      </ScrollArea>
+      </div>
 
-      <div className="p-4 border-t border-muted/40 flex items-center justify-between">
+      {/* Footer with navigation buttons - fixed at bottom */}
+      <div className="flex items-center justify-between pt-4 border-t border-muted/40">
         <Button variant="outline" onClick={prevStep}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back

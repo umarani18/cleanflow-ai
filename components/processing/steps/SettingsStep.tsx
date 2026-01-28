@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { ArrowLeft, ArrowRight, Loader2, Plus, Settings, Star, Shield, ToggleLeft, ToggleRight, Sliders } from "lucide-react"
 import { useProcessingWizard, type SettingsPreset } from "../WizardContext"
 import { fileManagementAPI } from "@/lib/api/file-management-api"
@@ -168,7 +169,7 @@ export function SettingsStep() {
     }
   }
 
-  const buildConfigFromState = () => ({
+  const buildConfigFromState = (): any => ({
     currency_values: currencyValues.split(",").map((s) => s.trim()).filter(Boolean),
     uom_values: uomValues.split(",").map((s) => s.trim()).filter(Boolean),
     date_formats: dateFormats.split(",").map((s) => s.trim()).filter(Boolean),
@@ -266,7 +267,9 @@ export function SettingsStep() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+    <div className="flex flex-col h-[60vh]">
+      <ScrollArea className="flex-1 overflow-y-auto p-6 pb-2">
+        <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Settings Configuration</h2>
@@ -402,15 +405,15 @@ export function SettingsStep() {
               <TabsContent value="lookups" className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-sm">Currencies (comma-separated)</Label>
+                    <Label className="text-sm">Currencies</Label>
                     <Input value={currencyValues} onChange={(e) => setCurrencyValues(e.target.value)} placeholder="USD, EUR, GBP, INR..." />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm">UOM (comma-separated)</Label>
+                    <Label className="text-sm">UOM</Label>
                     <Input value={uomValues} onChange={(e) => setUomValues(e.target.value)} placeholder="EA, PCS, KG, LBS..." />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm">Status Enum (comma-separated)</Label>
+                    <Label className="text-sm">Status Enum</Label>
                     <Input value={statusEnums} onChange={(e) => setStatusEnums(e.target.value)} placeholder="DRAFT, SUBMITTED, APPROVED..." />
                   </div>
                   <div className="space-y-2">
@@ -427,7 +430,7 @@ export function SettingsStep() {
                     <Input type="number" min={1} value={maxTextLen} onChange={(e) => setMaxTextLen(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm">Date formats (comma-separated)</Label>
+                    <Label className="text-sm">Date formats</Label>
                     <Input value={dateFormats} onChange={(e) => setDateFormats(e.target.value)} placeholder="ISO, DMY, MDY" />
                   </div>
                 </div>
@@ -438,18 +441,20 @@ export function SettingsStep() {
                 {selectedColumns.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Select columns first.</p>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                    {selectedColumns.map((col) => (
-                      <label key={col} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={requiredColumns.includes(col)}
-                          onChange={() => toggleRequired(col)}
-                          className="h-4 w-4"
-                        />
-                        <span>{col}</span>
-                      </label>
-                    ))}
+                  <div className="border border-muted rounded-lg p-3 max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {selectedColumns.map((col) => (
+                        <label key={col} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/30 p-2 rounded">
+                          <input
+                            type="checkbox"
+                            checked={requiredColumns.includes(col)}
+                            onChange={() => toggleRequired(col)}
+                            className="h-4 w-4"
+                          />
+                          <span>{col}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
               </TabsContent>
@@ -540,8 +545,10 @@ export function SettingsStep() {
           </div>
         </DialogContent>
       </Dialog>
+        </div>
+      </ScrollArea>
 
-      <div className="flex items-center justify-between pt-4 border-t border-muted/40">
+      <div className="p-4 border-t border-muted/40 flex items-center justify-between">
         <Button variant="outline" onClick={prevStep}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back

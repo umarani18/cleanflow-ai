@@ -72,7 +72,7 @@ export function ProcessingWizard({ onClose, onComplete }: ProcessingWizardProps)
             </div>
 
             {/* Step content */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-hidden">
                 {step === "columns" && <ColumnSelectionStep />}
                 {step === "profiling" && <ProfilingStep />}
                 {step === "settings" && <SettingsStep />}
