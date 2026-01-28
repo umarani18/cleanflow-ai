@@ -166,8 +166,6 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
             <h2 className="text-xl font-semibold">Processing...</h2>
             <p className="text-muted-foreground mt-2">{statusMessage}</p>
           </div>
-          <Progress value={progress} className="h-2" />
-          <p className="text-sm text-muted-foreground">{progress}% complete</p>
         </div>
       )}
 
