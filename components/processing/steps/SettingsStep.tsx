@@ -83,6 +83,7 @@ export function SettingsStep() {
   const [activeTab, setActiveTab] = useState("policies")
   const [showNewPresetDialog, setShowNewPresetDialog] = useState(false)
   const [newPresetName, setNewPresetName] = useState("")
+  const [copySourceId, setCopySourceId] = useState<string>("current")
 
   useEffect(() => {
     fetchPresets()
@@ -95,7 +96,13 @@ export function SettingsStep() {
     try {
       const response = await fileManagementAPI.getSettingsPresets(authToken)
       const serverPresets = response.presets || []
-      const finalPresets = serverPresets.length > 0 ? serverPresets : [DEFAULT_PRESET]
+      const hasDefault = serverPresets.some((p: any) => p.is_default)
+      const finalPresets =
+        serverPresets.length === 0
+          ? [DEFAULT_PRESET]
+          : hasDefault
+            ? serverPresets
+            : [...serverPresets, DEFAULT_PRESET]
       setPresets(finalPresets)
       const defaultPreset = finalPresets.find((p: SettingsPreset) => (p as any).is_default)
       if (defaultPreset && !selectedPreset) {
@@ -161,29 +168,31 @@ export function SettingsStep() {
     }
   }
 
+  const buildConfigFromState = () => ({
+    currency_values: currencyValues.split(",").map((s) => s.trim()).filter(Boolean),
+    uom_values: uomValues.split(",").map((s) => s.trim()).filter(Boolean),
+    date_formats: dateFormats.split(",").map((s) => s.trim()).filter(Boolean),
+    policies: {
+      allow_autofix: allowAutofix,
+      strictness,
+      unknown_column_behavior: unknownBehavior,
+    },
+    required_fields: {
+      placeholders_treated_as_missing: placeholders.split(",").map((s) => s.trim()).filter(Boolean),
+    },
+    enum_sets: {
+      status: statusEnums.split(",").map((s) => s.trim()).filter(Boolean),
+    },
+    thresholds: {
+      text: {
+        max_len_default: Number(maxTextLen) || 255,
+      },
+    },
+    required_columns: requiredColumns,
+  })
+
   const handleSaveOverrides = () => {
-    const overrides = {
-      currency_values: currencyValues.split(",").map((s) => s.trim()).filter(Boolean),
-      uom_values: uomValues.split(",").map((s) => s.trim()).filter(Boolean),
-      date_formats: dateFormats.split(",").map((s) => s.trim()).filter(Boolean),
-      policies: {
-        allow_autofix: allowAutofix,
-        strictness,
-        unknown_column_behavior: unknownBehavior,
-      },
-      required_fields: {
-        placeholders_treated_as_missing: placeholders.split(",").map((s) => s.trim()).filter(Boolean),
-      },
-      enum_sets: {
-        status: statusEnums.split(",").map((s) => s.trim()).filter(Boolean),
-      },
-      thresholds: {
-        text: {
-          max_len_default: Number(maxTextLen) || 255,
-        },
-      },
-      required_columns: requiredColumns,
-    }
+    const overrides = buildConfigFromState()
     setPresetOverrides(overrides)
     setEditMode(false)
   }
@@ -193,6 +202,66 @@ export function SettingsStep() {
       setRequiredColumns(requiredColumns.filter((c) => c !== col))
     } else {
       setRequiredColumns([...requiredColumns, col])
+    }
+  }
+
+  const handleCreatePreset = async () => {
+    if (!newPresetName.trim() || !authToken) return
+    setIsLoading(true)
+    try {
+      let config = buildConfigFromState()
+      if (copySourceId !== "current") {
+        const source = presets.find((p) => p.preset_id === copySourceId)
+        if (source?.config) config = source.config
+      }
+      const created = await fileManagementAPI.createSettingsPreset(
+        newPresetName.trim(),
+        config,
+        authToken,
+        false
+      )
+      await fetchPresets()
+      const newId = created?.preset_id || newPresetName.trim().toLowerCase().replace(/\s+/g, "_")
+      handleSelectPreset(newId)
+      setShowNewPresetDialog(false)
+      setNewPresetName("")
+      setCopySourceId("current")
+    } catch (err) {
+      console.error("Failed to create preset", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleUpdatePreset = async () => {
+    if (!authToken || !selectedPreset || selectedPreset.preset_id === DEFAULT_PRESET.preset_id) return
+    setIsLoading(true)
+    try {
+      const config = buildConfigFromState()
+      await fileManagementAPI.updateSettingsPreset(
+        selectedPreset.preset_id,
+        { preset_name: selectedPreset.preset_name, config },
+        authToken
+      )
+      await fetchPresets()
+    } catch (err) {
+      console.error("Failed to update preset", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDeletePreset = async () => {
+    if (!authToken || !selectedPreset || selectedPreset.preset_id === DEFAULT_PRESET.preset_id) return
+    setIsLoading(true)
+    try {
+      await fileManagementAPI.deleteSettingsPreset(selectedPreset.preset_id, authToken)
+      await fetchPresets()
+      setSelectedPreset(null)
+    } catch (err) {
+      console.error("Failed to delete preset", err)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -227,10 +296,29 @@ export function SettingsStep() {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" className="mt-6" onClick={() => setShowNewPresetDialog(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Preset
-        </Button>
+        <div className="flex items-center gap-2 mt-6">
+          <Button variant="outline" size="sm" onClick={() => setShowNewPresetDialog(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Preset
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!selectedPreset || selectedPreset.preset_id === DEFAULT_PRESET.preset_id || isLoading}
+            onClick={handleUpdatePreset}
+          >
+            {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Save Preset
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={!selectedPreset || selectedPreset.preset_id === DEFAULT_PRESET.preset_id || isLoading}
+            onClick={handleDeletePreset}
+          >
+            Delete
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -429,20 +517,24 @@ export function SettingsStep() {
               value={newPresetName}
               onChange={(e) => setNewPresetName(e.target.value)}
             />
-            <Button
-              onClick={() => {
-                if (!newPresetName.trim()) return
-                const preset: SettingsPreset = {
-                  preset_id: newPresetName.trim().toLowerCase().replace(/\s+/g, "_"),
-                  preset_name: newPresetName.trim(),
-                  config: {},
-                }
-                setPresets([preset, ...presets])
-                setSelectedPreset(preset)
-                setShowNewPresetDialog(false)
-                setNewPresetName("")
-              }}
-            >
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Start from</Label>
+              <Select value={copySourceId} onValueChange={setCopySourceId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose source preset" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">Current edits</SelectItem>
+                  {presets.map((p) => (
+                    <SelectItem key={p.preset_id} value={p.preset_id}>
+                      {p.preset_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleCreatePreset} disabled={!newPresetName.trim() || isLoading}>
+              {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Create Preset
             </Button>
           </div>

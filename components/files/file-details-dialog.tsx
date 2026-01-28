@@ -22,6 +22,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { DialogDescription } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { FileStatusResponse, DqReportResponse, fileManagementAPI } from "@/lib/api/file-management-api"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn, formatBytes, formatToIST } from "@/lib/utils"
@@ -56,6 +59,13 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
   const [dqReportLoading, setDqReportLoading] = useState(false)
   const [dqReportError, setDqReportError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [downloadingMatrix, setDownloadingMatrix] = useState(false)
+  const [matrixDialogOpen, setMatrixDialogOpen] = useState(false)
+  const [matrixLimit, setMatrixLimit] = useState<number | string>(500)
+  const [matrixStart, setMatrixStart] = useState<string>("")
+  const [matrixEnd, setMatrixEnd] = useState<string>("")
+  const [matrixTotals, setMatrixTotals] = useState<{ totalResults?: number; totalRows?: number } | null>(null)
+  const [matrixLoadingTotals, setMatrixLoadingTotals] = useState(false)
   const [issues, setIssues] = useState<{ row: number; column: string; violation: string; value: any }[]>([])
   const [issuesTotal, setIssuesTotal] = useState<number | null>(null)
   const [issuesNextOffset, setIssuesNextOffset] = useState<number | null>(null)
@@ -205,6 +215,63 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
     }
   }
 
+  const openMatrixDialog = async () => {
+    setMatrixDialogOpen(true)
+    if (!file) return
+    setMatrixLoadingTotals(true)
+    try {
+      const authTokens = JSON.parse(localStorage.getItem('authTokens') || '{}')
+      const token = authTokens.idToken
+      if (!token) throw new Error('Not authenticated')
+      const head = await fileManagementAPI.getDQMatrix(file.upload_id, token, { limit: 1, offset: 0 })
+      setMatrixTotals({
+        totalResults: head?.total_results,
+        totalRows: head?.total_rows
+      })
+    } catch {
+      // ignore
+    } finally {
+      setMatrixLoadingTotals(false)
+    }
+  }
+
+  const handleDownloadDqMatrix = async () => {
+    if (!file) return
+    setDownloadingMatrix(true)
+    try {
+      const authTokens = JSON.parse(localStorage.getItem('authTokens') || '{}')
+      const token = authTokens.idToken
+      if (!token) throw new Error('Not authenticated')
+      const params: { limit?: number; offset?: number } = {}
+      const limitVal = Number(matrixLimit)
+      if (!Number.isNaN(limitVal) && limitVal > 0) params.limit = limitVal
+      const startVal = matrixStart ? Number(matrixStart) : undefined
+      const endVal = matrixEnd ? Number(matrixEnd) : undefined
+      if (startVal !== undefined && !Number.isNaN(startVal) && startVal >= 0) {
+        params.offset = startVal
+        if (endVal !== undefined && !Number.isNaN(endVal) && endVal >= startVal) {
+          params.limit = endVal - startVal + 1
+        }
+      }
+      const data = await fileManagementAPI.getDQMatrix(file.upload_id, token, params)
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `dq_matrix_${file.original_filename || file.filename || file.upload_id}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      toast({ title: "Downloaded", description: `Returned ${data.returned ?? 'some'} rows` })
+      setMatrixDialogOpen(false)
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err?.message || "Failed to download dq_matrix", variant: "destructive" })
+    } finally {
+      setDownloadingMatrix(false)
+    }
+  }
+
   if (!file) return null
 
   const getStatusColor = (status: string) => {
@@ -216,6 +283,7 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange} >
       <DialogContent className="w-[98vw] h-[80vh] max-w-6xl max-h-none p-0 flex flex-col gap-0">
         <div className="flex h-full flex-col">
@@ -549,6 +617,20 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                       {/* Download Button */}
                       <div className="flex justify-end">
                         <Button 
+                          onClick={openMatrixDialog} 
+                          disabled={downloadingMatrix}
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                        >
+                          {downloadingMatrix ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Database className="h-4 w-4" />
+                          )}
+                          Download DQ Matrix
+                        </Button>
+                        <Button 
                           onClick={handleDownloadDqReport} 
                           disabled={downloading}
                           variant="outline"
@@ -807,6 +889,108 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                 </div>
               </ScrollArea>
             )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    <DqMatrixDialog
+      open={matrixDialogOpen}
+      onOpenChange={setMatrixDialogOpen}
+      limit={matrixLimit}
+      start={matrixStart}
+      end={matrixEnd}
+      setLimit={setMatrixLimit}
+      setStart={setMatrixStart}
+      setEnd={setMatrixEnd}
+      totals={matrixTotals}
+      loadingTotals={matrixLoadingTotals}
+      onDownload={handleDownloadDqMatrix}
+      downloading={downloadingMatrix}
+    />
+    </>
+  )
+}
+
+function DqMatrixDialog({
+  open,
+  onOpenChange,
+  limit,
+  start,
+  end,
+  setLimit,
+  setStart,
+  setEnd,
+  totals,
+  loadingTotals,
+  onDownload,
+  downloading
+}: {
+  open: boolean
+  onOpenChange: (val: boolean) => void
+  limit: number | string
+  start: string
+  end: string
+  setLimit: (val: any) => void
+  setStart: (val: any) => void
+  setEnd: (val: any) => void
+  totals: { totalResults?: number; totalRows?: number } | null
+  loadingTotals: boolean
+  onDownload: () => void
+  downloading: boolean
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Download DQ Matrix</DialogTitle>
+          <DialogDescription>Choose a range or limit to download cell-level issues.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Limit</Label>
+              <Input
+                type="number"
+                min={1}
+                value={limit}
+                onChange={(e) => setLimit(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Start (offset)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={start}
+                onChange={(e) => setStart(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>End (optional)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={end}
+                onChange={(e) => setEnd(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {loadingTotals ? "Loading totals..." : (
+              totals ? (
+                <>
+                  <div>Total issue rows: {totals.totalResults ?? "unknown"}</div>
+                  <div>Total rows processed: {totals.totalRows ?? "unknown"}</div>
+                </>
+              ) : "Totals not available"
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button onClick={onDownload} disabled={downloading}>
+              {downloading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Download
+            </Button>
           </div>
         </div>
       </DialogContent>
