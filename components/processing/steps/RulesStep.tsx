@@ -174,14 +174,20 @@ export function RulesStep() {
               const isExpanded = expandedColumns.includes(col)
               const rules = columnRules[col] || []
               const columnCustomRules = customRules.filter((r) => r.column === col)
+              const autoCount = rules.filter(r => r.category === "auto").length
+              const humanCount = rules.filter(r => r.category === "human").length
+              const selectedCount = rules.filter((r) => r.selected).length + columnCustomRules.length
               return (
                 <Collapsible key={col} open={isExpanded} onOpenChange={() => toggleColumnExpand(col)}>
                   <CollapsibleTrigger className="flex items-center gap-2 w-full p-3 rounded-md border border-muted hover:bg-muted/30">
                     {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     <span className="font-medium">{col}</span>
-                    <Badge variant="outline" className="ml-auto">
-                      {rules.filter((r) => r.selected).length + columnCustomRules.length} rules
-                    </Badge>
+                    <div className="ml-auto flex items-center gap-1">
+                      <Badge variant="outline" className="text-xs">A:{autoCount}</Badge>
+                      <Badge variant="outline" className="text-xs">H:{humanCount}</Badge>
+                      <Badge variant="outline" className="text-xs">C:{columnCustomRules.length}</Badge>
+                      <Badge variant="default" className="text-xs">S:{selectedCount}</Badge>
+                    </div>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-2 ml-6 space-y-3">
                     {rules.length === 0 && columnCustomRules.length === 0 && (
