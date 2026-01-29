@@ -271,8 +271,10 @@ class FileManagementAPI {
       console.log('📥 Response:', response.status)
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        const error = new Error(errorData.error || errorData.message || `HTTP ${response.status}`)
+        const raw = await response.json().catch(() => ({}))
+        const errorData = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw : {}
+        const fallbackMsg = typeof raw === "string" ? raw : `HTTP ${response.status}`
+        const error = new Error(errorData.error || errorData.message || fallbackMsg)
         
         // Don't log 404 errors for settings presets (expected when backend doesn't have them)
         const isSettingsNotFound = url.includes('/settings/presets') && response.status === 404
