@@ -325,12 +325,11 @@ export function SettingsStep() {
         const source = presets.find((p) => p.preset_id === copySourceId)
         if (source?.config) config = source.config
       }
-      const created = await fileManagementAPI.createSettingsPreset(
-        newPresetName.trim(),
+      const created = await fileManagementAPI.createSettingsPreset({
+        preset_name: newPresetName.trim(),
         config,
-        authToken,
-        false
-      )
+        is_default: false
+      })
       await fetchPresets()
       const newId = created?.preset_id || newPresetName.trim().toLowerCase().replace(/\s+/g, "_")
       handleSelectPreset(newId)
