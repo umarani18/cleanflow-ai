@@ -37,6 +37,16 @@ interface ColumnExportContentProps {
   }) => void
   exporting: boolean
   onCancel?: () => void
+  onSecondaryAction?: (options: {
+    format: 'csv' | 'excel' | 'json'
+    dataType: 'all' | 'clean' | 'quarantine'
+    columns: string[]
+    columnMapping: Record<string, string>
+  }) => void
+  secondaryActionLabel?: string
+  secondaryActionLoading?: boolean
+  secondaryActionDisabled?: boolean
+  primaryActionLabel?: string
   showTitle?: boolean
   showFooter?: boolean
   className?: string
@@ -54,6 +64,11 @@ export function ColumnExportContent({
   onExport,
   exporting,
   onCancel,
+  onSecondaryAction,
+  secondaryActionLabel = 'Push to ERP Tool',
+  secondaryActionLoading = false,
+  secondaryActionDisabled = false,
+  primaryActionLabel,
   showTitle = true,
   showFooter = true,
   className
@@ -154,6 +169,16 @@ export function ColumnExportContent({
     })
   }
 
+  const handleSecondaryAction = () => {
+    if (!onSecondaryAction) return
+    onSecondaryAction({
+      format: selectedFormat,
+      dataType,
+      columns: selectedColumns,
+      columnMapping
+    })
+  }
+
   const formatOptions = [
     { value: 'csv', label: 'CSV', icon: File, description: 'Comma-separated values' },
     { value: 'excel', label: 'Excel', icon: FileSpreadsheet, description: 'Microsoft Excel (.xlsx)' },
@@ -176,9 +201,11 @@ export function ColumnExportContent({
             <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
               <Columns className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            Export Required Fields
+            Select Columns for Export
           </div>
-          <p className="text-xs text-muted-foreground">Configure columns and export format</p>
+          <p className="text-xs text-muted-foreground">
+            Choose columns for Download or Push to ERP Tool, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
+          </p>
           <div className="text-xs mt-2 p-2 rounded bg-muted text-muted-foreground">
             File: <span className="font-mono font-medium text-foreground">{fileName}</span>
           </div>
@@ -382,7 +409,7 @@ export function ColumnExportContent({
       </ScrollArea>
 
       {showFooter && (
-        <div className="flex justify-end gap-3 shrink-0 pt-4 border-t">
+        <div className="flex justify-between gap-3 shrink-0 pt-4 border-t">
           <Button
             variant="outline"
             onClick={onCancel}
@@ -391,23 +418,43 @@ export function ColumnExportContent({
           >
             Cancel
           </Button>
-          <Button
-            onClick={handleExport}
-            disabled={exporting || selectedColumns.length === 0}
-            className="gap-2 px-6 bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
-          >
-            {exporting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Exporting...
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4" />
-                Export {selectedFormat.toUpperCase()}
-              </>
+          <div className="flex items-center gap-2">
+            {onSecondaryAction && (
+              <Button
+                variant="outline"
+                onClick={handleSecondaryAction}
+                disabled={
+                  exporting ||
+                  secondaryActionLoading ||
+                  secondaryActionDisabled ||
+                  selectedColumns.length === 0
+                }
+                className="gap-2 px-6"
+              >
+                {secondaryActionLoading && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                {secondaryActionLabel}
+              </Button>
             )}
-          </Button>
+            <Button
+              onClick={handleExport}
+              disabled={exporting || selectedColumns.length === 0}
+              className="gap-2 px-6 bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700"
+            >
+              {exporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  {primaryActionLabel || `Export ${selectedFormat.toUpperCase()}`}
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -430,10 +477,10 @@ export function ColumnExportDialog({
             <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
               <Columns className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            Export Required Fields
+            Select Columns for Export
           </DialogTitle>
           <DialogDescription className="text-sm mt-2">
-            Configure columns and export format
+            Choose columns for Download or Push to ERP Tool, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
           </DialogDescription>
           <div className="text-xs mt-3 p-2 rounded bg-muted text-muted-foreground">
             File: <span className="font-mono font-medium text-foreground">{fileName}</span>
