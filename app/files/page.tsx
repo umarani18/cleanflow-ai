@@ -101,6 +101,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import QuickBooksImport from "@/components/quickbooks/quickbooks-import";
+import ZohoBooksImport from "@/components/zoho/zoho-books-import";
 import UnifiedBridgeImport from "@/components/unified-bridge/unified-bridge-import";
 import CustomDestinationExport from "@/components/files/custom-destination-export";
 import { PushToERPModal } from "@/components/files/push-to-erp-modal";
@@ -143,6 +144,7 @@ const DESTINATION_OPTIONS = [
 
 const ERP_OPTIONS = [
   { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
+  { label: "ZOHO BOOKS", value: "zoho-books" },
   { label: "ORACLE FUSION", value: "oracle" },
   { label: "SAP", value: "sap" },
   { label: "MICROSOFT DYNAMICS", value: "dynamics" },
@@ -1728,6 +1730,20 @@ function FilesPageContent() {
                       }}
                     />
                   </div>
+                ) : selectedSource === "erp" && selectedErp === "zoho-books" ? (
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                    <ZohoBooksImport
+                      mode="source"
+                      onImportComplete={handleQuickBooksImportComplete}
+                      onNotification={(message, type) => {
+                        toast({
+                          title: type === "success" ? "Success" : "Error",
+                          description: message,
+                          variant: type === "error" ? "destructive" : "default",
+                        });
+                      }}
+                    />
+                  </div>
                 ) : selectedSource === "erp" ? (
                   <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
                     <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
@@ -1798,6 +1814,20 @@ function FilesPageContent() {
                   selectedDestinationErp === "quickbooks" ? (
                   <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
                     <QuickBooksImport
+                      mode="destination"
+                      onNotification={(message, type) => {
+                        toast({
+                          title: type === "success" ? "Success" : "Error",
+                          description: message,
+                          variant: type === "error" ? "destructive" : "default",
+                        });
+                      }}
+                    />
+                  </div>
+                ) : selectedDestination === "erp" &&
+                  selectedDestinationErp === "zoho-books" ? (
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                    <ZohoBooksImport
                       mode="destination"
                       onNotification={(message, type) => {
                         toast({
@@ -3117,6 +3147,7 @@ function FilesPageContent() {
                           "NetSuite",
                           "Workday",
                           "QuickBooks Online",
+                          "Zoho Books",
                           "Custom ERP",
                         ].map((erp) => (
                           <SelectItem key={erp} value={erp}>

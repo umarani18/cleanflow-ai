@@ -33,6 +33,7 @@ const SUPPORTED_ERPS = [
   "Microsoft Dynamics",
   "NetSuite",
   "Workday",
+  "Zoho Books",
   "Infor M3",
   "Infor LN",
   "Epicor Kinetic",

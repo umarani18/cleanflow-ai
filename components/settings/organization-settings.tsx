@@ -106,6 +106,7 @@ const normalizeRole = (value: string | null | undefined): AppRole => {
 // ERP Options
 const ERP_OPTIONS = [
   { value: "quickbooks", label: "QUICKBOOKS ONLINE" },
+  { value: "zoho-books", label: "ZOHO BOOKS" },
   { value: "oracle", label: "ORACLE FUSION" },
   { value: "sap", label: "SAP" },
   { value: "dynamics", label: "MICROSOFT DYNAMICS" },
