@@ -22,6 +22,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -78,6 +86,12 @@ export default function ZohoBooksImport({
   })
 
   const [importResult, setImportResult] = useState<ZohoBooksImportResponse | null>(null)
+  const [exportSummary, setExportSummary] = useState<{
+    success_count: number
+    failed_count: number
+    total_records: number
+    errors: string[]
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const [columnModalOpen, setColumnModalOpen] = useState(false)
@@ -85,6 +99,9 @@ export default function ZohoBooksImport({
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
   const [columnsLoading, setColumnsLoading] = useState(false)
   const [columnsError, setColumnsError] = useState<string | null>(null)
+  const [mappingOpen, setMappingOpen] = useState(false)
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
+  const [orgIdInput, setOrgIdInput] = useState('')
 
   const loadFiles = async () => {
     if (!idToken) return
@@ -127,6 +144,7 @@ export default function ZohoBooksImport({
         const cols = resp.columns || []
         setAvailableColumns(cols)
         setSelectedColumns(new Set(cols))
+        setColumnMapping(autoMapColumns(config.entity, cols))
 
         if (cols.length === 0) {
           setColumnsError('No columns detected for this file. You can still proceed.')
@@ -185,12 +203,30 @@ export default function ZohoBooksImport({
     }
   }, [])
 
+  const getUserId = () => {
+    if (!idToken) return null
+    try {
+      const payload = idToken.split('.')[1]
+      const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+      return decoded.sub || decoded.user_id || null
+    } catch {
+      return null
+    }
+  }
+
   const checkConnection = async () => {
     try {
       setLoading(true)
       const status = await zohoBooksAPI.getConnectionStatus()
       setConnected(status.connected)
       setConnectionInfo(status)
+      const userId = getUserId()
+      if (userId) {
+        const stored = localStorage.getItem(`zoho_org_id:${userId}`)
+        setOrgIdInput(status.org_id || stored || '')
+      } else {
+        setOrgIdInput(status.org_id || '')
+      }
     } catch (err) {
       console.error('Error checking connection:', err)
     } finally {
@@ -201,6 +237,7 @@ export default function ZohoBooksImport({
   const connectZoho = async () => {
     try {
       setError(null)
+      setExportSummary(null)
       const result = await zohoBooksAPI.openOAuthPopup()
 
       if (result.success) {
@@ -254,7 +291,11 @@ export default function ZohoBooksImport({
         if (config.dateTo) filters.date_to = config.dateTo
       }
 
-      const result = await zohoBooksAPI.importData(config.entity, filters, connectionInfo?.org_id)
+      const result = await zohoBooksAPI.importData(
+        config.entity,
+        filters,
+        orgIdInput || connectionInfo?.org_id
+      )
       setImportResult(result)
       onImportComplete?.(result.upload_id)
       onNotification?.('Zoho Books import completed', 'success')
@@ -274,32 +315,12 @@ export default function ZohoBooksImport({
       return
     }
 
-    if (mode === 'destination' && availableColumns.length > 0) {
-      const selected = selectedColumns.size > 0 ? selectedColumns : new Set(availableColumns)
-      const has = (name: string) => selected.has(name)
-      let validationError: string | null = null
-
-      if (config.entity === 'contacts' || config.entity === 'customers' || config.entity === 'vendors') {
-        if (!has('name') && !has('contact_name') && !has('company_name')) {
-          validationError = 'Missing required column for Zoho contacts: name (or contact_name/company_name).'
-        }
-      } else if (config.entity === 'items') {
-        if (!has('name')) {
-          validationError = 'Missing required column for Zoho items: name.'
-        }
-      } else if (config.entity === 'invoices') {
-        const hasLineItems = has('line_items')
-        const hasAltItems = has('item_id') && has('quantity')
-        if (!has('customer_id')) {
-          validationError = 'Missing required column for Zoho invoices: customer_id.'
-        } else if (!hasLineItems && !hasAltItems) {
-          validationError = 'Missing required invoice columns: line_items OR (item_id + quantity).'
-        }
-      }
-
-      if (validationError) {
-        setError(validationError)
-        onNotification?.(validationError, 'error')
+    if (mode === 'destination') {
+      const validation = validateMapping(config.entity, columnMapping, availableColumns)
+      if (!validation.valid) {
+        setError(validation.message)
+        onNotification?.(validation.message || 'Please complete mapping', 'error')
+        setMappingOpen(true)
         return
       }
     }
@@ -313,8 +334,27 @@ export default function ZohoBooksImport({
         return
       }
 
-      const result = await zohoBooksAPI.exportToZoho(fileId, config.entity, connectionInfo?.org_id)
-      onNotification?.(`Exported ${result.success_count || 0} records to Zoho Books!`, 'success')
+      const result = await zohoBooksAPI.exportToZoho(
+        fileId,
+        config.entity,
+        orgIdInput || connectionInfo?.org_id,
+        columnMapping
+      )
+      const errors = (result.results || [])
+        .filter((r) => r.status === 'failed' && r.error)
+        .slice(0, 5)
+        .map((r) => r.error as string)
+      setExportSummary({
+        success_count: result.success_count || 0,
+        failed_count: result.failed_count || 0,
+        total_records: result.total_records || 0,
+        errors,
+      })
+
+      onNotification?.(
+        `Exported ${result.success_count || 0} records to Zoho Books (${result.failed_count || 0} failed).`,
+        'success'
+      )
 
       if (onImportComplete) {
         onImportComplete(fileId)
@@ -323,6 +363,7 @@ export default function ZohoBooksImport({
       console.error('Zoho Books export error:', err)
       const message = (err as Error).message || 'Failed to export to Zoho Books'
       setError(message)
+      setExportSummary(null)
       onNotification?.('Failed to export to Zoho Books', 'error')
     } finally {
       setIsExporting(false)
@@ -377,6 +418,22 @@ export default function ZohoBooksImport({
                 Org ID: {connectionInfo.org_id}
               </span>
             )}
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground">Use Org ID</Label>
+              <Input
+                className="h-8 w-48 text-xs"
+                placeholder="Organization ID"
+                value={orgIdInput}
+                onChange={(e) => {
+                  const value = e.target.value.trim()
+                  setOrgIdInput(value)
+                  const userId = getUserId()
+                  if (userId) {
+                    localStorage.setItem(`zoho_org_id:${userId}`, value)
+                  }
+                }}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -493,6 +550,26 @@ export default function ZohoBooksImport({
             </AlertDescription>
           </Alert>
         )}
+        {exportSummary && (
+          <Alert className="border-blue-200 bg-blue-50">
+            <CheckCircle2 className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-900">
+              Exported {exportSummary.success_count}/{exportSummary.total_records} records.
+              {exportSummary.failed_count > 0 && (
+                <span className="block mt-2 text-xs text-blue-900">
+                  Failed: {exportSummary.failed_count}. {exportSummary.errors.length > 0 ? 'First errors:' : ''}
+                  {exportSummary.errors.length > 0 && (
+                    <ul className="list-disc pl-4 mt-1">
+                      {exportSummary.errors.map((err, idx) => (
+                        <li key={`${err}-${idx}`}>{err}</li>
+                      ))}
+                    </ul>
+                  )}
+                </span>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex flex-wrap gap-3">
           {mode === 'destination' ? (
@@ -520,6 +597,16 @@ export default function ZohoBooksImport({
                 <Download className="h-4 w-4 mr-2" />
               )}
               Import from Zoho Books
+            </Button>
+          )}
+          {mode === 'destination' && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setMappingOpen(true)}
+              disabled={!selectedFile}
+            >
+              Mapping
             </Button>
           )}
         </div>
@@ -584,6 +671,139 @@ export default function ZohoBooksImport({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={mappingOpen} onOpenChange={setMappingOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Map columns for Zoho Books</DialogTitle>
+            <DialogDescription>
+              Map your file columns to Zoho Books fields before export.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {getMappingFields(config.entity).map((field) => (
+              <div key={field.key} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                <div className="text-sm font-medium">
+                  {field.label}
+                  {field.required && <span className="text-red-500 ml-1">*</span>}
+                </div>
+                <Select
+                  value={columnMapping[field.key] || ''}
+                  onValueChange={(value) =>
+                    setColumnMapping((prev) => ({ ...prev, [field.key]: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableColumns.map((col) => (
+                      <SelectItem key={`${field.key}-${col}`} value={col}>
+                        {col}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="text-xs text-muted-foreground">{field.help}</div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setColumnMapping(autoMapColumns(config.entity, availableColumns))
+              }}
+            >
+              Auto map
+            </Button>
+            <Button
+              onClick={() => {
+                const validation = validateMapping(config.entity, columnMapping, availableColumns)
+                if (!validation.valid) {
+                  setError(validation.message)
+                  return
+                }
+                setMappingOpen(false)
+              }}
+            >
+              Save mapping
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+function getMappingFields(entity: string) {
+  if (entity === 'items') {
+    return [
+      { key: 'name', label: 'Item Name', required: true, help: 'Zoho item name' },
+      { key: 'description', label: 'Description', required: false, help: 'Item description' },
+      { key: 'rate', label: 'Rate', required: false, help: 'Unit price / rate' },
+    ]
+  }
+  if (entity === 'customers' || entity === 'vendors' || entity === 'contacts') {
+    return [
+      { key: 'contact_name', label: 'Contact Name', required: true, help: 'Customer/Vendor name' },
+      { key: 'company_name', label: 'Company', required: false, help: 'Company name' },
+      { key: 'email', label: 'Email', required: false, help: 'Email address' },
+      { key: 'phone', label: 'Phone', required: false, help: 'Phone number' },
+    ]
+  }
+  if (entity === 'invoices') {
+    return [
+      { key: 'customer_id', label: 'Customer ID', required: true, help: 'Zoho contact ID' },
+      { key: 'line_items', label: 'Line Items', required: false, help: 'JSON array of line items' },
+      { key: 'item_id', label: 'Item ID', required: false, help: 'Fallback if no line_items' },
+      { key: 'quantity', label: 'Quantity', required: false, help: 'Fallback if no line_items' },
+      { key: 'rate', label: 'Rate', required: false, help: 'Fallback if no line_items' },
+    ]
+  }
+  return []
+}
+
+function normalizeKey(value: string) {
+  return value.toLowerCase().replace(/[\s_]+/g, '')
+}
+
+function autoMapColumns(entity: string, columns: string[]) {
+  const fields = getMappingFields(entity)
+  const mapping: Record<string, string> = {}
+  const normalized = new Map(columns.map((c) => [normalizeKey(c), c]))
+  for (const field of fields) {
+    const match = normalized.get(normalizeKey(field.key))
+    if (match) {
+      mapping[field.key] = match
+      continue
+    }
+    if (field.key === 'contact_name') {
+      const alt = ['name', 'itemname', 'companyname']
+      for (const a of alt) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+  }
+  return mapping
+}
+
+function validateMapping(entity: string, mapping: Record<string, string>, columns: string[]) {
+  const fields = getMappingFields(entity)
+  const available = new Set(columns)
+  for (const field of fields) {
+    if (field.required) {
+      const source = mapping[field.key]
+      if (!source || !available.has(source)) {
+        return { valid: false, message: `Missing required mapping for ${field.label}.` }
+      }
+    }
+  }
+  return { valid: true, message: '' }
 }

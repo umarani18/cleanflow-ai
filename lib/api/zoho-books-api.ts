@@ -141,13 +141,19 @@ class ZohoBooksService {
     })
   }
 
-  async exportToZoho(uploadId: string, entity?: string, orgId?: string): Promise<ZohoBooksExportResponse> {
+  async exportToZoho(
+    uploadId: string,
+    entity?: string,
+    orgId?: string,
+    columnMapping?: Record<string, string>
+  ): Promise<ZohoBooksExportResponse> {
     return await this.makeRequest<ZohoBooksExportResponse>('/zoho-books/export', {
       method: 'POST',
       body: JSON.stringify({
         upload_id: uploadId,
         entity,
         org_id: orgId,
+        column_mapping: columnMapping,
       }),
     })
   }
