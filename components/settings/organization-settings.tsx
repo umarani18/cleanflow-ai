@@ -43,6 +43,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -64,6 +74,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -73,6 +84,10 @@ import {
   type OrgMembership,
   type OrgRole,
 } from "@/lib/api/org-api";
+import {
+  fileManagementAPI,
+  type SettingsPreset,
+} from "@/lib/api/file-management-api";
 
 type AppRole = OrgRole;
 
@@ -91,6 +106,7 @@ const normalizeRole = (value: string | null | undefined): AppRole => {
 // ERP Options
 const ERP_OPTIONS = [
   { value: "quickbooks", label: "QUICKBOOKS ONLINE" },
+  { value: "zoho-books", label: "ZOHO BOOKS" },
   { value: "oracle", label: "ORACLE FUSION" },
   { value: "sap", label: "SAP" },
   { value: "dynamics", label: "MICROSOFT DYNAMICS" },
@@ -316,6 +332,22 @@ export function OrganizationSettings() {
     INITIAL_SERVICES_SETTINGS,
   );
   const [isSavingServices, setIsSavingServices] = useState(false);
+  const [settingsPresets, setSettingsPresets] = useState<SettingsPreset[]>([]);
+  const [isLoadingPresets, setIsLoadingPresets] = useState(false);
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [isPresetDialogOpen, setIsPresetDialogOpen] = useState(false);
+  const [presetDialogMode, setPresetDialogMode] =
+    useState<"create" | "edit">("create");
+  const [presetFormName, setPresetFormName] = useState("");
+  const [presetFormConfig, setPresetFormConfig] = useState("{\n\n}");
+  const [presetFormDefault, setPresetFormDefault] = useState(false);
+  const [presetEditing, setPresetEditing] = useState<SettingsPreset | null>(
+    null,
+  );
+  const [presetToDelete, setPresetToDelete] = useState<SettingsPreset | null>(
+    null,
+  );
+  const [isDeletePresetOpen, setIsDeletePresetOpen] = useState(false);
 
   // Org context
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -394,6 +426,150 @@ export function OrganizationSettings() {
     return me;
   };
 
+  const loadSettingsPresets = async () => {
+    setIsLoadingPresets(true);
+    try {
+      const response = await fileManagementAPI.getSettingsPresets();
+      setSettingsPresets(response.presets || []);
+    } catch (err) {
+      console.error("Failed to load presets", err);
+      toast({
+        title: "Failed to load presets",
+        description: "Could not load global settings presets.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingPresets(false);
+    }
+  };
+
+  const openCreatePresetDialog = () => {
+    setPresetDialogMode("create");
+    setPresetFormName("");
+    setPresetFormConfig("{\n\n}");
+    setPresetFormDefault(false);
+    setPresetEditing(null);
+    setIsPresetDialogOpen(true);
+  };
+
+  const openEditPresetDialog = (preset: SettingsPreset) => {
+    setPresetDialogMode("edit");
+    setPresetFormName(preset.preset_name || "");
+    setPresetFormConfig(JSON.stringify(preset.config || {}, null, 2));
+    setPresetFormDefault(Boolean(preset.is_default));
+    setPresetEditing(preset);
+    setIsPresetDialogOpen(true);
+  };
+
+  const handleSavePreset = async () => {
+    if (!presetFormName.trim()) {
+      toast({
+        title: "Preset name required",
+        description: "Please enter a preset name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    let parsedConfig: any = {};
+    try {
+      parsedConfig = presetFormConfig.trim()
+        ? JSON.parse(presetFormConfig)
+        : {};
+    } catch (err) {
+      toast({
+        title: "Invalid JSON",
+        description: "Please provide valid JSON for the preset config.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSavingPreset(true);
+    try {
+      if (presetDialogMode === "create") {
+        await fileManagementAPI.createSettingsPreset({
+          preset_name: presetFormName.trim(),
+          config: parsedConfig,
+          is_default: presetFormDefault,
+        });
+      } else if (presetEditing) {
+        await fileManagementAPI.updateSettingsPreset(presetEditing.preset_id, {
+          preset_name: presetFormName.trim(),
+          config: parsedConfig,
+          is_default: presetFormDefault,
+        });
+      }
+
+      await loadSettingsPresets();
+      setIsPresetDialogOpen(false);
+      toast({
+        title: "Preset saved",
+        description:
+          presetDialogMode === "create"
+            ? "Preset created successfully."
+            : "Preset updated successfully.",
+      });
+    } catch (err) {
+      console.error("Failed to save preset", err);
+      toast({
+        title: "Save failed",
+        description: "Could not save the preset.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingPreset(false);
+    }
+  };
+
+  const handleDeletePreset = async () => {
+    if (!presetToDelete) return;
+
+    setIsSavingPreset(true);
+    try {
+      await fileManagementAPI.deleteSettingsPreset(presetToDelete.preset_id);
+      await loadSettingsPresets();
+      toast({
+        title: "Preset deleted",
+        description: "Preset removed successfully.",
+      });
+      setIsDeletePresetOpen(false);
+      setPresetToDelete(null);
+    } catch (err) {
+      console.error("Failed to delete preset", err);
+      toast({
+        title: "Delete failed",
+        description: "Could not delete the preset.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingPreset(false);
+    }
+  };
+
+  const handleSetDefaultPreset = async (preset: SettingsPreset) => {
+    setIsSavingPreset(true);
+    try {
+      await fileManagementAPI.updateSettingsPreset(preset.preset_id, {
+        is_default: true,
+      });
+      await loadSettingsPresets();
+      toast({
+        title: "Default updated",
+        description: `"${preset.preset_name}" is now the default preset.`,
+      });
+    } catch (err) {
+      console.error("Failed to set default preset", err);
+      toast({
+        title: "Update failed",
+        description: "Could not set default preset.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingPreset(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     const loadOrgData = async () => {
@@ -428,6 +604,12 @@ export function OrganizationSettings() {
     // We intentionally run this once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "services") {
+      loadSettingsPresets();
+    }
+  }, [activeTab]);
 
   const canManageOrganization = currentUserRole === "Super Admin";
   const canInviteMembers =
@@ -1576,6 +1758,176 @@ export function OrganizationSettings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Global Settings Presets */}
+        <Card>
+          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Global Settings Presets
+              </CardTitle>
+              <CardDescription>
+                Manage global DQ settings presets used across files and workflows.
+              </CardDescription>
+            </div>
+            <Button onClick={openCreatePresetDialog} className="gap-2">
+              <Plus className="w-4 h-4" />
+              New Preset
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {isLoadingPresets ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading presets...
+              </div>
+            ) : settingsPresets.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                No presets yet. Create a new preset to define global defaults.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Preset Name</TableHead>
+                    <TableHead>Default</TableHead>
+                    <TableHead>Updated</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {settingsPresets.map((preset) => (
+                    <TableRow key={preset.preset_id}>
+                      <TableCell className="font-medium">
+                        {preset.preset_name}
+                      </TableCell>
+                      <TableCell>
+                        {preset.is_default ? (
+                          <Badge variant="secondary">Default</Badge>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetDefaultPreset(preset)}
+                            disabled={isSavingPreset}
+                          >
+                            Set Default
+                          </Button>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {preset.updated_at
+                          ? new Date(preset.updated_at).toLocaleString()
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditPresetDialog(preset)}
+                          disabled={isSavingPreset}
+                        >
+                          <Edit className="w-4 h-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            setPresetToDelete(preset);
+                            setIsDeletePresetOpen(true);
+                          }}
+                          disabled={isSavingPreset}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Dialog open={isPresetDialogOpen} onOpenChange={setIsPresetDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {presetDialogMode === "create" ? "Create Preset" : "Edit Preset"}
+              </DialogTitle>
+              <DialogDescription>
+                Define global DQ settings to reuse across workflows.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Preset Name</Label>
+                <Input
+                  value={presetFormName}
+                  onChange={(e) => setPresetFormName(e.target.value)}
+                  placeholder="e.g. Default DQ Rules"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Preset Config (JSON)</Label>
+                <Textarea
+                  value={presetFormConfig}
+                  onChange={(e) => setPresetFormConfig(e.target.value)}
+                  className="min-h-[220px] font-mono text-xs"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={presetFormDefault}
+                  onCheckedChange={setPresetFormDefault}
+                />
+                <Label>Set as default preset</Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsPresetDialogOpen(false)}
+                disabled={isSavingPreset}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSavePreset} disabled={isSavingPreset}>
+                {isSavingPreset && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                {presetDialogMode === "create" ? "Create" : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={isDeletePresetOpen} onOpenChange={setIsDeletePresetOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete preset?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {presetToDelete
+                  ? `Delete preset "${presetToDelete.preset_name}"? This cannot be undone.`
+                  : "This action cannot be undone."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isSavingPreset}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeletePreset}
+                disabled={isSavingPreset}
+              >
+                {isSavingPreset ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </TabsContent>
     </Tabs>
   );

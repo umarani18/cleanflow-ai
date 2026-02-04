@@ -12,6 +12,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import QuickBooksImport from '@/components/quickbooks/quickbooks-import'
+import ZohoBooksImport from '@/components/zoho/zoho-books-import'
 
 interface ErpSourceFormProps {
   mode?: "source" | "destination"
@@ -25,6 +26,7 @@ interface ErpSourceFormProps {
 
 const ERP_OPTIONS = [
   { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
+  { label: "ZOHO BOOKS", value: "zoho-books" },
   { label: "ORACLE FUSION", value: "oracle" },
   { label: "SAP", value: "sap" },
   { label: "MICROSOFT DYNAMICS", value: "dynamics" },
@@ -91,6 +93,28 @@ export default function ErpSourceForm({
             }
           }}
         />
+      ) : selectedErp === "zoho-books" ? (
+        <ZohoBooksImport
+          mode={mode}
+          uploadId={uploadId}
+          onImportComplete={(uploadId) => {
+            onIngestionComplete({
+              success: true,
+              message: mode === "source" ? 'Successfully imported data from Zoho Books' : 'Successfully exported data to Zoho Books',
+              uploadId,
+            })
+          }}
+          onNotification={(message, type) => {
+            if (type === 'error') {
+              onError(message)
+            } else {
+              onIngestionComplete({
+                success: true,
+                message,
+              })
+            }
+          }}
+        />
       ) : (
         <div className="flex flex-col items-center justify-center min-h-[250px] p-8 border-2 border-dashed rounded-lg bg-muted/5">
           <div className="rounded-full bg-muted p-6 mb-4">
@@ -108,4 +132,3 @@ export default function ErpSourceForm({
     </div>
   )
 }
-

@@ -39,7 +39,7 @@ export function ProfilingStep() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fileManagementAPI.getColumnProfilingPreview(uploadId, authToken, selectedColumns, 500)
+      const response = await fileManagementAPI.getColumnProfilingPreview(uploadId, authToken, selectedColumns, 200)
       const profiles = (response as any)?.profiles || (response as any)?.column_profiles || {}
       if (profiles && Object.keys(profiles).length > 0) {
         setColumnProfiles(profiles)
@@ -70,7 +70,7 @@ export function ProfilingStep() {
   const profileSingle = async (column: string) => {
     if (!authToken) return
     try {
-      const response = await fileManagementAPI.getColumnProfilingPreview(uploadId, authToken, [column], 500)
+      const response = await fileManagementAPI.getColumnProfilingPreview(uploadId, authToken, [column], 200)
       const profiles = (response as any)?.profiles || (response as any)?.column_profiles || {}
       if (profiles?.[column]) {
         setColumnProfiles({

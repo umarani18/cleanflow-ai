@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import quickBooksAPI from '@/lib/api/quickbooks-api'
+import zohoBooksAPI from '@/lib/api/zoho-books-api'
 import type { FileStatusResponse } from '@/lib/api/file-management-api'
 
 interface ERPOption {
@@ -26,6 +27,7 @@ interface ERPOption {
 
 const ERP_OPTIONS: ERPOption[] = [
   { value: 'quickbooks', label: 'QuickBooks Online', description: 'Push directly to your connected QuickBooks account', available: true },
+  { value: 'zoho-books', label: 'Zoho Books', description: 'Push directly to your connected Zoho Books account', available: true },
   { value: 'oracle', label: 'Oracle Fusion', description: 'Export to Oracle ERP Cloud', available: false },
   { value: 'sap', label: 'SAP ERP', description: 'Push to SAP S/4HANA or Business One', available: false },
   { value: 'dynamics', label: 'Microsoft Dynamics', description: 'Export to Dynamics 365', available: false },
@@ -92,6 +94,27 @@ export function PushToERPModal({
         setResult({
           success: response.success,
           message: response.message || `Successfully exported ${response.records_exported || 0} records to QuickBooks`,
+        })
+        onSuccess?.()
+      } else if (selectedERP === 'zoho-books') {
+        setStatus('Checking Zoho Books connection...')
+        const connectionStatus = await zohoBooksAPI.getConnectionStatus()
+
+        if (!connectionStatus.connected) {
+          const msg = 'Zoho Books is not connected. Please connect your Zoho Books account first.'
+          setError(msg)
+          onError?.(msg)
+          setPushing(false)
+          return
+        }
+
+        setStatus('Exporting data to Zoho Books (this may take a moment)...')
+        const response = await zohoBooksAPI.exportToZoho(file.upload_id)
+
+        setStatus('')
+        setResult({
+          success: response.success_count > 0,
+          message: `Successfully exported ${response.success_count || 0} records to Zoho Books`,
         })
         onSuccess?.()
       }

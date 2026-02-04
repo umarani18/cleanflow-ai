@@ -51,7 +51,10 @@ import {
 import { AWS_CONFIG } from "@/lib/aws-config";
 import { cn, formatBytes, formatToIST } from "@/lib/utils";
 import { DownloadFormatModal } from "@/components/files/download-format-modal";
-import { ColumnExportDialog } from "@/components/files/column-export-dialog";
+import {
+  ColumnExportContent,
+  ColumnExportDialog,
+} from "@/components/files/column-export-dialog";
 import { ERPTransformationModal } from "@/components/files/erp-transformation-modal";
 import { FileDetailsDialog } from "@/components/files/file-details-dialog";
 import { WizardDialog } from "@/components/processing";
@@ -98,6 +101,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import QuickBooksImport from "@/components/quickbooks/quickbooks-import";
+import ZohoBooksImport from "@/components/zoho/zoho-books-import";
 import UnifiedBridgeImport from "@/components/unified-bridge/unified-bridge-import";
 import CustomDestinationExport from "@/components/files/custom-destination-export";
 import { PushToERPModal } from "@/components/files/push-to-erp-modal";
@@ -140,6 +144,7 @@ const DESTINATION_OPTIONS = [
 
 const ERP_OPTIONS = [
   { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
+  { label: "ZOHO BOOKS", value: "zoho-books" },
   { label: "ORACLE FUSION", value: "oracle" },
   { label: "SAP", value: "sap" },
   { label: "MICROSOFT DYNAMICS", value: "dynamics" },
@@ -319,7 +324,7 @@ function FilesPageContent() {
     string | null
   >(null);
 
-  // Column Export Dialog state
+  // Column Export state (used in combined export dialog)
   const [showColumnExportModal, setShowColumnExportModal] = useState(false);
   const [columnExportFile, setColumnExportFile] =
     useState<FileStatusResponse | null>(null);
@@ -328,6 +333,10 @@ function FilesPageContent() {
   const [actionsDialogOpen, setActionsDialogOpen] = useState(false);
   const [actionsDialogFile, setActionsDialogFile] =
     useState<FileStatusResponse | null>(null);
+  const [actionsErpMode, setActionsErpMode] = useState<"original" | "transform">(
+    "original",
+  );
+  const [actionsErpTarget, setActionsErpTarget] = useState<string>("Oracle Fusion");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectionFileInputRef = useRef<HTMLInputElement>(null);
@@ -1101,7 +1110,9 @@ function FilesPageContent() {
 
   const openActionsDialog = (file: FileStatusResponse) => {
     setActionsDialogFile(file);
+    setColumnExportFile(file);
     setActionsDialogOpen(true);
+    void handleColumnExportClick(file);
   };
 
   const handleColumnExportClick = async (file: FileStatusResponse) => {
@@ -1109,7 +1120,6 @@ function FilesPageContent() {
 
     setColumnExportFile(file);
     setColumnExportLoading(true);
-    setShowColumnExportModal(true);
 
     try {
       // Fetch columns from the file
@@ -1191,13 +1201,78 @@ function FilesPageContent() {
         description: `Exported ${options.columns.length} columns with ${Object.keys(options.columnMapping).length} renamed`,
       });
 
-      setShowColumnExportModal(false);
+      setActionsDialogOpen(false);
       setColumnExportFile(null);
     } catch (error) {
       console.error("Column export error:", error);
       toast({
         title: "Export Failed",
         description: "Unable to export file with selected columns",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const handleColumnExportWithErp = async (options: {
+    format: "csv" | "excel" | "json";
+    dataType: "all" | "clean" | "quarantine";
+    columns: string[];
+    columnMapping: Record<string, string>;
+  }) => {
+    if (!columnExportFile || !idToken) return;
+
+    setDownloading(columnExportFile.upload_id);
+
+    try {
+      const blob = await fileManagementAPI.exportWithColumns(
+        columnExportFile.upload_id,
+        idToken,
+        {
+          format: options.format,
+          data: options.dataType,
+          columns: options.columns,
+          columnMapping: options.columnMapping,
+          erp: actionsErpMode === "transform" ? actionsErpTarget : undefined,
+        },
+      );
+
+      const baseFilename = (
+        columnExportFile.original_filename ||
+        columnExportFile.filename ||
+        "file"
+      ).replace(/\.[^/.]+$/, "");
+      const extension =
+        options.format === "excel"
+          ? ".xlsx"
+          : options.format === "json"
+            ? ".json"
+            : ".csv";
+      const filename = `${baseFilename}_erp${extension}`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "ERP Export Complete",
+        description:
+          actionsErpMode === "transform"
+            ? `Exported with ${actionsErpTarget} formatting`
+            : "Exported in original format",
+      });
+      setActionsDialogOpen(false);
+    } catch (error) {
+      console.error("ERP export error:", error);
+      toast({
+        title: "ERP Export Failed",
+        description: "Unable to export ERP file",
         variant: "destructive",
       });
     } finally {
@@ -1655,6 +1730,20 @@ function FilesPageContent() {
                       }}
                     />
                   </div>
+                ) : selectedSource === "erp" && selectedErp === "zoho-books" ? (
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                    <ZohoBooksImport
+                      mode="source"
+                      onImportComplete={handleQuickBooksImportComplete}
+                      onNotification={(message, type) => {
+                        toast({
+                          title: type === "success" ? "Success" : "Error",
+                          description: message,
+                          variant: type === "error" ? "destructive" : "default",
+                        });
+                      }}
+                    />
+                  </div>
                 ) : selectedSource === "erp" ? (
                   <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
                     <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
@@ -1725,6 +1814,20 @@ function FilesPageContent() {
                   selectedDestinationErp === "quickbooks" ? (
                   <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
                     <QuickBooksImport
+                      mode="destination"
+                      onNotification={(message, type) => {
+                        toast({
+                          title: type === "success" ? "Success" : "Error",
+                          description: message,
+                          variant: type === "error" ? "destructive" : "default",
+                        });
+                      }}
+                    />
+                  </div>
+                ) : selectedDestination === "erp" &&
+                  selectedDestinationErp === "zoho-books" ? (
+                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                    <ZohoBooksImport
                       mode="destination"
                       onNotification={(message, type) => {
                         toast({
@@ -2968,71 +3071,130 @@ function FilesPageContent() {
         />
 
         <Dialog open={actionsDialogOpen} onOpenChange={setActionsDialogOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Download & Export</DialogTitle>
+          <DialogContent className="max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+            <DialogHeader className="border-b pb-4">
+              <DialogTitle className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
+                  <CloudUpload className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                Export & Push Data
+              </DialogTitle>
               <DialogDescription>
-                Choose an action for{" "}
-                <span className="font-medium text-foreground">
-                  {actionsDialogFile?.original_filename ||
-                    actionsDialogFile?.filename ||
-                    "this file"}
-                </span>
-                .
+                Configure your data and select a destination.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3">
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() => {
-                  if (!actionsDialogFile) return;
-                  setActionsDialogOpen(false);
-                  handleDownloadClick(actionsDialogFile);
-                }}
-                disabled={!actionsDialogFile}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Download
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() => {
-                  if (!actionsDialogFile) return;
-                  setActionsDialogOpen(false);
-                  void handleColumnExportClick(actionsDialogFile);
-                }}
-                disabled={
-                  !actionsDialogFile ||
-                  !(
-                    actionsDialogFile.status === "DQ_FIXED" ||
-                    actionsDialogFile.status === "COMPLETED"
-                  )
-                }
-              >
-                <Columns className="mr-2 h-4 w-4" />
-                Export Required Fields
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() => {
-                  if (!actionsDialogFile) return;
-                  setActionsDialogOpen(false);
-                  handlePushToQuickBooks(actionsDialogFile);
-                }}
-                disabled={
-                  !actionsDialogFile ||
-                  !(
-                    actionsDialogFile.status === "DQ_FIXED" ||
-                    actionsDialogFile.status === "COMPLETED"
-                  )
-                }
-              >
-                <CloudUpload className="mr-2 h-4 w-4" />
-                Export Data
-              </Button>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+              <div className="rounded-lg border p-4 bg-muted/30">
+                <div className="text-sm font-medium">
+                  {actionsDialogFile?.original_filename ||
+                    actionsDialogFile?.filename ||
+                    "Selected file"}
+                </div>
+                {actionsDialogFile && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {actionsDialogFile.rows_clean ||
+                      actionsDialogFile.rows_out ||
+                      0}{" "}
+                    clean rows ready to export
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                    1
+                  </span>
+                  ERP Transformation (Optional)
+                </Label>
+                <RadioGroup
+                  value={actionsErpMode}
+                  onValueChange={(value) =>
+                    setActionsErpMode(value as "original" | "transform")
+                  }
+                  className="space-y-2"
+                >
+                  <div className="flex items-center space-x-2 rounded-lg border p-3">
+                    <RadioGroupItem value="original" id="erp-original" />
+                    <Label htmlFor="erp-original" className="cursor-pointer">
+                      Original Format (CSV)
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 rounded-lg border p-3">
+                    <RadioGroupItem value="transform" id="erp-transform" />
+                    <Label htmlFor="erp-transform" className="cursor-pointer">
+                      Transform for ERP System
+                    </Label>
+                  </div>
+                </RadioGroup>
+
+                {actionsErpMode === "transform" && (
+                  <div className="grid gap-2">
+                    <Label className="text-sm font-medium">ERP System</Label>
+                    <Select
+                      value={actionsErpTarget}
+                      onValueChange={setActionsErpTarget}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select ERP" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[
+                          "Oracle Fusion",
+                          "SAP ERP",
+                          "Microsoft Dynamics",
+                          "NetSuite",
+                          "Workday",
+                          "QuickBooks Online",
+                          "Zoho Books",
+                          "Custom ERP",
+                        ].map((erp) => (
+                          <SelectItem key={erp} value={erp}>
+                            {erp}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {columnExportLoading ? (
+                <div className="text-sm text-muted-foreground">
+                  Loading columns…
+                </div>
+              ) : (
+                <ColumnExportContent
+                  fileName={
+                    actionsDialogFile?.original_filename ||
+                    actionsDialogFile?.filename ||
+                    "Selected file"
+                  }
+                  columns={columnExportColumns}
+                  onExport={handleColumnExport}
+                  onSecondaryAction={handleColumnExportWithErp}
+                  secondaryActionLabel="Push to ERP Tool"
+                  secondaryActionLoading={
+                    downloading === columnExportFile?.upload_id
+                  }
+                  secondaryActionDisabled={
+                    !actionsDialogFile ||
+                    !(
+                      actionsDialogFile.status === "DQ_FIXED" ||
+                      actionsDialogFile.status === "COMPLETED"
+                    )
+                  }
+                  primaryActionLabel="Download"
+                  exporting={
+                    downloading === columnExportFile?.upload_id ||
+                    columnExportLoading
+                  }
+                  onCancel={() => setActionsDialogOpen(false)}
+                  showTitle={false}
+                  className="min-h-[360px]"
+                />
+              )}
             </div>
           </DialogContent>
         </Dialog>
