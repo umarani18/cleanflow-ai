@@ -77,7 +77,7 @@ export default function UnifiedBridgeImport({
   }
 
   const sourceDescriptions = {
-    ftp: mode === "source" 
+    ftp: mode === "source"
       ? "Pull files from FTP or SFTP servers"
       : "Ingest data to FTP or SFTP servers",
     tcp: mode === "source"
@@ -102,7 +102,7 @@ export default function UnifiedBridgeImport({
           <div>
             <h3 className="text-sm font-medium">Unified Bridge</h3>
             <p className="text-xs text-muted-foreground">
-              {mode === "source" 
+              {mode === "source"
                 ? "Ingest data from multiple sources"
                 : "Export data to multiple destinations"}
             </p>

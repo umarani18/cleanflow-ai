@@ -43,14 +43,36 @@ const toastVariants = cva(
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
-    VariantProps<typeof toastVariants>
+  VariantProps<typeof toastVariants>
 >(({ className, variant, ...props }, ref) => {
   return (
     <ToastPrimitives.Root
       ref={ref}
       className={cn(toastVariants({ variant }), className)}
       {...props}
-    />
+    >
+      <div className="absolute top-0 left-0 w-full h-1 z-50 overflow-hidden rounded-t-md">
+        <div
+          className={cn(
+            "h-full w-full origin-left animate-[toast-progress_5000ms_linear_forwards]",
+            variant === "destructive" ? "bg-white/50" : "bg-primary"
+          )}
+          style={{
+            animationDuration: '5000ms',
+            animationName: 'shring-width',
+            animationTimingFunction: 'linear',
+            animationFillMode: 'forwards'
+          }}
+        />
+        <style jsx>{`
+          @keyframes shring-width {
+            from { width: 100%; }
+            to { width: 0%; }
+          }
+        `}</style>
+      </div>
+      {props.children}
+    </ToastPrimitives.Root>
   )
 })
 Toast.displayName = ToastPrimitives.Root.displayName

@@ -57,10 +57,10 @@ export default function ErpSourceForm({
       <div className="space-y-2">
         <Label htmlFor="erp-system">{mode === "source" ? "Select Source System" : "Select Destination System"}</Label>
         <Select value={selectedErp} onValueChange={setSelectedErp}>
-          <SelectTrigger id="erp-system" disabled={disabled}>
+          <SelectTrigger id="erp-system" disabled={disabled} className="focus:ring-0 focus:ring-offset-0 hover:bg-background hover:text-foreground active:scale-100 transition-none">
             <SelectValue placeholder="Select ERP system" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-[300px] w-[var(--radix-select-trigger-width)]">
             {ERP_OPTIONS.map((erp) => (
               <SelectItem key={erp.value} value={erp.value}>
                 {erp.label}
