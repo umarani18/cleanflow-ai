@@ -36,6 +36,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
+import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -572,7 +573,7 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                   )}
 
                   {!previewLoading && !previewError && previewData && (
-                    <>
+                    <TooltipProvider delayDuration={150}>
                       <div className="flex-1 overflow-auto relative bg-background mx-4 my-4 border rounded-lg">
                         <table className="w-full border-collapse text-sm">
                           <thead className="sticky top-0 z-20 bg-muted shadow-sm " >
@@ -623,18 +624,58 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                                             : resolvedStatus === 'clean'
                                               ? "bg-emerald-500/5 text-emerald-800"
                                               : ""
-                                  return (
-                                    <td
-                                      key={header}
-                                      className={cn(
-                                        "px-4 py-2.5 whitespace-nowrap border-r last:border-r-0 max-w-[260px] truncate",
-                                        cellClass
-                                      )}
-                                      title={value !== undefined ? String(value ?? '') : ''}
-                                    >
-                                      {value !== undefined ? String(value ?? '') : ''}
-                                    </td>
-                                  )
+
+                                  // Tooltip content: status + per-cell issues/fixes using only the already-loaded preview row
+                                  const tooltipLines: string[] = []
+                                  if (resolvedStatus) {
+                                    tooltipLines.push(`Status: ${resolvedStatus}`)
+                                  }
+
+                                  const violationsRaw = (row as any)?.dq_violations as string | undefined
+                                  if (violationsRaw) {
+                                    const tokens = violationsRaw.split(";").map((v) => v.trim()).filter(Boolean)
+                                    const perCell = tokens.filter((t) => t.toLowerCase().includes(header.toLowerCase()))
+                                    const toShow = perCell.length > 0 ? perCell : tokens
+                                    if (toShow.length > 0) {
+                                      tooltipLines.push(`Issues: ${toShow.join(", ")}`)
+                                    }
+                                  }
+
+                                  const fixesRaw = (row as any)?.fixes_applied as string | undefined
+                                  if (fixesRaw) {
+                                    const tokens = fixesRaw.split(";").map((v) => v.trim()).filter(Boolean)
+                                    const perCell = tokens.filter((t) => t.toLowerCase().includes(header.toLowerCase()))
+                                    const toShow = perCell.length > 0 ? perCell : tokens
+                                    if (toShow.length > 0) {
+                                      tooltipLines.push(`Fixes: ${toShow.join(", ")}`)
+                                    }
+                                  }
+
+                                  if (tooltipLines.length === 0) {
+                                    tooltipLines.push("Status: clean")
+                                  }
+
+                                    return (
+                                      <UiTooltip key={header}>
+                                        <TooltipTrigger asChild>
+                                          <td
+                                            className={cn(
+                                              "px-4 py-2.5 whitespace-nowrap border-r last:border-r-0 max-w-[260px] truncate",
+                                              cellClass
+                                            )}
+                                          >
+                                            {value !== undefined ? String(value ?? '') : ''}
+                                          </td>
+                                        </TooltipTrigger>
+                                        <TooltipContent align="start" className="max-w-xs break-words text-xs">
+                                          <div className="space-y-1">
+                                            {tooltipLines.map((line, i) => (
+                                              <div key={i}>{line}</div>
+                                            ))}
+                                          </div>
+                                        </TooltipContent>
+                                      </UiTooltip>
+                                    )
                                 })}
                               </tr>
                             ))}
@@ -646,7 +687,7 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                           Showing 1-{Math.min(20, previewData.total_rows)} of {previewData.total_rows} total records
                         </div>
                       </div>
-                    </>
+                    </TooltipProvider>
                   )}
 
                   {!previewLoading && !previewError && !previewData && (
