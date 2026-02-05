@@ -258,6 +258,13 @@ function FilesPageContent() {
   const [selectedSource, setSelectedSource] = useState("local");
   const [selectedDestination, setSelectedDestination] = useState("null");
   const [selectedErp, setSelectedErp] = useState("quickbooks");
+
+  // Helpers
+  const updateUploadProgress = useCallback((value: number) => {
+    // Clamp 0-100, round to 2 decimals to avoid long floating artefacts
+    const clamped = Math.min(100, Math.max(0, value));
+    setUploadProgress(Number(clamped.toFixed(2)));
+  }, []);
   const [selectedDestinationErp, setSelectedDestinationErp] =
     useState("quickbooks");
   const [sortField, setSortField] = useState<
@@ -533,7 +540,7 @@ function FilesPageContent() {
         file,
         idToken,
         useAI,
-        (progress) => setUploadProgress(progress),
+        (progress) => updateUploadProgress(progress),
         (status) => {
           // Use Redux action to update store
           dispatch(updateFile(status));
@@ -557,7 +564,7 @@ function FilesPageContent() {
       });
     } finally {
       setUploading(false);
-      setUploadProgress(0);
+      updateUploadProgress(0);
     }
   };
 
@@ -1678,7 +1685,7 @@ function FilesPageContent() {
                             Uploading...
                           </p>
                           <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">
-                            {uploadProgress}%
+                            {uploadProgress.toFixed(2)}%
                           </p>
                         </div>
                         <Progress
