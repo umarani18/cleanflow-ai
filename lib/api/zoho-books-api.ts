@@ -10,6 +10,8 @@ export interface ZohoBooksConnectResponse {
 export interface ZohoBooksConnectionStatus {
   connected: boolean
   org_id?: string
+  zoho_user_id?: string
+  zoho_accounts_user_id?: string
   linked_at?: string
 }
 
