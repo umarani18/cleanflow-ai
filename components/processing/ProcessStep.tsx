@@ -113,6 +113,16 @@ export function ProcessStep({ onComplete }: ProcessStepProps) {
         if (onComplete) onComplete()
     }
 
+    // Auto-close after 3 seconds on success
+    useEffect(() => {
+        if (status === "success") {
+            const timer = setTimeout(() => {
+                handleComplete()
+            }, 3000)
+            return () => clearTimeout(timer)
+        }
+    }, [status])
+
     return (
         <div className="flex flex-col items-center justify-center h-[60vh] p-8">
             {status === "idle" && (
@@ -169,12 +179,9 @@ export function ProcessStep({ onComplete }: ProcessStepProps) {
                     <div>
                         <h2 className="text-xl font-semibold text-green-500">Processing Complete!</h2>
                         <p className="text-muted-foreground mt-2">
-                            Your file has been processed successfully. You can now view the results.
+                            Your file has been processed successfully. Closing in 3 seconds...
                         </p>
                     </div>
-                    <Button size="lg" onClick={handleComplete}>
-                        View Results
-                    </Button>
                 </div>
             )}
 
