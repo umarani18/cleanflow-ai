@@ -213,6 +213,7 @@ export default function ZohoBooksImport({
       return null
     }
   }
+  const userId = getUserId()
 
   const checkConnection = async () => {
     try {
@@ -413,9 +414,9 @@ export default function ZohoBooksImport({
               <Trash2 className="h-4 w-4 mr-2" />
               Disconnect
             </Button>
-            {connectionInfo?.org_id && (
+            {connectionInfo?.zoho_accounts_user_id && (
               <span className="text-xs text-muted-foreground self-center">
-                Org ID: {connectionInfo.org_id}
+                Zoho Accounts User ID: {connectionInfo.zoho_accounts_user_id}
               </span>
             )}
             <div className="flex items-center gap-2">
