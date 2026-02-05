@@ -2253,7 +2253,7 @@ function FilesPageContent() {
                                     </TooltipContent>
                                   </Tooltip>
                                 )}
-                              {/* <Tooltip>
+                              <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
                                     variant="ghost"
@@ -2265,7 +2265,7 @@ function FilesPageContent() {
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Details</TooltipContent>
-                              </Tooltip> */}
+                              </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
