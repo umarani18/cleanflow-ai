@@ -493,35 +493,20 @@ export default function ZohoBooksImport({
             </div>
           ) : (
             <div className="space-y-2">
-              <Label>File to export</Label>
-              <Select value={selectedFile?.upload_id || ''} onValueChange={handleFileSelect}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select file" />
-                </SelectTrigger>
-                <SelectContent>
-                  {files.map((file) => (
-                    <SelectItem key={file.upload_id} value={file.upload_id}>
-                      {file.original_filename || file.filename}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Limit</Label>
+              <Input
+                type="number"
+                min={1}
+                max={200}
+                value={config.limit}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    limit: Number(e.target.value),
+                  }))
+                }
+              />
             </div>
-            // <div className="space-y-2">
-            //   <Label>Limit</Label>
-            //   <Input
-            //     type="number"
-            //     min={1}
-            //     max={200}
-            //     value={config.limit}
-            //     onChange={(e) =>
-            //       setConfig((prev) => ({
-            //         ...prev,
-            //         limit: Number(e.target.value),
-            //       }))
-            //     }
-            //   />
-            // </div>
           )}
         </div>
 
