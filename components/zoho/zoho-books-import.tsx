@@ -53,6 +53,7 @@ interface ZohoFile {
   original_filename?: string
   status: string
   rows_clean?: number
+  created_at?: string
 }
 
 interface ZohoBooksImportProps {
@@ -115,7 +116,16 @@ export default function ZohoBooksImport({
         original_filename: f.original_filename,
         status: f.status,
         rows_clean: f.rows_clean,
+        created_at: f.created_at,
       }))
+
+      // Sort files by created_at desc (newest first)
+      mappedFiles.sort((a, b) => {
+        const dateA = new Date(a.created_at || 0).getTime()
+        const dateB = new Date(b.created_at || 0).getTime()
+        return dateB - dateA
+      })
+
       setFiles(mappedFiles)
     } catch (err) {
       console.error('Error loading files:', err)
@@ -213,6 +223,7 @@ export default function ZohoBooksImport({
       return null
     }
   }
+  const userId = getUserId()
 
   const checkConnection = async () => {
     try {
@@ -413,9 +424,9 @@ export default function ZohoBooksImport({
               <Trash2 className="h-4 w-4 mr-2" />
               Disconnect
             </Button>
-            {connectionInfo?.org_id && (
+            {connectionInfo?.zoho_accounts_user_id && (
               <span className="text-xs text-muted-foreground self-center">
-                Org ID: {connectionInfo.org_id}
+                Zoho Accounts User ID: {connectionInfo.zoho_accounts_user_id}
               </span>
             )}
             <div className="flex items-center gap-2">
@@ -458,8 +469,8 @@ export default function ZohoBooksImport({
                 <SelectItem value="contacts">Contacts</SelectItem>
                 <SelectItem value="customers">Customers</SelectItem>
                 <SelectItem value="vendors">Vendors</SelectItem>
-                <SelectItem value="items">Items</SelectItem>
-                <SelectItem value="invoices">Invoices</SelectItem>
+                <SelectItem value="items" disabled>Items</SelectItem>
+                <SelectItem value="invoices" disabled>Invoices</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -482,20 +493,35 @@ export default function ZohoBooksImport({
             </div>
           ) : (
             <div className="space-y-2">
-              <Label>Limit</Label>
-              <Input
-                type="number"
-                min={1}
-                max={200}
-                value={config.limit}
-                onChange={(e) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    limit: Number(e.target.value),
-                  }))
-                }
-              />
+              <Label>File to export</Label>
+              <Select value={selectedFile?.upload_id || ''} onValueChange={handleFileSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select file" />
+                </SelectTrigger>
+                <SelectContent>
+                  {files.map((file) => (
+                    <SelectItem key={file.upload_id} value={file.upload_id}>
+                      {file.original_filename || file.filename}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            // <div className="space-y-2">
+            //   <Label>Limit</Label>
+            //   <Input
+            //     type="number"
+            //     min={1}
+            //     max={200}
+            //     value={config.limit}
+            //     onChange={(e) =>
+            //       setConfig((prev) => ({
+            //         ...prev,
+            //         limit: Number(e.target.value),
+            //       }))
+            //     }
+            //   />
+            // </div>
           )}
         </div>
 

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Search, Upload, CheckSquare, Square, ArrowRight } from "lucide-react"
 import { cn }
- from "@/lib/utils"
+  from "@/lib/utils"
 import { useProcessingWizard } from "../WizardContext"
 
 export function ColumnSelectionStep() {
@@ -98,7 +98,11 @@ export function ColumnSelectionStep() {
           Select All
         </Button>
         <Button variant="outline" size="sm" onClick={handleDeselectAll}>
-          <Square className="w-4 h-4 mr-2 text-muted-foreground" />
+          {selectedColumns.length === 0 ? (
+            <CheckSquare className="w-4 h-4 mr-2 text-primary" />
+          ) : (
+            <Square className="w-4 h-4 mr-2 text-muted-foreground" />
+          )}
           Deselect All
         </Button>
         <div className="relative">

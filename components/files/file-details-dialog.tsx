@@ -15,6 +15,7 @@ import {
   Table as TableIcon,
   XCircle,
   Cpu,
+  Terminal,
 } from "lucide-react"
 import {
   Dialog,
@@ -101,15 +102,45 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
     }
   }, [open])
 
-  const loadPreview = async () => {
+  const [latestFile, setLatestFile] = useState<FileStatusResponse | null>(file)
+
+  useEffect(() => {
+    setLatestFile(file)
+  }, [file])
+
+  useEffect(() => {
+    if (open && file) {
+      loadLatestFileDetails()
+    }
+  }, [open, file])
+
+  const loadLatestFileDetails = async () => {
     if (!file) return
+    try {
+      const authTokens = JSON.parse(localStorage.getItem('authTokens') || '{}')
+      const token = authTokens.idToken
+      if (!token) return
+
+      const freshFile = await fileManagementAPI.getFileStatus(file.upload_id, token)
+      console.log('API Response for File Details:', freshFile);
+      console.log('Rows In:', freshFile.rows_in, 'Detailed:', freshFile);
+      setLatestFile(freshFile)
+    } catch (error) {
+      console.error("Failed to refresh file details", error)
+    }
+  }
+
+  const loadPreview = async () => {
+    // Use latestFile if available, otherwise fallback to prop file
+    const targetFile = latestFile || file
+    if (!targetFile) return
     setPreviewLoading(true)
     setPreviewError(null)
     try {
       const authTokens = JSON.parse(localStorage.getItem('authTokens') || '{}')
       const token = authTokens.idToken
       if (!token) throw new Error('Not authenticated')
-      const data = await fileManagementAPI.getFilePreview(file.upload_id, token)
+      const data = await fileManagementAPI.getFilePreview(targetFile.upload_id, token)
       setPreviewData(data)
     } catch (err: any) {
       setPreviewError(err.message || 'Failed to load preview')
@@ -119,14 +150,15 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
   }
 
   const loadDqReport = async () => {
-    if (!file) return
+    const targetFile = latestFile || file
+    if (!targetFile) return
     setDqReportLoading(true)
     setDqReportError(null)
     try {
       const authTokens = JSON.parse(localStorage.getItem('authTokens') || '{}')
       const token = authTokens.idToken
       if (!token) throw new Error('Not authenticated')
-      const report = await fileManagementAPI.downloadDqReport(file.upload_id, token)
+      const report = await fileManagementAPI.downloadDqReport(targetFile.upload_id, token)
       setDqReport(report)
       const sampleIssues = report?.hybrid_summary?.outstanding_issues || []
       // Always cap initial render to a single page to avoid loading thousands of rows at once.
@@ -188,7 +220,7 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
       const token = authTokens.idToken
       if (!token) throw new Error('Not authenticated')
       const report = await fileManagementAPI.downloadDqReport(file.upload_id, token)
-      
+
       // Create blob and download
       const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
@@ -199,7 +231,7 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
-      
+
       toast({
         title: "Downloaded",
         description: "DQ report downloaded successfully",
@@ -294,629 +326,655 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange} >
-      <DialogContent className="w-[98vw] h-[80vh] max-w-6xl max-h-none p-0 flex flex-col gap-0">
-        <div className="flex h-full flex-col">
-          <DialogHeader className="px-6 py-4 border-b shrink-0">
-            <div className="flex items-center justify-left gap-4">
-              <DialogTitle className="flex items-center gap-2 text-lg font-semibold truncate">
-                <FileText className="w-5 h-5 text-primary shrink-0" />
-                <span className="truncate">{file.original_filename || file.filename || 'File'}</span>
-              </DialogTitle>
-              <Badge className={cn("shrink-0", getStatusColor(file.status))} variant="outline">
-                {file.status}
-              </Badge>
-            </div>
-          </DialogHeader>
+      <Dialog open={open} onOpenChange={onOpenChange} >
+        <DialogContent className="w-[98vw] h-[80vh] max-w-6xl max-h-none p-0 flex flex-col gap-0">
+          <div className="flex h-full flex-col">
+            <DialogHeader className="px-6 py-4 border-b shrink-0">
+              <div className="flex items-center justify-left gap-4">
+                <DialogTitle className="flex items-center gap-2 text-lg font-semibold truncate">
+                  <FileText className="w-5 h-5 text-primary shrink-0" />
+                  <span className="truncate">{(latestFile || file).original_filename || (latestFile || file).filename || 'File'}</span>
+                </DialogTitle>
+                <Badge className={cn("shrink-0", getStatusColor((latestFile || file).status))} variant="outline">
+                  {(latestFile || file).status}
+                </Badge>
+              </div>
+            </DialogHeader>
 
-          {/* Tab Navigation */}
-          <div className="px-6 py-2 border-b shrink-0 bg-muted/10">
-            <div className="inline-flex rounded-lg border bg-muted p-1">
-              <button
-                onClick={() => setActiveTab('details')}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
-                  activeTab === 'details'
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Server className="h-3.5 w-3.5" />
-                Details
-              </button>
-              <button
-                onClick={() => setActiveTab('preview')}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
-                  activeTab === 'preview'
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <TableIcon className="h-3.5 w-3.5" />
-                Preview
-              </button>
-              {(file.status === 'DQ_FIXED' || file.status === 'COMPLETED') && (
+            {/* Tab Navigation */}
+            <div className="px-6 py-2 border-b shrink-0 bg-muted/10">
+              <div className="inline-flex rounded-lg border bg-muted p-1">
                 <button
-                  onClick={() => setActiveTab('dq-report')}
+                  onClick={() => setActiveTab('details')}
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
-                    activeTab === 'dq-report'
+                    activeTab === 'details'
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <PieChart className="h-3.5 w-3.5" />
-                  DQ Report
+                  <Server className="h-3.5 w-3.5" />
+                  Details
                 </button>
-              )}
+                <button
+                  onClick={() => setActiveTab('preview')}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
+                    activeTab === 'preview'
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <TableIcon className="h-3.5 w-3.5" />
+                  Preview
+                </button>
+                {(file.status === 'DQ_FIXED' || file.status === 'COMPLETED') && (
+                  <button
+                    onClick={() => setActiveTab('dq-report')}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
+                      activeTab === 'dq-report'
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <PieChart className="h-3.5 w-3.5" />
+                    DQ Report
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Content Area */}
-          <div className="flex-1 overflow-hidden relative">
-            {activeTab === 'details' && (
-              <ScrollArea className="h-full">
-                <div className="p-6 space-y-6">
-                {/* Processing Stats Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                      <Hash className="w-4 h-4" />
-                      <span className="text-sm font-medium">Rows</span>
-                    </div>
-                    <div className="text-2xl font-bold">{file.rows_in || 0}</div>
-                  </div>
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 text-green-600 mb-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-sm font-medium">Validated</span>
-                    </div>
-                    <div className="text-2xl font-bold">{file.rows_clean || 0}</div>
-                  </div>
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 text-yellow-600 mb-2">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span className="text-sm font-medium">Fixed</span>
-                    </div>
-                    <div className="text-2xl font-bold">{file.rows_fixed || 0}</div>
-                  </div>
-                  <div className="bg-muted/50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 text-red-600 mb-2">
-                      <XCircle className="w-4 h-4" />
-                      <span className="text-sm font-medium">Quarantined</span>
-                    </div>
-                    <div className="text-2xl font-bold">{file.rows_quarantined || 0}</div>
-                  </div>
-                </div>
-
-                {/* DQ Score & Size */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-muted/50 p-5 rounded-lg flex items-center justify-between border">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary/10 rounded-full">
-                        <Activity className="w-5 h-5 text-primary" />
+            {/* Content Area */}
+            <div className="flex-1 overflow-hidden relative">
+              {activeTab === 'details' && (
+                <ScrollArea className="h-full">
+                  <div className="p-6 space-y-6">
+                    {/* Processing Stats Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="bg-muted/50 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                          <Hash className="w-4 h-4" />
+                          <span className="text-sm font-medium">Rows</span>
+                        </div>
+                        <div className="text-2xl font-bold">{(latestFile || file).rows_in || 0}</div>
                       </div>
-                      <div>
-                        <div className="font-medium">Quality Score</div>
-                        <div className="text-xs text-muted-foreground">Overall data health</div>
+                      <div className="bg-muted/50 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 text-green-600 mb-2">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span className="text-sm font-medium">Validated</span>
+                        </div>
+                        <div className="text-2xl font-bold">{(latestFile || file).rows_clean || 0}</div>
+                      </div>
+                      <div className="bg-muted/50 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 text-yellow-600 mb-2">
+                          <AlertTriangle className="w-4 h-4" />
+                          <span className="text-sm font-medium">Fixed</span>
+                        </div>
+                        <div className="text-2xl font-bold">{(latestFile || file).rows_fixed || 0}</div>
+                      </div>
+                      <div className="bg-muted/50 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 text-red-600 mb-2">
+                          <XCircle className="w-4 h-4" />
+                          <span className="text-sm font-medium">Quarantined</span>
+                        </div>
+                        <div className="text-2xl font-bold">{(latestFile || file).rows_quarantined || 0}</div>
                       </div>
                     </div>
-                    <span className="text-3xl font-bold text-primary">
-                      {typeof file.dq_score === 'number' ? `${file.dq_score.toFixed(1)}%` : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="bg-muted/50 p-5 rounded-lg flex items-center justify-between border">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-muted rounded-full">
-                        <FileText className="w-5 h-5 text-muted-foreground" />
+
+                    {/* DQ Score & Size */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="bg-muted/50 p-5 rounded-lg flex items-center justify-between border">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-primary/10 rounded-full">
+                            <Activity className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <div className="font-medium">Quality Score</div>
+                            <div className="text-xs text-muted-foreground">Overall data health</div>
+                          </div>
+                        </div>
+                        <span className="text-3xl font-bold text-primary">
+                          {typeof (latestFile || file).dq_score === 'number' ? `${(latestFile || file).dq_score!.toFixed(1)}%` : 'N/A'}
+                        </span>
                       </div>
-                      <div>
-                        <div className="font-medium">File Size</div>
-                        <div className="text-xs text-muted-foreground">Original input size</div>
-                      </div>
-                    </div>
-                    <span className="text-xl font-mono font-medium">
-                      {formatBytes(file.input_size_bytes || file.file_size || 0)}
-                    </span>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Timestamps */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-medium flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    Timeline (IST)
-                  </h4>
-                  <div className="grid gap-4 text-sm sm:grid-cols-3">
-                    <div className="bg-muted/30 rounded-lg p-4 border">
-                      <p className="text-xs text-muted-foreground mb-1">Uploaded</p>
-                      <p className="font-mono text-sm font-medium">{formatToIST(file.uploaded_at || file.created_at)}</p>
-                    </div>
-                    <div className="bg-muted/30 rounded-lg p-4 border">
-                      <p className="text-xs text-muted-foreground mb-1">Last Updated</p>
-                      <p className="font-mono text-sm font-medium">{formatToIST(file.updated_at)}</p>
-                    </div>
-                    <div className="bg-muted/30 rounded-lg p-4 border">
-                      <p className="text-xs text-muted-foreground mb-1">Processing Time</p>
-                      <p className="font-mono text-sm font-medium">
-                        {(() => {
-                          if (file.processing_time_seconds || file.processing_time) {
-                            if (typeof file.processing_time === 'string' && file.processing_time.includes('s')) {
-                              return file.processing_time
-                            }
-                            const seconds = file.processing_time_seconds ?? (typeof file.processing_time === 'string' ? parseFloat(file.processing_time) : file.processing_time)
-                            if (typeof seconds === 'number' && !isNaN(seconds)) {
-                              if (seconds < 1) return `${(seconds * 1000).toFixed(0)}ms`
-                              if (seconds < 60) return `${seconds.toFixed(2)}s`
-                              const minutes = Math.floor(seconds / 60)
-                              const remainingSeconds = Math.floor(seconds % 60)
-                              if (minutes < 60) return `${minutes}m ${remainingSeconds}s`
-                              const hours = Math.floor(minutes / 60)
-                              const remainingMinutes = minutes % 60
-                              return `${hours}h ${remainingMinutes}m`
-                            }
-                          }
-                          return "—"
-                        })()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* System Details */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-medium flex items-center gap-2">
-                    <Database className="w-4 h-4" />
-                    System Info
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="bg-muted/30 p-3 rounded border">
-                      <span className="text-xs text-muted-foreground block mb-1">Upload ID</span>
-                      <code className="text-xs font-mono block truncate select-all" title={file.upload_id}>
-                        {file.upload_id}
-                      </code>
-                    </div>
-                    <div className="bg-muted/30 p-3 rounded border">
-                      <span className="text-xs text-muted-foreground block mb-1">Engine</span>
-                      {/* <span className="text-sm font-medium">{file.engine || 'Standard'}</span> */}
-                      <span className="text-sm font-medium">CleanAI 1.0</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              </ScrollArea>
-            )}
-
-            {activeTab === 'preview' && (
-              <div className="h-full flex flex-col">
-                {previewLoading && (
-                  <div className="flex items-center justify-center flex-1">
-                    <div className="text-center">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-                      <p className="text-muted-foreground">Loading preview data...</p>
-                    </div>
-                  </div>
-                )}
-                
-                {previewError && (
-                  <div className="flex flex-col items-center justify-center flex-1 text-center p-8">
-                    <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center mb-4">
-                      <AlertTriangle className="h-8 w-8 text-yellow-500" />
-                    </div>
-                    <h3 className="text-lg font-medium mb-2">Preview Unavailable</h3>
-                    <p className="text-muted-foreground max-w-md">{previewError}</p>
-                  </div>
-                )}
-
-                {!previewLoading && !previewError && previewData && (
-                  <>
-                    <div className="flex-1 overflow-auto relative bg-background mx-4 my-4 border rounded-lg">
-                      <table className="w-full border-collapse text-sm">
-                        <thead className="sticky top-0 z-20 bg-muted shadow-sm " >
-                          <tr>
-                            {previewData.headers?.map((header) => (
-                              <th 
-                                key={header} 
-                                className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap border-b border-r last:border-r-0 bg-muted select-none"
-                              >
-                                {header}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {previewData.sample_data?.map((row, idx) => (
-                            <tr
-                              key={idx}
-                              className="border-b transition-colors hover:bg-muted/30"
-                              title={row?.dq_violations || row?.dq_status || ""}
-                            >
-                              {previewData.headers?.map((header) => {
-                                const value = row && typeof row === 'object' ? row[header] : ''
-                                const status = String(row?.dq_status || "").toLowerCase()
-                                const cellStatus = row?.cell_status ? row.cell_status[header] : undefined
-                                const resolvedStatus = (cellStatus || status) as string
-                                const isStatusCell = header === 'dq_status'
-                                const isViolationCell = header === 'dq_violations'
-                                const cellClass =
-                                  isStatusCell
-                                    ? status === 'clean'
-                                      ? "bg-emerald-500/10 text-emerald-700"
-                                      : status === 'fixed'
-                                        ? "bg-amber-500/10 text-amber-700"
-                                        : status === 'quarantined'
-                                          ? "bg-red-500/10 text-red-700"
-                                          : ""
-                                    : isViolationCell
-                                      ? status === 'quarantined'
-                                        ? "bg-red-500/10 text-red-800"
-                                        : status === 'fixed'
-                                          ? "bg-amber-500/10 text-amber-800"
-                                          : ""
-                                      : resolvedStatus === 'quarantined'
-                                        ? "bg-red-500/10 text-red-800"
-                                        : resolvedStatus === 'fixed'
-                                          ? "bg-amber-500/10 text-amber-800"
-                                          : resolvedStatus === 'clean'
-                                            ? "bg-emerald-500/5 text-emerald-800"
-                                            : ""
-                                return (
-                                  <td 
-                                    key={header} 
-                                    className={cn(
-                                      "px-4 py-2.5 whitespace-nowrap border-r last:border-r-0 max-w-[260px] truncate",
-                                      cellClass
-                                    )}
-                                    title={value !== undefined ? String(value ?? '') : ''}
-                                  >
-                                    {value !== undefined ? String(value ?? '') : ''}
-                                  </td>
-                                )
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="p-4 border-t bg-muted/10 shrink-0">
-                      <div className="text-sm text-muted-foreground text-center">
-                        Showing 1-{Math.min(20, previewData.total_rows)} of {previewData.total_rows} total records
+                      <div className="bg-muted/50 p-5 rounded-lg flex items-center justify-between border">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-muted rounded-full">
+                            <FileText className="w-5 h-5 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <div className="font-medium">File Size</div>
+                            <div className="text-xs text-muted-foreground">Original input size</div>
+                          </div>
+                        </div>
+                        <span className="text-xl font-mono font-medium">
+                          {formatBytes((latestFile || file).input_size_bytes || (latestFile || file).file_size || 0)}
+                        </span>
                       </div>
                     </div>
-                  </>
-                )}
 
-                {!previewLoading && !previewError && !previewData && (
-                  <div className="flex flex-col items-center justify-center flex-1 text-center">
-                    <TableIcon className="h-12 w-12 text-muted-foreground/20 mb-4" />
-                    <p className="text-muted-foreground">No preview data available</p>
+                    <Separator />
+
+                    {/* Timestamps */}
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-medium flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Timeline (IST)
+                      </h4>
+                      <div className="grid gap-4 text-sm sm:grid-cols-3">
+                        <div className="bg-muted/30 rounded-lg p-4 border">
+                          <p className="text-xs text-muted-foreground mb-1">Uploaded</p>
+                          <p className="font-mono text-sm font-medium">{formatToIST(file.uploaded_at || file.created_at)}</p>
+                        </div>
+                        <div className="bg-muted/30 rounded-lg p-4 border">
+                          <p className="text-xs text-muted-foreground mb-1">Last Updated</p>
+                          <p className="font-mono text-sm font-medium">{formatToIST(file.updated_at)}</p>
+                        </div>
+                        <div className="bg-muted/30 rounded-lg p-4 border">
+                          <p className="text-xs text-muted-foreground mb-1">Processing Time</p>
+                          <p className="font-mono text-sm font-medium">
+                            {(() => {
+                              if (file.processing_time_seconds || file.processing_time) {
+                                if (typeof file.processing_time === 'string' && file.processing_time.includes('s')) {
+                                  return file.processing_time
+                                }
+                                const seconds = file.processing_time_seconds ?? (typeof file.processing_time === 'string' ? parseFloat(file.processing_time) : file.processing_time)
+                                if (typeof seconds === 'number' && !isNaN(seconds)) {
+                                  if (seconds < 1) return `${(seconds * 1000).toFixed(0)}ms`
+                                  if (seconds < 60) return `${seconds.toFixed(2)}s`
+                                  const minutes = Math.floor(seconds / 60)
+                                  const remainingSeconds = Math.floor(seconds % 60)
+                                  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`
+                                  const hours = Math.floor(minutes / 60)
+                                  const remainingMinutes = minutes % 60
+                                  return `${hours}h ${remainingMinutes}m`
+                                }
+                              }
+                              return "—"
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* System Details */}
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-medium flex items-center gap-2">
+                        <Database className="w-4 h-4" />
+                        System Info
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="bg-muted/30 p-3 rounded border">
+                          <span className="text-xs text-muted-foreground block mb-1">Upload ID</span>
+                          <code className="text-xs font-mono block truncate select-all" title={file.upload_id}>
+                            {file.upload_id}
+                          </code>
+                        </div>
+                        <div className="bg-muted/30 p-3 rounded border">
+                          <span className="text-xs text-muted-foreground block mb-1">Engine</span>
+                          {/* <span className="text-sm font-medium">{file.engine || 'Standard'}</span> */}
+                          <span className="text-sm font-medium">CleanAI 1.0</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* Debug Info: API Response */}
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-medium flex items-center gap-2">
+                        <Terminal className="w-4 h-4" />
+                        API Response Debug
+                      </h4>
+                      <Collapsible>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="outline" size="sm" className="w-full justify-between">
+                            Show Raw Data
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <div className="bg-muted/30 p-4 rounded mt-2 overflow-auto max-h-60 border">
+                            <div className="text-xs text-muted-foreground mb-2">Endpoint: /files/{file.upload_id}/status</div>
+                            <pre className="text-xs font-mono whitespace-pre-wrap break-all">
+                              {JSON.stringify(latestFile || file, null, 2)}
+                            </pre>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
                   </div>
-                )}
-              </div>
-            )}
+                </ScrollArea>
+              )}
 
-            {activeTab === 'dq-report' && (
-              <ScrollArea className="h-full">
-                <div className="p-6 space-y-6">
-                  {dqReportLoading && (
-                    <div className="flex items-center justify-center h-64">
+              {activeTab === 'preview' && (
+                <div className="h-full flex flex-col">
+                  {previewLoading && (
+                    <div className="flex items-center justify-center flex-1">
                       <div className="text-center">
                         <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-                        <p className="text-muted-foreground">Loading DQ report...</p>
+                        <p className="text-muted-foreground">Loading preview data...</p>
                       </div>
                     </div>
                   )}
 
-                  {dqReportError && (
-                    <div className="flex flex-col items-center justify-center h-64 text-center">
+                  {previewError && (
+                    <div className="flex flex-col items-center justify-center flex-1 text-center p-8">
                       <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center mb-4">
                         <AlertTriangle className="h-8 w-8 text-yellow-500" />
                       </div>
-                      <h3 className="text-lg font-medium mb-2">Report Unavailable</h3>
-                      <p className="text-muted-foreground max-w-md">{dqReportError}</p>
+                      <h3 className="text-lg font-medium mb-2">Preview Unavailable</h3>
+                      <p className="text-muted-foreground max-w-md">{previewError}</p>
                     </div>
                   )}
 
-                  {!dqReportLoading && !dqReportError && (
+                  {!previewLoading && !previewError && previewData && (
                     <>
-                      {/* Download Button */}
-                      <div className="flex justify-end">
-                        <Button 
-                          onClick={openMatrixDialog} 
-                          disabled={!isDqMatrixReady || downloadingMatrix}
-                          variant="outline"
-                          size="sm"
-                          className="gap-2"
-                        >
-                          {downloadingMatrix ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Database className="h-4 w-4" />
-                          )}
-                          Download DQ Matrix
-                        </Button>
-                        <Button 
-                          onClick={handleDownloadDqReport} 
-                          disabled={downloading}
-                          variant="outline"
-                          size="sm"
-                          className="gap-2"
-                        >
-                          {downloading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                          Download Report
-                        </Button>
+                      <div className="flex-1 overflow-auto relative bg-background mx-4 my-4 border rounded-lg">
+                        <table className="w-full border-collapse text-sm">
+                          <thead className="sticky top-0 z-20 bg-muted shadow-sm " >
+                            <tr>
+                              {previewData.headers?.map((header) => (
+                                <th
+                                  key={header}
+                                  className="px-4 py-3 text-left font-semibold text-muted-foreground whitespace-nowrap border-b border-r last:border-r-0 bg-muted select-none"
+                                >
+                                  {header}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {previewData.sample_data?.map((row, idx) => (
+                              <tr
+                                key={idx}
+                                className="border-b transition-colors hover:bg-muted/30"
+                                title={row?.dq_violations || row?.dq_status || ""}
+                              >
+                                {previewData.headers?.map((header) => {
+                                  const value = row && typeof row === 'object' ? row[header] : ''
+                                  const status = String(row?.dq_status || "").toLowerCase()
+                                  const cellStatus = row?.cell_status ? row.cell_status[header] : undefined
+                                  const resolvedStatus = (cellStatus || status) as string
+                                  const isStatusCell = header === 'dq_status'
+                                  const isViolationCell = header === 'dq_violations'
+                                  const cellClass =
+                                    isStatusCell
+                                      ? status === 'clean'
+                                        ? "bg-emerald-500/10 text-emerald-700"
+                                        : status === 'fixed'
+                                          ? "bg-amber-500/10 text-amber-700"
+                                          : status === 'quarantined'
+                                            ? "bg-red-500/10 text-red-700"
+                                            : ""
+                                      : isViolationCell
+                                        ? status === 'quarantined'
+                                          ? "bg-red-500/10 text-red-800"
+                                          : status === 'fixed'
+                                            ? "bg-amber-500/10 text-amber-800"
+                                            : ""
+                                        : resolvedStatus === 'quarantined'
+                                          ? "bg-red-500/10 text-red-800"
+                                          : resolvedStatus === 'fixed'
+                                            ? "bg-amber-500/10 text-amber-800"
+                                            : resolvedStatus === 'clean'
+                                              ? "bg-emerald-500/5 text-emerald-800"
+                                              : ""
+                                  return (
+                                    <td
+                                      key={header}
+                                      className={cn(
+                                        "px-4 py-2.5 whitespace-nowrap border-r last:border-r-0 max-w-[260px] truncate",
+                                        cellClass
+                                      )}
+                                      title={value !== undefined ? String(value ?? '') : ''}
+                                    >
+                                      {value !== undefined ? String(value ?? '') : ''}
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-
-                      {/* DQ Score Card */}
-                      <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6 rounded-xl border">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-lg font-semibold mb-1">Data Quality Score</h3>
-                            <p className="text-sm text-muted-foreground">Overall quality assessment</p>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-4xl font-bold text-primary">
-                              {dqReport?.dq_score !== undefined ? `${dqReport.dq_score}%` : (file.dq_score !== undefined ? `${file.dq_score}%` : 'N/A')}
-                            </div>
-                            <Badge 
-                              variant="secondary" 
-                              className={cn(
-                                "mt-1",
-                                (dqReport?.dq_score ?? file.dq_score ?? 0) >= 90 ? "bg-emerald-100 text-emerald-700" :
-                                (dqReport?.dq_score ?? file.dq_score ?? 0) >= 70 ? "bg-amber-100 text-amber-700" :
-                                "bg-rose-100 text-rose-700"
-                              )}
-                            >
-                              {(dqReport?.dq_score ?? file.dq_score ?? 0) >= 90 ? 'Excellent' :
-                               (dqReport?.dq_score ?? file.dq_score ?? 0) >= 70 ? 'Good' : 'Needs Attention'}
-                            </Badge>
-                          </div>
+                      <div className="p-4 border-t bg-muted/10 shrink-0">
+                        <div className="text-sm text-muted-foreground text-center">
+                          Showing 1-{Math.min(20, previewData.total_rows)} of {previewData.total_rows} total records
                         </div>
                       </div>
+                    </>
+                  )}
 
-                      {/* Detection Info */}
-                      {(dqReport?.detected_erp || dqReport?.detected_entity) && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {dqReport?.detected_erp && (
-                            <div className="bg-muted/50 p-4 rounded-lg border flex items-center gap-3">
-                              <div className="p-2 bg-sky-100 rounded-lg">
-                                <Cpu className="w-5 h-5 text-sky-600" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Detected ERP</p>
-                                <p className="font-medium">{dqReport.detected_erp}</p>
-                              </div>
-                            </div>
-                          )}
-                          {dqReport?.detected_entity && (
-                            <div className="bg-muted/50 p-4 rounded-lg border flex items-center gap-3">
-                              <div className="p-2 bg-violet-100 rounded-lg">
-                                <Database className="w-5 h-5 text-violet-600" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Detected Entity</p>
-                                <p className="font-medium capitalize">{dqReport.detected_entity.replace(/_/g, ' ')}</p>
-                              </div>
-                            </div>
-                          )}
+                  {!previewLoading && !previewError && !previewData && (
+                    <div className="flex flex-col items-center justify-center flex-1 text-center">
+                      <TableIcon className="h-12 w-12 text-muted-foreground/20 mb-4" />
+                      <p className="text-muted-foreground">No preview data available</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'dq-report' && (
+                <ScrollArea className="h-full">
+                  <div className="p-6 space-y-6">
+                    {dqReportLoading && (
+                      <div className="flex items-center justify-center h-64">
+                        <div className="text-center">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+                          <p className="text-muted-foreground">Loading DQ report...</p>
                         </div>
-                      )}
+                      </div>
+                    )}
 
-                      {/* Row Distribution Pie Chart */}
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-medium flex items-center gap-2">
-                          <PieChartIcon className="w-4 h-4" />
-                          Row Distribution
-                        </h4>
-                        {(() => {
-                          const total = dqReport?.rows_in ?? file.rows_in ?? 0
-                          const clean = dqReport?.rows_clean ?? file.rows_clean ?? 0
-                          const fixed = dqReport?.rows_fixed ?? file.rows_fixed ?? 0
-                          const quarantined = dqReport?.rows_quarantined ?? file.rows_quarantined ?? 0
-                          
-                          const pieData = [
-                            { name: 'Clean', value: clean, color: '#22C55E' },
-                            { name: 'Fixed', value: fixed, color: '#EAB308' },
-                            { name: 'Quarantined', value: quarantined, color: '#EF4444' },
-                          ].filter(d => d.value > 0)
+                    {dqReportError && (
+                      <div className="flex flex-col items-center justify-center h-64 text-center">
+                        <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center mb-4">
+                          <AlertTriangle className="h-8 w-8 text-yellow-500" />
+                        </div>
+                        <h3 className="text-lg font-medium mb-2">Report Unavailable</h3>
+                        <p className="text-muted-foreground max-w-md">{dqReportError}</p>
+                      </div>
+                    )}
 
-                          if (pieData.length === 0) {
-                            return (
-                              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                                No data available
+                    {!dqReportLoading && !dqReportError && (
+                      <>
+                        {/* Download Button */}
+                        <div className="flex justify-end">
+                          <Button
+                            onClick={openMatrixDialog}
+                            disabled={!isDqMatrixReady || downloadingMatrix}
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                          >
+                            {downloadingMatrix ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Database className="h-4 w-4" />
+                            )}
+                            Download DQ Matrix
+                          </Button>
+                          <Button
+                            onClick={handleDownloadDqReport}
+                            disabled={downloading}
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                          >
+                            {downloading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            Download Report
+                          </Button>
+                        </div>
+
+                        {/* DQ Score Card */}
+                        <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-6 rounded-xl border">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="text-lg font-semibold mb-1">Data Quality Score</h3>
+                              <p className="text-sm text-muted-foreground">Overall quality assessment</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-4xl font-bold text-primary">
+                                {dqReport?.dq_score !== undefined ? `${dqReport.dq_score}%` : (file.dq_score !== undefined ? `${file.dq_score}%` : 'N/A')}
                               </div>
-                            )
-                          }
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  "mt-1",
+                                  (dqReport?.dq_score ?? file.dq_score ?? 0) >= 90 ? "bg-emerald-100 text-emerald-700" :
+                                    (dqReport?.dq_score ?? file.dq_score ?? 0) >= 70 ? "bg-amber-100 text-amber-700" :
+                                      "bg-rose-100 text-rose-700"
+                                )}
+                              >
+                                {(dqReport?.dq_score ?? file.dq_score ?? 0) >= 90 ? 'Excellent' :
+                                  (dqReport?.dq_score ?? file.dq_score ?? 0) >= 70 ? 'Good' : 'Needs Attention'}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
 
-                          return (
-                            <div className="bg-muted/30 rounded-lg p-6">
-                              {/* Total rows centered at top */}
-                              <div className="text-center mb-4">
-                                <p className="text-3xl font-bold">{total.toLocaleString()}</p>
-                                <p className="text-sm text-muted-foreground">Total Rows</p>
-                              </div>
-                              
-                              {/* Pie Chart centered */}
-                              <div className="flex justify-center">
-                                <div style={{ width: 220, height: 220 }}>
-                                  <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                      <Pie
-                                        data={pieData}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={55}
-                                        outerRadius={85}
-                                        paddingAngle={3}
-                                        dataKey="value"
-                                      >
-                                        {pieData.map((entry, index) => (
-                                          <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                                        ))}
-                                      </Pie>
-                                      <Tooltip 
-                                        formatter={(value: number) => [value.toLocaleString(), 'Rows']}
-                                        contentStyle={{ 
-                                          borderRadius: '8px', 
-                                          border: '1px solid hsl(var(--border))',
-                                          backgroundColor: 'hsl(var(--background))',
-                                          padding: '8px 12px',
-                                          fontSize: '13px'
-                                        }}
-                                      />
-                                    </PieChart>
-                                  </ResponsiveContainer>
+                        {/* Detection Info */}
+                        {(dqReport?.detected_erp || dqReport?.detected_entity) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {dqReport?.detected_erp && (
+                              <div className="bg-muted/50 p-4 rounded-lg border flex items-center gap-3">
+                                <div className="p-2 bg-sky-100 rounded-lg">
+                                  <Cpu className="w-5 h-5 text-sky-600" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Detected ERP</p>
+                                  <p className="font-medium">{dqReport.detected_erp}</p>
                                 </div>
                               </div>
-                              
-                              {/* Legend below chart */}
-                              <div className="flex justify-center gap-6 mt-4">
-                                {pieData.map((item) => (
-                                  <div key={item.name} className="flex flex-col items-center">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                                      <span className="text-sm font-medium">{item.name}</span>
+                            )}
+                            {dqReport?.detected_entity && (
+                              <div className="bg-muted/50 p-4 rounded-lg border flex items-center gap-3">
+                                <div className="p-2 bg-violet-100 rounded-lg">
+                                  <Database className="w-5 h-5 text-violet-600" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Detected Entity</p>
+                                  <p className="font-medium capitalize">{dqReport.detected_entity.replace(/_/g, ' ')}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Row Distribution Pie Chart */}
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-medium flex items-center gap-2">
+                            <PieChartIcon className="w-4 h-4" />
+                            Row Distribution
+                          </h4>
+                          {(() => {
+                            const total = dqReport?.rows_in ?? file.rows_in ?? 0
+                            const clean = dqReport?.rows_clean ?? file.rows_clean ?? 0
+                            const fixed = dqReport?.rows_fixed ?? file.rows_fixed ?? 0
+                            const quarantined = dqReport?.rows_quarantined ?? file.rows_quarantined ?? 0
+
+                            const pieData = [
+                              { name: 'Clean', value: clean, color: '#22C55E' },
+                              { name: 'Fixed', value: fixed, color: '#EAB308' },
+                              { name: 'Quarantined', value: quarantined, color: '#EF4444' },
+                            ].filter(d => d.value > 0)
+
+                            if (pieData.length === 0) {
+                              return (
+                                <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                                  No data available
+                                </div>
+                              )
+                            }
+
+                            return (
+                              <div className="bg-muted/30 rounded-lg p-6">
+                                {/* Total rows centered at top */}
+                                <div className="text-center mb-4">
+                                  <p className="text-3xl font-bold">{total.toLocaleString()}</p>
+                                  <p className="text-sm text-muted-foreground">Total Rows</p>
+                                </div>
+
+                                {/* Pie Chart centered */}
+                                <div className="flex justify-center">
+                                  <div style={{ width: 220, height: 220 }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                      <PieChart>
+                                        <Pie
+                                          data={pieData}
+                                          cx="50%"
+                                          cy="50%"
+                                          innerRadius={55}
+                                          outerRadius={85}
+                                          paddingAngle={3}
+                                          dataKey="value"
+                                        >
+                                          {pieData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                                          ))}
+                                        </Pie>
+                                        <Tooltip
+                                          formatter={(value: number) => [value.toLocaleString(), 'Rows']}
+                                          contentStyle={{
+                                            borderRadius: '8px',
+                                            border: '1px solid hsl(var(--border))',
+                                            backgroundColor: 'hsl(var(--background))',
+                                            padding: '8px 12px',
+                                            fontSize: '13px'
+                                          }}
+                                        />
+                                      </PieChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                </div>
+
+                                {/* Legend below chart */}
+                                <div className="flex justify-center gap-6 mt-4">
+                                  {pieData.map((item) => (
+                                    <div key={item.name} className="flex flex-col items-center">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                                        <span className="text-sm font-medium">{item.name}</span>
+                                      </div>
+                                      <span className="text-xs text-muted-foreground">
+                                        {item.value.toLocaleString()} ({total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)
+                                      </span>
                                     </div>
-                                    <span className="text-xs text-muted-foreground">
-                                      {item.value.toLocaleString()} ({total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+
+                        {/* Top Violations */}
+                        {(() => {
+                          const topViolations = dqReport?.top_violations
+                            ?? (dqReport?.violation_counts
+                              ? Object.entries(dqReport.violation_counts)
+                                .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+                                .slice(0, 5)
+                                .map(([violation, count]) => ({ violation, count }))
+                              : [])
+
+                          if (!topViolations || topViolations.length === 0) return null
+
+                          return (
+                            <div className="space-y-3">
+                              <h4 className="text-sm font-medium flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4" />
+                                Top Violations
+                              </h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                {topViolations.map((item) => (
+                                  <div key={item.violation} className="p-3 rounded-lg border bg-muted/40 flex items-center justify-between">
+                                    <span className="text-sm truncate" title={item.violation}>
+                                      {item.violation.replace(/_/g, ' ')}
                                     </span>
+                                    <Badge variant="secondary">{item.count.toLocaleString()}</Badge>
                                   </div>
                                 ))}
                               </div>
                             </div>
                           )
                         })()}
-                      </div>
 
-                      {/* Top Violations */}
-                      {(() => {
-                        const topViolations = dqReport?.top_violations
-                          ?? (dqReport?.violation_counts
-                            ? Object.entries(dqReport.violation_counts)
-                                .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-                                .slice(0, 5)
-                                .map(([violation, count]) => ({ violation, count }))
-                            : [])
-
-                        if (!topViolations || topViolations.length === 0) return null
-
-                        return (
+                        {/* Row-wise Outstanding Issues */}
+                        {issues && issues.length > 0 && (
                           <div className="space-y-3">
-                            <h4 className="text-sm font-medium flex items-center gap-2">
-                              <AlertTriangle className="w-4 h-4" />
-                              Top Violations
-                            </h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                              {topViolations.map((item) => (
-                                <div key={item.violation} className="p-3 rounded-lg border bg-muted/40 flex items-center justify-between">
-                                  <span className="text-sm truncate" title={item.violation}>
-                                    {item.violation.replace(/_/g, ' ')}
-                                  </span>
-                                  <Badge variant="secondary">{item.count.toLocaleString()}</Badge>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )
-                      })()}
-
-                      {/* Row-wise Outstanding Issues */}
-                      {issues && issues.length > 0 && (
-                        <div className="space-y-3">
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h4 className="text-sm font-medium flex items-center gap-2">
-                                <AlertTriangle className="w-4 h-4" />
-                                Outstanding Issues
-                              </h4>
-                              <Badge variant="secondary">
-                                Showing {issues.length.toLocaleString()} of {(issuesTotal ?? issues.length).toLocaleString()}
-                              </Badge>
-                              {issuesNextOffset !== null && (
-                                <Badge variant="outline">More available</Badge>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap gap-2 items-center">
-                              {Object.keys(availableViolations).length > 0 && (
-                                <div className="flex flex-wrap gap-2 items-center">
-                                  {Object.entries(availableViolations).map(([code, count]) => (
-                                    <label key={code} className="flex items-center gap-1 text-xs">
-                                      <Checkbox
-                                        checked={selectedViolations.has(code)}
-                                        onCheckedChange={(checked) => {
-                                          const next = new Set(selectedViolations)
-                                          if (checked) next.add(code); else next.delete(code)
-                                          setSelectedViolations(next)
-                                        }}
-                                      />
-                                      <span className="truncate max-w-[140px]" title={code}>{code}</span>
-                                      <Badge variant="outline" className="text-[10px]">{count}</Badge>
-                                    </label>
-                                  ))}
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="text-sm font-medium flex items-center gap-2">
+                                  <AlertTriangle className="w-4 h-4" />
+                                  Outstanding Issues
+                                </h4>
+                                <Badge variant="secondary">
+                                  Showing {issues.length.toLocaleString()} of {(issuesTotal ?? issues.length).toLocaleString()}
+                                </Badge>
+                                {issuesNextOffset !== null && (
+                                  <Badge variant="outline">More available</Badge>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-2 items-center">
+                                {Object.keys(availableViolations).length > 0 && (
+                                  <div className="flex flex-wrap gap-2 items-center">
+                                    {Object.entries(availableViolations).map(([code, count]) => (
+                                      <label key={code} className="flex items-center gap-1 text-xs">
+                                        <Checkbox
+                                          checked={selectedViolations.has(code)}
+                                          onCheckedChange={(checked) => {
+                                            const next = new Set(selectedViolations)
+                                            if (checked) next.add(code); else next.delete(code)
+                                            setSelectedViolations(next)
+                                          }}
+                                        />
+                                        <span className="truncate max-w-[140px]" title={code}>{code}</span>
+                                        <Badge variant="outline" className="text-[10px]">{count}</Badge>
+                                      </label>
+                                    ))}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs"
+                                      onClick={() => fetchIssues(true)}
+                                      disabled={issuesLoading}
+                                    >
+                                      {issuesLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply filters'}
+                                    </Button>
+                                  </div>
+                                )}
+                                {issuesNextOffset !== null && (
                                   <Button
                                     size="sm"
-                                    variant="outline"
+                                    variant="secondary"
                                     className="h-7 text-xs"
-                                    onClick={() => fetchIssues(true)}
+                                    onClick={() => fetchIssues(false)}
                                     disabled={issuesLoading}
                                   >
-                                    {issuesLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply filters'}
+                                    {issuesLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Load more'}
                                   </Button>
-                                </div>
-                              )}
-                              {issuesNextOffset !== null && (
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  className="h-7 text-xs"
-                                  onClick={() => fetchIssues(false)}
-                                  disabled={issuesLoading}
-                                >
-                                  {issuesLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Load more'}
-                                </Button>
-                              )}
+                                )}
+                              </div>
                             </div>
-                          </div>
 
-                          <RowWiseIssues
-                            issues={issues}
-                            total={issuesTotal || undefined}
-                            hasMore={issuesNextOffset !== null}
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </ScrollArea>
-            )}
+                            <RowWiseIssues
+                              issues={issues}
+                              total={issuesTotal || undefined}
+                              hasMore={issuesNextOffset !== null}
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-    <DqMatrixDialog
-      open={matrixDialogOpen}
-      onOpenChange={setMatrixDialogOpen}
-      limit={matrixLimit}
-      start={matrixStart}
-      end={matrixEnd}
-      setLimit={setMatrixLimit}
-      setStart={setMatrixStart}
-      setEnd={setMatrixEnd}
-      totals={matrixTotals}
-      loadingTotals={matrixLoadingTotals}
-      onDownload={handleDownloadDqMatrix}
-      downloading={downloadingMatrix}
-    />
+        </DialogContent>
+      </Dialog>
+      <DqMatrixDialog
+        open={matrixDialogOpen}
+        onOpenChange={setMatrixDialogOpen}
+        limit={matrixLimit}
+        start={matrixStart}
+        end={matrixEnd}
+        setLimit={setMatrixLimit}
+        setStart={setMatrixStart}
+        setEnd={setMatrixEnd}
+        totals={matrixTotals}
+        loadingTotals={matrixLoadingTotals}
+        onDownload={handleDownloadDqMatrix}
+        downloading={downloadingMatrix}
+      />
     </>
   )
 }
@@ -1086,7 +1144,7 @@ function RowWiseIssues({
       {/* Sampling note */}
       {(hasMore || (total && total > issues.length)) && (
         <div className="text-xs text-muted-foreground">
-          Showing {issues.length.toLocaleString()} of {(total ?? issues.length).toLocaleString()} issues. 
+          Showing {issues.length.toLocaleString()} of {(total ?? issues.length).toLocaleString()} issues.
           {hasMore ? " Load more from backend to see full list." : ""}
         </div>
       )}
@@ -1103,8 +1161,8 @@ function RowWiseIssues({
       {/* Row-wise expandable list */}
       <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
         {Object.entries(issuesByRow).map(([rowNum, rowIssues]) => (
-          <Collapsible 
-            key={rowNum} 
+          <Collapsible
+            key={rowNum}
             open={expandedRows.has(Number(rowNum))}
             onOpenChange={() => toggleRow(Number(rowNum))}
           >
@@ -1123,9 +1181,9 @@ function RowWiseIssues({
                 </div>
                 <div className="flex gap-1">
                   {rowIssues.slice(0, 3).map((issue, idx) => (
-                    <Badge 
-                      key={idx} 
-                      variant="outline" 
+                    <Badge
+                      key={idx}
+                      variant="outline"
                       className={cn("text-[10px] px-1.5", getViolationColor(issue.violation))}
                     >
                       {issue.column}
@@ -1142,13 +1200,13 @@ function RowWiseIssues({
             <CollapsibleContent>
               <div className="mt-2 ml-7 space-y-2">
                 {rowIssues.map((issue, idx) => (
-                  <div 
-                    key={idx} 
+                  <div
+                    key={idx}
                     className={cn(
                       "p-3 rounded-lg border-l-4 bg-muted/30",
                       issue.violation.includes('missing') || issue.violation.includes('required') ? 'border-l-red-500' :
-                      issue.violation.includes('invalid') || issue.violation.includes('duplicate') ? 'border-l-orange-500' :
-                      issue.violation.includes('format') ? 'border-l-yellow-500' : 'border-l-blue-500'
+                        issue.violation.includes('invalid') || issue.violation.includes('duplicate') ? 'border-l-orange-500' :
+                          issue.violation.includes('format') ? 'border-l-yellow-500' : 'border-l-blue-500'
                     )}
                   >
                     <div className="flex items-start justify-between gap-4">
