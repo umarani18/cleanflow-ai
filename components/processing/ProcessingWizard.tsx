@@ -21,9 +21,10 @@ const STEP_LABELS: Record<WizardStep, string> = {
 interface ProcessingWizardProps {
     onClose?: () => void
     onComplete?: () => void
+    onStarted?: () => void
 }
 
-export function ProcessingWizard({ onClose, onComplete }: ProcessingWizardProps) {
+export function ProcessingWizard({ onClose, onComplete, onStarted }: ProcessingWizardProps) {
     const { step } = useProcessingWizard()
     const currentIndex = STEP_ORDER.indexOf(step)
 
@@ -77,7 +78,9 @@ export function ProcessingWizard({ onClose, onComplete }: ProcessingWizardProps)
                 {step === "profiling" && <ProfilingStep />}
                 {step === "settings" && <SettingsStep />}
                 {step === "rules" && <RulesStep />}
-                {step === "process" && <ProcessStep onComplete={onComplete} />}
+                {step === "process" && (
+                    <ProcessStep onComplete={onComplete} onStarted={onStarted} />
+                )}
             </div>
         </div>
     )

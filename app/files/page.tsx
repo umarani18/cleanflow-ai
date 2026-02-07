@@ -3240,6 +3240,11 @@ function FilesPageContent() {
           onOpenChange={setWizardOpen}
           file={wizardFile}
           authToken={idToken || ""}
+          onStarted={() => {
+            setWizardOpen(false);
+            setWizardFile(null);
+            loadFiles(); // Refresh file list after processing starts
+          }}
           onComplete={() => {
             setWizardOpen(false);
             setWizardFile(null);

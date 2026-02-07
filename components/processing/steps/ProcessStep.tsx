@@ -8,7 +8,13 @@ import { useProcessingWizard } from "../WizardContext"
 import { fileManagementAPI, type FileStatusResponse } from "@/lib/api/file-management-api"
 import { FileDetailsDialog } from "@/components/files/file-details-dialog"
 
-export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
+export function ProcessStep({
+  onComplete,
+  onStarted,
+}: {
+  onComplete?: () => void
+  onStarted?: () => void
+}) {
   const {
     uploadId,
     authToken,
@@ -98,6 +104,7 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
         preset_overrides: presetOverrides,
       })
       setStatusMessage("Processing started, monitoring progress...")
+      if (onStarted) onStarted()
     } catch (err: any) {
       setStatus("error")
       setProcessingError(err.message || "Failed to start processing")
