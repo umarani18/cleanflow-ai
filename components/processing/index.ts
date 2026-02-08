@@ -1,6 +1,6 @@
 export { ProcessingWizard } from "./ProcessingWizard"
 export { useProcessingWizard, STEP_ORDER, ProcessingWizardProvider } from "./WizardContext"
-export type { WizardStep, ColumnInfo, SettingsPreset, RuleWithState, WizardState } from "./WizardContext"
+export type { WizardStep, SettingsPreset, RuleWithState, WizardState } from "./WizardContext"
 export { ColumnSelectionStep } from "./steps/ColumnSelectionStep"
 export { ProfilingStep } from "./steps/ProfilingStep"
 export { SettingsStep } from "./steps/SettingsStep"

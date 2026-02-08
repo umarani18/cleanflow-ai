@@ -135,7 +135,8 @@ export interface ColumnProfileRule {
   rule_name?: string
   confidence: number
   decision: 'auto' | 'human'
-  reasoning: string
+  reasoning?: string
+  source?: string
 }
 
 export interface CustomRuleDefinition {
@@ -153,6 +154,7 @@ export interface CustomRuleSuggestionResponse {
   suggestion?: CustomRuleDefinition & { confidence?: number }
   executable?: boolean
   error?: string
+  raw_response?: unknown
 }
 
 export interface SettingsPreset {
@@ -164,6 +166,22 @@ export interface SettingsPreset {
     date_formats?: string[]
     custom_patterns?: Record<string, string>
     required_columns?: string[]
+    ruleset_version?: string
+    policies?: {
+      allow_autofix?: boolean
+      strictness?: string
+      unknown_column_behavior?: string
+    }
+    rules_enabled?: Record<string, boolean>
+    required_fields?: {
+      placeholders_treated_as_missing?: string[]
+    }
+    enum_sets?: Record<string, string[]>
+    thresholds?: {
+      text?: {
+        max_len_default?: number
+      }
+    }
   }
   is_default?: boolean
   created_at?: string
@@ -175,9 +193,31 @@ export interface ColumnProfile {
   type_confidence: number
   null_rate: number
   unique_ratio: number
+  numeric_parse_rate?: number
+  int_like_rate?: number
+  date_parse_rate?: number
+  datetime_has_time_rate?: number
+  email_valid_rate?: number
+  phone_valid_rate?: number
+  iso4217_rate?: number
+  uom_code_rate?: number
+  fiscal_period_rate?: number
+  len_min?: number
+  len_max?: number
+  len_mean?: number
+  key_type?: 'none' | 'primary_key' | 'unique'
+  nullable_suggested?: boolean
+  llm_reasoning?: string
   rules: ColumnProfileRule[]
   profile_time_sec?: number
   llm_time_sec?: number
+}
+
+export interface ColumnTypeOverride {
+  core_type: string
+  type_alias: string | null
+  key_type: 'none' | 'primary_key' | 'unique'
+  nullable: boolean
 }
 
 export interface ProfilingResponse {
@@ -378,6 +418,7 @@ class FileManagementAPI {
       custom_rules?: CustomRuleDefinition[]
       preset_id?: string
       preset_overrides?: Record<string, any>
+      column_type_overrides?: Record<string, ColumnTypeOverride>
     }
   ): Promise<any> {
     console.log('Starting processing:', uploadId, options?.custom_rules?.length ? '(with custom rules)' : '')
@@ -420,6 +461,10 @@ class FileManagementAPI {
       payload.preset_overrides = options.preset_overrides
     }
 
+    if (options?.column_type_overrides) {
+      payload.column_type_overrides = options.column_type_overrides
+    }
+
     return this.makeRequest(ENDPOINTS.FILES_PROCESS(uploadId), authToken, {
       method: "POST",
       body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined
@@ -439,61 +484,6 @@ class FileManagementAPI {
 
   async getFileColumns(uploadId: string, authToken: string): Promise<{ columns: string[] }> {
     return this.makeRequest(ENDPOINTS.FILES_COLUMNS(uploadId), authToken, { method: 'GET' })
-  }
-
-  async getSettingsPresets(authToken: string): Promise<{ presets: any[] }> {
-    try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS, authToken, { method: "GET" })
-    } catch (error) {
-      const message = (error as Error)?.message || ""
-      if (message.toLowerCase().includes("not found")) return { presets: [] }
-      console.warn("⚠️ Falling back to empty presets due to error:", message)
-      return { presets: [] }
-    }
-  }
-
-  async getSettingsPreset(presetId: string, authToken: string): Promise<any> {
-    try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), authToken, { method: "GET" })
-    } catch (error) {
-      const message = (error as Error)?.message || ""
-      // Silently return fallback for "not found" or other errors
-      // Don't log to console to avoid cluttering output
-      return { preset_id: presetId, preset_name: presetId, config: {} }
-    }
-  }
-
-  async createSettingsPreset(
-    presetName: string,
-    config: Record<string, any>,
-    authToken: string,
-    isDefault = false
-  ): Promise<any> {
-    return this.makeRequest(ENDPOINTS.SETTINGS_PRESETS, authToken, {
-      method: "POST",
-      body: JSON.stringify({
-        preset_name: presetName,
-        config,
-        is_default: isDefault,
-      }),
-    })
-  }
-
-  async updateSettingsPreset(
-    presetId: string,
-    payload: { preset_name?: string; config?: Record<string, any>; is_default?: boolean },
-    authToken: string
-  ): Promise<any> {
-    return this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    })
-  }
-
-  async deleteSettingsPreset(presetId: string, authToken: string): Promise<any> {
-    return this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, {
-      method: "DELETE",
-    })
   }
 
   async getDQMatrix(uploadId: string, authToken: string, options?: { limit?: number; offset?: number; start?: number; end?: number }): Promise<any> {
@@ -1262,24 +1252,27 @@ class FileManagementAPI {
   /**
    * Get all user settings presets
    */
-  async getSettingsPresets(): Promise<{ presets: SettingsPreset[]; count: number }> {
-    const token = await this.getAuth()
+  async getSettingsPresets(authToken?: string): Promise<{ presets: SettingsPreset[]; count: number }> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS, token, { method: 'GET' })
   }
 
   /**
    * Get a specific settings preset
    */
-  async getSettingsPreset(presetId: string): Promise<SettingsPreset> {
-    const token = await this.getAuth()
+  async getSettingsPreset(presetId: string, authToken?: string): Promise<SettingsPreset> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'GET' })
   }
 
   /**
    * Create a new settings preset
    */
-  async createSettingsPreset(preset: { preset_name: string; config: any; is_default?: boolean }): Promise<{ preset_id: string; message: string }> {
-    const token = await this.getAuth()
+  async createSettingsPreset(
+    preset: { preset_name: string; config: any; is_default?: boolean },
+    authToken?: string
+  ): Promise<{ preset_id: string; message: string }> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS, token, {
       method: 'POST',
       body: JSON.stringify(preset)
@@ -1289,8 +1282,12 @@ class FileManagementAPI {
   /**
    * Update a settings preset
    */
-  async updateSettingsPreset(presetId: string, updates: { preset_name?: string; config?: any; is_default?: boolean }): Promise<{ message: string }> {
-    const token = await this.getAuth()
+  async updateSettingsPreset(
+    presetId: string,
+    updates: { preset_name?: string; config?: any; is_default?: boolean },
+    authToken?: string
+  ): Promise<{ message: string }> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, {
       method: 'PUT',
       body: JSON.stringify(updates)
@@ -1300,8 +1297,8 @@ class FileManagementAPI {
   /**
    * Delete a settings preset
    */
-  async deleteSettingsPreset(presetId: string): Promise<{ message: string }> {
-    const token = await this.getAuth()
+  async deleteSettingsPreset(presetId: string, authToken?: string): Promise<{ message: string }> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'DELETE' })
   }
 

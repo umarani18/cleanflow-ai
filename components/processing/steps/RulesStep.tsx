@@ -13,6 +13,7 @@ import { useProcessingWizard, type RuleWithState } from "../WizardContext"
 import { fileManagementAPI, type CustomRuleDefinition } from "@/lib/api/file-management-api"
 import { cn } from "@/lib/utils"
 import { getRuleLabel } from "@/lib/dq-rules"
+import { deriveRulesV2 } from "@/lib/type-catalog"
 
 export function RulesStep() {
   const {
@@ -20,6 +21,14 @@ export function RulesStep() {
     authToken,
     selectedColumns,
     columnProfiles,
+    columnCoreTypes,
+    columnTypeAliases,
+    columnKeyTypes,
+    columnNullable,
+    setColumnCoreType,
+    setColumnTypeAlias,
+    setColumnKeyType,
+    setColumnNullable,
     customRules,
     addCustomRule,
     removeCustomRule,
@@ -40,41 +49,40 @@ export function RulesStep() {
   const [rawResponse, setRawResponse] = useState<string | null>(null)
 
   useEffect(() => {
-    // Seed rules from profiles if not already set
+    // Seed rules from derived types (catalog) if not already set
     if (selectedColumns.length > 0 && Object.keys(columnRules).length === 0) {
       const defaults: Record<string, RuleWithState[]> = {}
       selectedColumns.forEach((col) => {
         const profile = columnProfiles[col]
         if (!profile) return
-        const autoRules =
-          (profile.rules || []).filter((r: any) => r.decision === "auto").map((r: any) => r.rule_id) ||
-          profile.auto_rules ||
-          []
-        const humanRules =
-          (profile.rules || []).filter((r: any) => r.decision === "human").map((r: any) => r.rule_id) ||
-          profile.human_rules ||
-          []
-        defaults[col] = [
-          ...autoRules.map((id: string) => ({
-            rule_id: id,
-            rule_name: getRuleLabel(id),
-            category: "auto" as const,
-            selected: true,
-            column: col,
-          })),
-          ...humanRules.map((id: string) => ({
-            rule_id: id,
-            rule_name: getRuleLabel(id),
-            category: "human" as const,
-            selected: false,
-            column: col,
-          })),
-        ]
+        // initialize type state from profile if present
+        const core = profile.type_guess || columnCoreTypes[col] || "string"
+        if (!columnCoreTypes[col]) {
+          setColumnCoreType(col, core)
+        }
+        if (profile.key_type && !columnKeyTypes[col]) {
+          setColumnKeyType(col, profile.key_type as "none" | "primary_key" | "unique")
+        }
+        if (profile.nullable_suggested !== undefined && columnNullable[col] === undefined) {
+          setColumnNullable(col, !!profile.nullable_suggested)
+        }
+        const finalType = columnTypeAliases[col] || core
+        const keyType = (columnKeyTypes[col] as "none" | "primary_key" | "unique") || "none"
+        const nullable = columnNullable[col] !== undefined ? columnNullable[col] : true
+        const derived = deriveRulesV2(finalType, keyType, nullable)
+        defaults[col] = derived.rules.map((id) => ({
+          rule_id: id,
+          rule_name: getRuleLabel(id),
+          category: "auto" as const,
+          selected: true,
+          column: col,
+          source: derived.ruleSources[id],
+        }))
       })
       setColumnRules(defaults)
       setGlobalRules([]) // keep empty by default
     }
-  }, [selectedColumns, columnProfiles])
+  }, [selectedColumns, columnProfiles, columnCoreTypes, columnTypeAliases, columnKeyTypes, columnNullable])
 
   const toggleColumnExpand = (col: string) => {
     setExpandedColumns((prev) => (prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col]))
@@ -89,6 +97,26 @@ export function RulesStep() {
     setColumnRules({
       ...columnRules,
       [column]: rules.map((r) => (r.rule_id === ruleId ? { ...r, selected: !r.selected } : r)),
+    })
+  }
+
+  const handleTypeChange = (column: string, core: string, alias: string | null, key: "none" | "primary_key" | "unique", nullable: boolean) => {
+    setColumnCoreType(column, core)
+    setColumnTypeAlias(column, alias)
+    setColumnKeyType(column, key)
+    setColumnNullable(column, nullable)
+    const finalType = alias || core
+    const derived = deriveRulesV2(finalType, key, nullable)
+    setColumnRules({
+      ...columnRules,
+      [column]: derived.rules.map((id) => ({
+        rule_id: id,
+        rule_name: getRuleLabel(id),
+        category: "auto" as const,
+        selected: true,
+        column,
+        source: derived.ruleSources[id],
+      })),
     })
   }
 
@@ -178,16 +206,19 @@ export function RulesStep() {
               const autoCount = rules.filter(r => r.category === "auto").length
               const humanCount = rules.filter(r => r.category === "human").length
               const selectedCount = rules.filter((r) => r.selected).length + columnCustomRules.length
-              return (
-                <Collapsible key={col} open={isExpanded} onOpenChange={() => toggleColumnExpand(col)}>
-                  <CollapsibleTrigger className="flex items-center gap-2 w-full p-3 rounded-md border border-muted hover:bg-muted/30">
-                    {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    <span className="font-medium">{col}</span>
-                    <div className="ml-auto flex items-center gap-1">
-                      <Badge variant="outline" className="text-xs">A:{autoCount}</Badge>
-                      <Badge variant="outline" className="text-xs">H:{humanCount}</Badge>
-                      <Badge variant="outline" className="text-xs">C:{columnCustomRules.length}</Badge>
-                      <Badge variant="default" className="text-xs">S:{selectedCount}</Badge>
+          return (
+            <Collapsible key={col} open={isExpanded} onOpenChange={() => toggleColumnExpand(col)}>
+              <CollapsibleTrigger className="flex items-center gap-2 w-full p-3 rounded-md border border-muted hover:bg-muted/30">
+                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                <span className="font-medium">{col}</span>
+                <div className="text-xs text-muted-foreground ml-2">
+                  {columnKeyTypes[col] && columnKeyTypes[col] !== "none" ? columnKeyTypes[col] : "type"} | {columnCoreTypes[col] || columnProfiles[col]?.type_guess}
+                </div>
+                <div className="ml-auto flex items-center gap-1">
+                  <Badge variant="outline" className="text-xs">A:{autoCount}</Badge>
+                  <Badge variant="outline" className="text-xs">H:{humanCount}</Badge>
+                  <Badge variant="outline" className="text-xs">C:{columnCustomRules.length}</Badge>
+                  <Badge variant="default" className="text-xs">S:{selectedCount}</Badge>
                     </div>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-2 ml-6 space-y-3">
@@ -209,7 +240,10 @@ export function RulesStep() {
                                 className="flex items-center gap-2 p-2 rounded hover:bg-muted/30 cursor-pointer"
                               >
                                 <Checkbox checked={rule.selected} />
-                                <span className="text-sm">{rule.rule_name}</span>
+                                <span className="text-sm">
+                                  {rule.rule_name}
+                                  {rule.source && <span className="ml-1 text-[10px] text-muted-foreground">({rule.source})</span>}
+                                </span>
                               </div>
                             ))}
                         </div>

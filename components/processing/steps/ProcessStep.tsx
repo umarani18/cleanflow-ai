@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { Loader2, CheckCircle, XCircle, Play, RotateCw } from "lucide-react"
 import { useProcessingWizard } from "../WizardContext"
 import { fileManagementAPI, type FileStatusResponse } from "@/lib/api/file-management-api"
@@ -23,6 +22,10 @@ export function ProcessStep({
     customRules,
     globalRules,
     columnRules,
+    columnCoreTypes,
+    columnTypeAliases,
+    columnKeyTypes,
+    columnNullable,
     selectedPreset,
     presetOverrides,
     setProcessing,
@@ -37,7 +40,7 @@ export function ProcessStep({
   const [fileData, setFileData] = useState<FileStatusResponse | null>(null)
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null
+    let interval: ReturnType<typeof setInterval> | null = null
     const MAX_POLL = 5 * 60 * 1000
     const start = Date.now()
 
@@ -72,8 +75,12 @@ export function ProcessStep({
         }
       }, 2000)
     }
-    return () => interval && clearInterval(interval)
-  }, [status, uploadId, authToken])
+    return () => {
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
+  }, [status, uploadId, authToken, setProcessingError])
 
   const handleStart = async () => {
     if (!authToken) {
@@ -94,6 +101,16 @@ export function ProcessStep({
         if (disabled.length > 0) perColumnDisabled[col] = disabled
       })
 
+      const columnTypeOverrides: Record<string, any> = {}
+      selectedColumns.forEach((col) => {
+        columnTypeOverrides[col] = {
+          core_type: columnCoreTypes[col] || "string",
+          type_alias: columnTypeAliases[col] || null,
+          key_type: columnKeyTypes[col] || "none",
+          nullable: columnNullable[col] !== undefined ? columnNullable[col] : true,
+        }
+      })
+
       await fileManagementAPI.startProcessing(uploadId, authToken, {
         selected_columns: selectedColumns,
         required_columns: requiredColumns,
@@ -102,6 +119,7 @@ export function ProcessStep({
         disable_rules: perColumnDisabled,
         preset_id: selectedPreset?.preset_id,
         preset_overrides: presetOverrides,
+        column_type_overrides: columnTypeOverrides,
       })
       setStatusMessage("Processing started, monitoring progress...")
       if (onStarted) onStarted()

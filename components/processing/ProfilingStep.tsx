@@ -202,14 +202,22 @@ export function ProfilingStep() {
                                         >
                                             <div className="flex items-center justify-between">
                                                 <h4 className="font-medium">{col}</h4>
-                                                <Badge variant="outline">
-                                                    {profile.type_guess}
-                                                    {profile.type_confidence && (
-                                                        <span className="ml-1 opacity-70">
-                                                            {Math.round(profile.type_confidence * 100)}%
-                                                        </span>
+                                                <div className="flex items-center gap-1">
+                                                    {profile.key_type && profile.key_type !== "none" && (
+                                                        <Badge variant="secondary" className="uppercase text-[10px]">{profile.key_type}</Badge>
                                                     )}
-                                                </Badge>
+                                                    {profile.nullable_suggested === false && (
+                                                        <Badge variant="destructive" className="text-[10px]">NOT NULL</Badge>
+                                                    )}
+                                                    <Badge variant="outline">
+                                                        {profile.type_guess}
+                                                        {profile.type_confidence !== undefined && (
+                                                            <span className="ml-1 opacity-70">
+                                                                {Math.round(profile.type_confidence * 100)}%
+                                                            </span>
+                                                        )}
+                                                    </Badge>
+                                                </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-2 text-sm">
                                                 <div className="flex justify-between">
@@ -226,14 +234,37 @@ export function ProfilingStep() {
                                                         <span>{(profile.unique_ratio * 100).toFixed(1)}%</span>
                                                     </div>
                                                 )}
+                                                {profile.numeric_parse_rate !== undefined && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-muted-foreground">Numeric parse:</span>
+                                                        <span>{(profile.numeric_parse_rate * 100).toFixed(0)}%</span>
+                                                    </div>
+                                                )}
+                                                {profile.date_parse_rate !== undefined && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-muted-foreground">Date parse:</span>
+                                                        <span>{(profile.date_parse_rate * 100).toFixed(0)}%</span>
+                                                    </div>
+                                                )}
+                                                {profile.len_mean !== undefined && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-muted-foreground">Len (min/max/avg):</span>
+                                                        <span>{profile.len_min ?? '-'} / {profile.len_max ?? '-'} / {profile.len_mean?.toFixed(1)}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                             {profile.rules && profile.rules.length > 0 && (
-                                                <div className="text-xs">
-                                                    <span className="text-muted-foreground">Auto Rules: </span>
-                                                    {profile.rules
-                                                        .filter(r => r.decision === 'auto')
-                                                        .map(r => r.rule_id)
-                                                        .join(", ")}
+                                                <div className="text-xs space-y-1">
+                                                    <div className="text-muted-foreground">Auto Rules:</div>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {profile.rules
+                                                            .filter(r => r.decision === 'auto')
+                                                            .map((r) => (
+                                                                <Badge key={r.rule_id} variant="outline" className="text-[11px]">
+                                                                    {r.rule_id}{r.source ? ` (${r.source})` : ""}
+                                                                </Badge>
+                                                            ))}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
