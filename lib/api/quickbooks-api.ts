@@ -76,12 +76,12 @@ class QuickBooksService {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 60000)
 
-      const response = await fetch(url, { 
-        ...options, 
+      const response = await fetch(url, {
+        ...options,
         headers,
-        signal: controller.signal 
+        signal: controller.signal
       })
-      
+
       clearTimeout(timeoutId)
       console.log('📥 Response:', response.status)
 
@@ -93,7 +93,7 @@ class QuickBooksService {
       return await response.json()
     } catch (error) {
       console.error('❌ QuickBooks API Error:', error)
-      
+
       // Retry logic for timeout errors
       if ((error as Error).name === 'AbortError' && retries < 2) {
         console.log(`⏱️ Request timed out, retrying... (attempt ${retries + 1}/2)`)
@@ -101,7 +101,7 @@ class QuickBooksService {
         await new Promise(resolve => setTimeout(resolve, (retries + 1) * 2000))
         return this.makeRequest<T>(endpoint, options, skipAuth, retries + 1)
       }
-      
+
       throw error
     }
   }
@@ -210,13 +210,21 @@ class QuickBooksService {
   /**
    * Export/Upload cleaned data to QuickBooks
    * @param uploadId - The upload ID of cleaned data
+   * @param entity - Optional entity type (customers, invoices, vendors, items)
+   * @param columnMapping - Optional column mapping from file columns to QB fields
    */
-  async exportToQuickBooks(uploadId: string): Promise<QuickBooksExportResponse> {
+  async exportToQuickBooks(
+    uploadId: string,
+    entity?: string,
+    columnMapping?: Record<string, string>
+  ): Promise<QuickBooksExportResponse> {
     try {
       const response = await this.makeRequest<QuickBooksExportResponse>('/quickbooks/export', {
         method: 'POST',
         body: JSON.stringify({
           upload_id: uploadId,
+          entity: entity || 'invoices',
+          column_mapping: columnMapping || {},
         }),
       })
       return response

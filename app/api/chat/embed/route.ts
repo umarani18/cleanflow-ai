@@ -3,14 +3,21 @@ import { Pinecone } from '@pinecone-database/pinecone'
 import { readFile } from 'fs/promises'
 import path from 'path'
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY!
-const PINECONE_API_KEY = process.env.PINECONE_API_KEY!
+const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
 const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME || 'cleanflowai-docs'
 
-// Initialize Pinecone
-const pinecone = new Pinecone({
-  apiKey: PINECONE_API_KEY,
-})
+// Lazy-initialize Pinecone to prevent build errors when env var is not set
+let pinecone: Pinecone | null = null
+function getPinecone(): Pinecone {
+  if (!pinecone) {
+    const apiKey = process.env.PINECONE_API_KEY
+    if (!apiKey) {
+      throw new Error('PINECONE_API_KEY environment variable is not set')
+    }
+    pinecone = new Pinecone({ apiKey })
+  }
+  return pinecone
+}
 
 // Helper function to generate embeddings using HuggingFace
 async function generateEmbedding(text: string): Promise<number[]> {
@@ -92,7 +99,7 @@ export async function POST(req: NextRequest) {
     const chunks = chunkText(text)
 
     // Get Pinecone index
-    const index = pinecone.Index(PINECONE_INDEX_NAME)
+    const index = getPinecone().Index(PINECONE_INDEX_NAME)
 
     // Upsert chunks to Pinecone
     const upsertData = []
@@ -139,7 +146,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   try {
-    const index = pinecone.Index(PINECONE_INDEX_NAME)
+    const index = getPinecone().Index(PINECONE_INDEX_NAME)
     const stats = await index.describeIndexStats()
 
     return NextResponse.json({

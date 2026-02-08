@@ -1,16 +1,22 @@
 "use client"
 
 import { BarChart3, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { memo, useEffect, useState } from "react"
+import dynamic from "next/dynamic"
 
 import { Button } from "@/components/ui/button"
-import { ChatDrawer } from "@/components/chat/chat-drawer"
 import Image from "next/image"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/providers/auth-provider"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
+
+// Lazy load ChatDrawer to reduce initial bundle (contains framer-motion + react-markdown)
+const ChatDrawer = dynamic(
+	() => import("@/components/chat/chat-drawer").then((mod) => ({ default: mod.ChatDrawer })),
+	{ ssr: false }
+)
 
 const navigation = [
 	{
@@ -39,14 +45,22 @@ const navigation = [
 	},
 ]
 
-export function AppSidebar() {
+function AppSidebarComponent() {
 	const [collapsed, setCollapsed] = useState(false)
 	const [isMobile, setIsMobile] = useState(false)
 	const [mobileOpen, setMobileOpen] = useState(false)
 	const [chatOpen, setChatOpen] = useState(false)
 	const pathname = usePathname()
+	const router = useRouter()
 	const { logout, isAuthenticated, user } = useAuth()
 	const { theme, setTheme } = useTheme()
+
+	// Prefetch all navigation routes on mount to eliminate first-visit compile delay
+	useEffect(() => {
+		navigation.forEach((item) => {
+			router.prefetch(item.href)
+		})
+	}, [router])
 
 	const navContainer = {
 		hidden: {},
@@ -70,7 +84,7 @@ export function AppSidebar() {
 				setCollapsed(false)
 			}
 		}
-		
+
 		checkMobile()
 		window.addEventListener('resize', checkMobile)
 		return () => window.removeEventListener('resize', checkMobile)
@@ -188,30 +202,30 @@ export function AppSidebar() {
 				<div className="p-4 border-t border-sidebar-border/60">
 					{!collapsed && (
 						<div className="space-y-3">
-						{isAuthenticated && (
-							<div className="px-4 py-2">
-								<div className="text-sm font-medium truncate">
-									{user?.name || 'User'}
+							{isAuthenticated && (
+								<div className="px-4 py-2">
+									<div className="text-sm font-medium truncate">
+										{user?.name || 'User'}
+									</div>
+									<div className="text-xs text-muted-foreground truncate">
+										{user?.email}
+									</div>
 								</div>
-								<div className="text-xs text-muted-foreground truncate">
-									{user?.email}
-								</div>
-							</div>
-						)}
-						<button
-							onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-							className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
-						>
-							{theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-							<span className="text-sm">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-						</button>
-						<button
-							onClick={() => setChatOpen(true)}
-							className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
-						>
-							<HelpCircle className="w-4 h-4" />
-							<span className="text-sm">Help & Support</span>
-						</button>
+							)}
+							<button
+								onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+								className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
+							>
+								{theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+								<span className="text-sm">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+							</button>
+							<button
+								onClick={() => setChatOpen(true)}
+								className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
+							>
+								<HelpCircle className="w-4 h-4" />
+								<span className="text-sm">Help & Support</span>
+							</button>
 							{isAuthenticated && (
 								<Button
 									onClick={handleLogout}
@@ -248,3 +262,6 @@ export function AppSidebar() {
 		</div>
 	)
 }
+
+// Memoize sidebar to prevent re-renders when parent state changes
+export const AppSidebar = memo(AppSidebarComponent)

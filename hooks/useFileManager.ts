@@ -3,7 +3,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/components/providers/auth-provider'
 
 const CONFIG = {
-  apiUrl: 'https://t322r7a4i0.execute-api.ap-south-1.amazonaws.com/prod/'
+  apiUrl: 'https://oq92wt6zd9.execute-api.ap-south-1.amazonaws.com/prod/'
 }
 
 // Helper function to map API status to internal status

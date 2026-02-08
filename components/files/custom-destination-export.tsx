@@ -39,14 +39,14 @@ export default function CustomDestinationExport({
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloadFilename, setDownloadFilename] = useState('')
-  
+
   // Column picker state
   const [columnModalOpen, setColumnModalOpen] = useState(false)
   const [availableColumns, setAvailableColumns] = useState<string[]>([])
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
   const [columnsLoading, setColumnsLoading] = useState(false)
   const [columnsError, setColumnsError] = useState<string | null>(null)
-  
+
   const { idToken } = useAuth()
   const { toast } = useToast()
 
@@ -96,14 +96,14 @@ export default function CustomDestinationExport({
     if (!file) return
 
     setSelectedFile(file)
-    
+
     // Set default download filename
     const baseName = file.original_filename?.replace(/\.[^/.]+$/, '') || 'export'
     setDownloadFilename(`${baseName}_processed`)
 
     // Always show column picker for column selection before export
     if (!idToken) return
-    
+
     setColumnModalOpen(true)
     setColumnsLoading(true)
     setColumnsError(null)
@@ -143,7 +143,7 @@ export default function CustomDestinationExport({
 
     try {
       console.log('Processing file with selected columns:', Array.from(selectedColumns))
-      
+
       // Trigger DQ processing
       await fileManagementAPI.startProcessing(
         selectedFile.upload_id,
@@ -183,7 +183,7 @@ export default function CustomDestinationExport({
               title: 'Processing Complete',
               description: `File processed successfully with a DQ score of ${updatedFile.dq_score}%`,
             })
-            
+
             // Show download modal automatically
             setShowDownloadModal(true)
 
@@ -295,16 +295,22 @@ export default function CustomDestinationExport({
               <SelectValue placeholder={loading ? 'Loading files...' : 'Choose a file to export'} />
             </SelectTrigger>
             <SelectContent>
-              {files.map((file) => (
-                <SelectItem key={file.upload_id} value={file.upload_id}>
-                  <div className="flex items-center gap-2">
-                    <span>{file.original_filename || file.filename}</span>
-                    {(file.status === 'DQ_FIXED' || file.status === 'COMPLETED') && (
-                      <CheckCircle2 className="h-3 w-3 text-green-600" />
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
+              {[...files]
+                .sort((a, b) => {
+                  const dateA = new Date(a.updated_at || a.status_timestamp || 0).getTime();
+                  const dateB = new Date(b.updated_at || b.status_timestamp || 0).getTime();
+                  return dateB - dateA; // Descending order (newest first)
+                })
+                .map((file) => (
+                  <SelectItem key={file.upload_id} value={file.upload_id}>
+                    <div className="flex items-center gap-2">
+                      <span>{file.original_filename || file.filename}</span>
+                      {(file.status === 'DQ_FIXED' || file.status === 'COMPLETED') && (
+                        <CheckCircle2 className="h-3 w-3 text-green-600" />
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -449,13 +455,13 @@ export default function CustomDestinationExport({
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setColumnModalOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleColumnConfirm} 
+            <AlertDialogAction
+              onClick={handleColumnConfirm}
               disabled={columnsLoading || selectedColumns.size === 0}
               className="gap-2"
             >
-              {selectedFile?.status === 'DQ_FIXED' || selectedFile?.status === 'COMPLETED' 
-                ? 'Download File' 
+              {selectedFile?.status === 'DQ_FIXED' || selectedFile?.status === 'COMPLETED'
+                ? 'Download File'
                 : 'Process & Continue'}
             </AlertDialogAction>
           </AlertDialogFooter>
