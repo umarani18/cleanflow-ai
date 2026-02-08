@@ -47,8 +47,10 @@ export function ProfilingStep() {
                 selectedColumns,
                 500
             )
-            if (response.profiles) {
+            if (response.profiles && Object.keys(response.profiles).length > 0) {
                 setColumnProfiles(response.profiles)
+            } else {
+                setError("No profiling data returned. Refresh or adjust column selection.")
             }
         } catch (err: any) {
             setError(err.message || "Failed to fetch profiling data")
@@ -73,13 +75,15 @@ export function ProfilingStep() {
                     ...columnProfiles,
                     [column]: response.profiles[column],
                 })
+            } else {
+                setError(`No profiling data returned for ${column}`)
             }
             // Add to selected if not already
             if (!selectedColumns.includes(column)) {
                 setSelectedColumns([...selectedColumns, column])
             }
-        } catch (err) {
-            console.error("Failed to profile column:", column, err)
+        } catch (err: any) {
+            setError(err.message || `Failed to profile ${column}`)
         }
     }
 
