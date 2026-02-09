@@ -478,6 +478,12 @@ export const TYPE_ALIASES: Record<string, any> = {
     ],
     "category": "identity"
   },
+  "numeric_identifier": {
+    "name": "numeric_identifier",
+    "extends": "integer",
+    "rules": [],
+    "category": "identity"
+  },
   "version": {
     "name": "version",
     "extends": "string",
@@ -1275,7 +1281,7 @@ export function deriveRulesV2(
     add("R1", "primary_key");
     add("R2", "primary_key");
   } else if (keyType === "unique") {
-    add("R2", "unique");
+    // Unique constraint tracked as metadata; no duplicate primary key rule
   }
 
   if (!nullable) {
