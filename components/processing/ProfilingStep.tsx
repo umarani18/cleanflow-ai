@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Loader2, ArrowLeft, ArrowRight, Check, X, RefreshCw } from "lucide-react"
 import { useProcessingWizard, STEP_ORDER } from "./WizardContext"
 import { fileManagementAPI } from "@/lib/api/file-management-api"
@@ -17,9 +19,13 @@ export function ProfilingStep() {
         setSelectedColumns,
         columnProfiles,
         setColumnProfiles,
+        crossFieldRules,
+        setCrossFieldRules,
         requiredColumns,
         setRequiredColumns,
         allColumns,
+        backendVersion,
+        setBackendVersion,
         prevStep,
         nextStep,
     } = useProcessingWizard()
@@ -49,6 +55,19 @@ export function ProfilingStep() {
             )
             if (response.profiles && Object.keys(response.profiles).length > 0) {
                 setColumnProfiles(response.profiles)
+                setBackendVersion(response.summary?.backend_version)
+                const incoming = response.cross_field_rules || []
+                const merged = incoming.map((r) => {
+                    const key = r.rule_id + (r.cols || []).join(".")
+                    const prev = crossFieldRules.find(
+                        (p) => p.rule_id + p.cols.join(".") === key
+                    )
+                    return {
+                        ...r,
+                        enabled: prev ? prev.enabled : true,
+                    }
+                })
+                setCrossFieldRules(merged)
             } else {
                 setError("No profiling data returned. Refresh or adjust column selection.")
             }
@@ -279,6 +298,93 @@ export function ProfilingStep() {
                     </div>
                 </div>
             </div>
+
+            {/* Debug banner */}
+            <div className="border border-dashed border-muted-foreground/40 rounded-lg p-3 text-xs text-muted-foreground bg-muted/10">
+                <div className="flex items-center justify-between">
+                    <span>Backend: {backendVersion || "unknown"}</span>
+                    <span>
+                        Keys detected:{" "}
+                        {Object.values(columnProfiles || {}).some((p: any) => p.key_type && p.key_type !== "none")
+                            ? "yes"
+                            : "none returned from backend"}
+                    </span>
+                    <span>
+                        Cross rules:{" "}
+                        {crossFieldRules && crossFieldRules.length > 0
+                            ? `${crossFieldRules.length} returned`
+                            : "none returned from backend"}
+                    </span>
+                </div>
+            </div>
+
+            {crossFieldRules && crossFieldRules.length > 0 && (
+                <div className="border border-muted rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-sm font-semibold">Cross-column rules (LLM suggested)</h3>
+                            <p className="text-xs text-muted-foreground">
+                                Toggle rules to include them in processing
+                            </p>
+                        </div>
+                        <Badge variant="outline">{crossFieldRules.length} detected</Badge>
+                    </div>
+                    <div className="space-y-2">
+                        {crossFieldRules.map((r) => (
+                            <div key={r.rule_id + r.cols.join(".")} className="flex items-start gap-3 border border-muted/50 rounded-md p-3">
+                                <Checkbox
+                                    checked={r.enabled}
+                                    onCheckedChange={() => setCrossFieldRules(
+                                        crossFieldRules.map((item) =>
+                                            item.rule_id === r.rule_id && item.cols.join(".") === r.cols.join(".")
+                                                ? { ...item, enabled: !item.enabled }
+                                                : item
+                                        )
+                                    )}
+                                    className="mt-1"
+                                />
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                        <span>{r.rule_id}</span>
+                                        {r.confidence !== undefined && (
+                                            <Badge variant="secondary" className="text-[10px]">
+                                                {Math.round((r.confidence || 0) * 100)}%
+                                            </Badge>
+                                        )}
+                                        {r.tolerance !== undefined && (
+                                            <Badge variant="outline" className="text-[10px]">
+                                                tol ±{Math.round((r.tolerance || 0) * 100)}%
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                        {r.predicate || r.cols.join(" , ")}
+                                    </div>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {r.cols.map((c) => (
+                                            <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>
+                                        ))}
+                                    </div>
+                                    {r.reasoning && (
+                                        <TooltipProvider delayDuration={200}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <div className="text-[11px] text-muted-foreground mt-1 line-clamp-1 cursor-help">
+                                                        {r.reasoning}
+                                                    </div>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                                    {r.reasoning}
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Required columns info */}
             {requiredColumns.length > 0 && (

@@ -26,6 +26,7 @@ export function ProcessStep({
     columnTypeAliases,
     columnKeyTypes,
     columnNullable,
+    crossFieldRules,
     selectedPreset,
     presetOverrides,
     setProcessing,
@@ -120,6 +121,7 @@ export function ProcessStep({
         preset_id: selectedPreset?.preset_id,
         preset_overrides: presetOverrides,
         column_type_overrides: columnTypeOverrides,
+        cross_field_rules: crossFieldRules.filter((r) => r.enabled),
       })
       setStatusMessage("Processing started, monitoring progress...")
       if (onStarted) onStarted()

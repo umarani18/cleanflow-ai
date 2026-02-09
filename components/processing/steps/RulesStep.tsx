@@ -13,7 +13,7 @@ import { useProcessingWizard, type RuleWithState } from "../WizardContext"
 import { fileManagementAPI, type CustomRuleDefinition } from "@/lib/api/file-management-api"
 import { cn } from "@/lib/utils"
 import { getRuleLabel } from "@/lib/dq-rules"
-import { deriveRulesV2 } from "@/lib/type-catalog"
+import { deriveRulesV2, CORE_TYPES, TYPE_ALIASES } from "@/lib/type-catalog"
 
 export function RulesStep() {
   const {
@@ -66,7 +66,8 @@ export function RulesStep() {
         if (profile.nullable_suggested !== undefined && columnNullable[col] === undefined) {
           setColumnNullable(col, !!profile.nullable_suggested)
         }
-        const finalType = columnTypeAliases[col] || core
+        const rawType = columnTypeAliases[col] || core
+        const finalType = (CORE_TYPES as any)[rawType] || (TYPE_ALIASES as any)[rawType] ? rawType : "string"
         const keyType = (columnKeyTypes[col] as "none" | "primary_key" | "unique") || "none"
         const nullable = columnNullable[col] !== undefined ? columnNullable[col] : true
         const derived = deriveRulesV2(finalType, keyType, nullable)
@@ -105,7 +106,8 @@ export function RulesStep() {
     setColumnTypeAlias(column, alias)
     setColumnKeyType(column, key)
     setColumnNullable(column, nullable)
-    const finalType = alias || core
+    const rawType = alias || core
+    const finalType = (CORE_TYPES as any)[rawType] || (TYPE_ALIASES as any)[rawType] ? rawType : "string"
     const derived = deriveRulesV2(finalType, key, nullable)
     setColumnRules({
       ...columnRules,

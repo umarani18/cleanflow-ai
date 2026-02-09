@@ -50,6 +50,16 @@ export interface RuleWithState {
     source?: string
 }
 
+export interface CrossFieldRuleWithState {
+    rule_id: string
+    cols: string[]
+    predicate?: string
+    tolerance?: number
+    confidence?: number
+    reasoning?: string
+    enabled: boolean
+}
+
 // Wizard state
 export interface WizardState {
     // Current step
@@ -71,6 +81,8 @@ export interface WizardState {
     columnTypeAliases: Record<string, string | null>
     columnKeyTypes: Record<string, "none" | "primary_key" | "unique">
     columnNullable: Record<string, boolean>
+    backendVersion?: string
+    crossFieldRules: CrossFieldRuleWithState[]
 
     // Step 3: Settings
     selectedPreset: SettingsPreset | null
@@ -104,6 +116,11 @@ interface WizardActions {
     setColumnTypeAlias: (column: string, alias: string | null) => void
     setColumnKeyType: (column: string, key: "none" | "primary_key" | "unique") => void
     setColumnNullable: (column: string, nullable: boolean) => void
+    setBackendVersion: (version: string | undefined) => void
+    setCrossFieldRules: (rules: CrossFieldRuleWithState[]) => void
+    toggleCrossFieldRule: (ruleId: string) => void
+    setCrossFieldRules: (rules: CrossFieldRuleWithState[]) => void
+    toggleCrossFieldRule: (ruleId: string) => void
 
     // Settings
     setSelectedPreset: (preset: SettingsPreset | null) => void
@@ -143,6 +160,8 @@ const initialState: WizardState = {
     columnTypeAliases: {},
     columnKeyTypes: {},
     columnNullable: {},
+    backendVersion: undefined,
+    crossFieldRules: [],
     selectedPreset: null,
     presetOverrides: {},
     globalRules: [],
@@ -222,6 +241,17 @@ export function ProcessingWizardProvider({ children }: { children: ReactNode }) 
             columnNullable: { ...s.columnNullable, [column]: nullable },
         })),
 
+        setBackendVersion: (version) => setState((s) => ({ ...s, backendVersion: version })),
+
+        setCrossFieldRules: (rules) => setState((s) => ({ ...s, crossFieldRules: rules })),
+
+        toggleCrossFieldRule: (ruleId) => setState((s) => ({
+            ...s,
+            crossFieldRules: s.crossFieldRules.map((r) =>
+                r.rule_id === ruleId ? { ...r, enabled: !r.enabled } : r
+            ),
+        })),
+
         setSelectedPreset: (preset) => setState((s) => ({ ...s, selectedPreset: preset })),
 
         setPresetOverrides: (overrides) => setState((s) => ({ ...s, presetOverrides: overrides })),
@@ -264,6 +294,15 @@ export function ProcessingWizardProvider({ children }: { children: ReactNode }) 
             }))
         },
 
+        setCrossFieldRules: (rules) => setState((s) => ({ ...s, crossFieldRules: rules })),
+
+        toggleCrossFieldRule: (ruleId) => setState((s) => ({
+            ...s,
+            crossFieldRules: s.crossFieldRules.map((r) =>
+                r.rule_id === ruleId ? { ...r, enabled: !r.enabled } : r
+            ),
+        })),
+
         setProcessing: (processing) => setState((s) => ({ ...s, isProcessing: processing })),
 
         startProcessing: () => setState((s) => ({ ...s, isProcessing: true, processingError: null })),
@@ -284,6 +323,7 @@ export function ProcessingWizardProvider({ children }: { children: ReactNode }) 
                 columnTypeAliases: Object.fromEntries(columns.map((c) => [c, null])),
                 columnKeyTypes: Object.fromEntries(columns.map((c) => [c, "none"] as const)),
                 columnNullable: Object.fromEntries(columns.map((c) => [c, true])),
+                crossFieldRules: [],
             })
         },
     }

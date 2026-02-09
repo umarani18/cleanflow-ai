@@ -213,6 +213,15 @@ export interface ColumnProfile {
   llm_time_sec?: number
 }
 
+export interface CrossFieldRule {
+  rule_id: string
+  cols: string[]
+  predicate?: string
+  tolerance?: number
+  confidence?: number
+  reasoning?: string
+}
+
 export interface ColumnTypeOverride {
   core_type: string
   type_alias: string | null
@@ -226,8 +235,10 @@ export interface ProfilingResponse {
     total_rules: number
     processed_at: string
     engine_version: string
+    backend_version?: string
   }
   profiles: Record<string, ColumnProfile>
+  cross_field_rules?: CrossFieldRule[]
 }
 
 // Overall DQ Report (per-user aggregated)
@@ -419,6 +430,7 @@ class FileManagementAPI {
       preset_id?: string
       preset_overrides?: Record<string, any>
       column_type_overrides?: Record<string, ColumnTypeOverride>
+      cross_field_rules?: CrossFieldRule[]
     }
   ): Promise<any> {
     console.log('Starting processing:', uploadId, options?.custom_rules?.length ? '(with custom rules)' : '')
@@ -463,6 +475,10 @@ class FileManagementAPI {
 
     if (options?.column_type_overrides) {
       payload.column_type_overrides = options.column_type_overrides
+    }
+
+    if (options?.cross_field_rules) {
+      payload.cross_field_rules = options.cross_field_rules
     }
 
     return this.makeRequest(ENDPOINTS.FILES_PROCESS(uploadId), authToken, {

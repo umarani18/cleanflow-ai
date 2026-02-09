@@ -1239,7 +1239,11 @@ export function lineage(name: string): string[] {
     return [name];
   }
   const alias = TYPE_ALIASES[name];
-  if (!alias) throw new Error(`Unknown type alias: ${name}`);
+  if (!alias) {
+    console.warn(`[type-catalog] Unknown type alias "${name}", falling back to "string"`);
+    lineageCache.set(name, ["string"]);
+    return ["string"];
+  }
   const parent = lineage(alias.extends);
   const res = [...parent, name];
   lineageCache.set(name, res);
