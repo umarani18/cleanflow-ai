@@ -29,6 +29,8 @@ export function RulesStep() {
     setColumnTypeAlias,
     setColumnKeyType,
     setColumnNullable,
+    crossFieldRules,
+    setCrossFieldRules,
     customRules,
     addCustomRule,
     removeCustomRule,
@@ -168,6 +170,8 @@ export function RulesStep() {
   const totalHumanRules = Object.values(columnRules).flat().filter(r => r.category === "human").length
   const totalSelectedRules = Object.values(columnRules).flat().filter(r => r.selected).length
   const totalCustomRules = customRules.length
+  const totalCrossRules = crossFieldRules.length
+  const totalSelectedCrossRules = crossFieldRules.filter((r) => r.enabled).length
 
   return (
     <div className="flex flex-col h-full p-6">
@@ -187,8 +191,11 @@ export function RulesStep() {
           <Badge variant="outline" className="text-xs">
             Custom: {totalCustomRules}
           </Badge>
+          <Badge variant="outline" className="text-xs">
+            Cross: {totalSelectedCrossRules}/{totalCrossRules}
+          </Badge>
           <Badge variant="default" className="text-xs">
-            Selected: {totalSelectedRules + totalCustomRules}
+            Selected: {totalSelectedRules + totalCustomRules + totalSelectedCrossRules}
           </Badge>
         </div>
       </div>
@@ -197,6 +204,55 @@ export function RulesStep() {
       <div className="border border-muted rounded-lg overflow-hidden flex-1 min-h-0 mt-6">
         <div className="h-full overflow-y-auto p-4">
           <div className="space-y-3">
+            {crossFieldRules.length > 0 && (
+              <div className="border border-muted rounded-md p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium text-sm">Cross-column Rules</h3>
+                  <Badge variant="outline" className="text-xs">{totalSelectedCrossRules}/{totalCrossRules} enabled</Badge>
+                </div>
+                <div className="space-y-2">
+                  {crossFieldRules.map((rule) => (
+                    <div
+                      key={rule.rule_id + rule.cols.join(".")}
+                      className="p-2 rounded border border-muted/60 bg-muted/20"
+                    >
+                      <div className="flex items-start gap-2">
+                        <Checkbox
+                          checked={rule.enabled}
+                          onCheckedChange={() =>
+                            setCrossFieldRules(
+                              crossFieldRules.map((item) =>
+                                item.rule_id === rule.rule_id && item.cols.join(".") === rule.cols.join(".")
+                                  ? { ...item, enabled: !item.enabled }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{rule.rule_id}</span>
+                            {rule.relationship && <Badge variant="secondary" className="text-[10px]">{rule.relationship}</Badge>}
+                            {rule.confidence !== undefined && (
+                              <Badge variant="outline" className="text-[10px]">{Math.round((rule.confidence || 0) * 100)}%</Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {rule.condition || rule.predicate || "No condition provided"}
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {rule.cols.map((c) => (
+                              <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <h3 className="font-medium">Column Rules</h3>
             {selectedColumns.length === 0 && (
               <p className="text-sm text-muted-foreground">Select columns and profile them to see suggested rules.</p>

@@ -358,8 +358,13 @@ export function ProfilingStep() {
                                         )}
                                     </div>
                                     <div className="text-xs text-muted-foreground mt-1">
-                                        {r.predicate || r.cols.join(" , ")}
+                                        {r.condition || r.predicate || r.cols.join(" , ")}
                                     </div>
+                                    {r.relationship && (
+                                        <div className="text-[11px] text-muted-foreground/80 mt-1">
+                                            Relationship: {r.relationship}
+                                        </div>
+                                    )}
                                     <div className="flex flex-wrap gap-1 mt-1">
                                         {r.cols.map((c) => (
                                             <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>

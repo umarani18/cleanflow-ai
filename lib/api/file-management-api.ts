@@ -216,10 +216,15 @@ export interface ColumnProfile {
 export interface CrossFieldRule {
   rule_id: string
   cols: string[]
+  relationship?: string
+  condition?: string
   predicate?: string
   tolerance?: number
   confidence?: number
   reasoning?: string
+  coverage?: number
+  pass_rate?: number
+  failed_rows?: number[]
 }
 
 export interface ColumnTypeOverride {

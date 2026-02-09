@@ -256,7 +256,12 @@ export function ProfilingStep() {
                     {crossFieldRules.map((rule, i) => (
                       <div key={i} className="flex items-center gap-3 text-sm p-2 rounded bg-muted/30">
                         <span className="font-mono text-xs">{rule.rule_id}</span>
-                        <span className="text-muted-foreground">{rule.predicate}</span>
+                        <span className="text-muted-foreground">{rule.condition || rule.predicate}</span>
+                        {rule.relationship && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {rule.relationship}
+                          </Badge>
+                        )}
                         <div className="flex gap-1">
                           {rule.cols?.map((c: string) => (
                             <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>
