@@ -65,11 +65,12 @@ export function ProcessStep({
             setStatus("error")
             setProcessingError("Processing failed")
             if (interval) clearInterval(interval)
-          } else if (fileStatus === "DQ_RUNNING") {
-            setProgress((prev) => Math.min(prev + 5, 90))
-            setStatusMessage("Running data quality checks...")
-          } else if (fileStatus === "QUEUED") {
+          } else if (["QUEUED", "DQ_DISPATCHED", "UPLOADING", "NORMALIZING"].includes(fileStatus)) {
+            setProgress((prev) => Math.max(prev, 20))
             setStatusMessage("Queued for processing...")
+          } else if (["DQ_RUNNING", "VALIDATED"].includes(fileStatus)) {
+            setProgress((prev) => Math.min(prev + 5, 92))
+            setStatusMessage("Running data quality checks...")
           }
         } catch (err) {
           console.error("Failed to get status", err)
@@ -112,6 +113,20 @@ export function ProcessStep({
         }
       })
 
+      const compactCrossRules = crossFieldRules
+        .filter((r) => r.enabled)
+        .map((r) => ({
+          rule_id: r.rule_id,
+          cols: r.cols,
+          predicate: r.predicate || r.condition || "",
+          relationship: r.relationship || "",
+          condition: r.condition || r.predicate || "",
+          confidence: r.confidence != null ? String(r.confidence) : undefined,
+          tolerance: r.tolerance != null ? String(r.tolerance) : undefined,
+          reasoning: r.reasoning || "",
+          enabled: true,
+        }))
+
       await fileManagementAPI.startProcessing(uploadId, authToken, {
         selected_columns: selectedColumns,
         required_columns: requiredColumns,
@@ -121,7 +136,7 @@ export function ProcessStep({
         preset_id: selectedPreset?.preset_id,
         preset_overrides: presetOverrides,
         column_type_overrides: columnTypeOverrides,
-        cross_field_rules: crossFieldRules.filter((r) => r.enabled),
+        cross_field_rules: compactCrossRules,
       })
       setStatusMessage("Processing started, monitoring progress...")
       if (onStarted) onStarted()
