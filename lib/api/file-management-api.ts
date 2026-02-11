@@ -278,8 +278,10 @@ class FileManagementAPI {
 
         // Don't log expected/handled errors to reduce console noise.
         const isSettingsNotFound = url.includes('/settings/presets') && response.status === 404
+        const errorMessage = (errorData.error || errorData.message || fallbackMsg || '').toLowerCase()
         const isPermissionDenied = response.status === 403
-        if (!isSettingsNotFound && !isPermissionDenied) {
+        const isMembershipRequired = errorMessage.includes('organization membership required')
+        if (!isSettingsNotFound && !isPermissionDenied && !isMembershipRequired) {
           console.error('❌ API Error:', error)
         }
 
@@ -291,8 +293,10 @@ class FileManagementAPI {
       // Only log if not already logged above
       const url_lower = url.toLowerCase()
       const isSettingsError = url_lower.includes('/settings/presets')
-      const isPermissionDeniedError = error instanceof Error && error.message.toLowerCase().includes('permission denied')
-      if (!isSettingsError && !isPermissionDeniedError && !(error instanceof Error && error.message.includes('HTTP'))) {
+      const messageLower = error instanceof Error ? error.message.toLowerCase() : ''
+      const isPermissionDeniedError = messageLower.includes('permission denied')
+      const isMembershipRequiredError = messageLower.includes('organization membership required')
+      if (!isSettingsError && !isPermissionDeniedError && !isMembershipRequiredError && !(error instanceof Error && error.message.includes('HTTP'))) {
         console.error('❌ API Error:', error)
       }
       throw error
@@ -322,7 +326,11 @@ class FileManagementAPI {
       }
     } catch (error: any) {
       const message = (error?.message || "").toLowerCase()
-      if (message.includes("permission denied") || message.includes("forbidden")) {
+      if (
+        message.includes("permission denied") ||
+        message.includes("forbidden") ||
+        message.includes("organization membership required")
+      ) {
         // Expected when a role loses files permission; callers can render empty/read-only states.
         return { items: [], count: 0 }
       }
