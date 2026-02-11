@@ -61,6 +61,7 @@ interface ZohoBooksImportProps {
   uploadId?: string
   onImportComplete?: (uploadId: string) => void
   onNotification?: (message: string, type: 'success' | 'error') => void
+  onPermissionDenied?: () => void
 }
 
 export default function ZohoBooksImport({
@@ -68,6 +69,7 @@ export default function ZohoBooksImport({
   uploadId,
   onImportComplete,
   onNotification,
+  onPermissionDenied,
 }: ZohoBooksImportProps) {
   const { idToken } = useAuth()
   const [connected, setConnected] = useState(false)
@@ -114,6 +116,13 @@ export default function ZohoBooksImport({
   const isPermissionError = (error: unknown) =>
     ((error as Error)?.message || "").toLowerCase().includes("permission denied") ||
     ((error as Error)?.message || "").toLowerCase().includes("forbidden")
+  const notifyPermissionDenied = (error: unknown) => {
+    if (isPermissionError(error)) {
+      onPermissionDenied?.()
+      return true
+    }
+    return false
+  }
 
   const loadFiles = async () => {
     if (!idToken) return
@@ -140,7 +149,9 @@ export default function ZohoBooksImport({
       setFiles(mappedFiles)
     } catch (err: any) {
       const message = (err?.message || "").toLowerCase()
-      if (!message.includes("permission denied") && !message.includes("forbidden")) {
+      if (message.includes("permission denied") || message.includes("forbidden")) {
+        onPermissionDenied?.()
+      } else {
         console.warn("Failed to load files.")
       }
       setFiles([])
@@ -175,7 +186,7 @@ export default function ZohoBooksImport({
           setColumnsError('No columns detected for this file. You can still proceed.')
         }
       } catch (err) {
-        if (!isPermissionError(err)) {
+        if (!notifyPermissionDenied(err)) {
           console.error('Failed to fetch columns:', err)
         }
         setAvailableColumns([])
@@ -278,7 +289,9 @@ export default function ZohoBooksImport({
       console.error('Error connecting Zoho Books:', err)
       const message = (err as Error).message || 'Failed to connect to Zoho Books'
       setError(message)
-      onNotification?.('Failed to connect to Zoho Books', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to connect to Zoho Books', 'error')
+      }
     }
   }
 
@@ -294,7 +307,9 @@ export default function ZohoBooksImport({
       console.error('Error disconnecting Zoho Books:', err)
       const message = (err as Error).message || 'Failed to disconnect from Zoho Books'
       setError(message)
-      onNotification?.('Failed to disconnect from Zoho Books', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to disconnect from Zoho Books', 'error')
+      }
     }
   }
 
@@ -331,7 +346,9 @@ export default function ZohoBooksImport({
       console.error('Zoho Books import error:', err)
       const message = (err as Error).message || 'Failed to import from Zoho Books'
       setError(message)
-      onNotification?.('Failed to import from Zoho Books', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to import from Zoho Books', 'error')
+      }
     } finally {
       setIsImporting(false)
     }
@@ -392,7 +409,9 @@ export default function ZohoBooksImport({
       const message = (err as Error).message || 'Failed to export to Zoho Books'
       setError(message)
       setExportSummary(null)
-      onNotification?.('Failed to export to Zoho Books', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to export to Zoho Books', 'error')
+      }
     } finally {
       setIsExporting(false)
     }

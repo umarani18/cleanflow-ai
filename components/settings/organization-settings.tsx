@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Edit,
   Loader2,
+  RefreshCw,
   Mail,
   MapPin,
   MoreHorizontal,
@@ -347,6 +348,7 @@ export function OrganizationSettings() {
   const [invites, setInvites] = useState<OrgInvite[]>([]);
   const [, setMembersLoadError] = useState<string | null>(null);
   const [isLoadingOrg, setIsLoadingOrg] = useState(true);
+  const [isRefreshingOrg, setIsRefreshingOrg] = useState(false);
   const [logoDataUrl, setLogoDataUrl] = useState<string>("");
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -1030,6 +1032,27 @@ export function OrganizationSettings() {
     setIsInviteDialogOpen(true);
   };
 
+  const getInviteFrontendBaseUrl = (): string | undefined => {
+    const candidates = [
+      process.env.NEXT_PUBLIC_FRONTEND_BASE_URL,
+      process.env.NEXT_PUBLIC_APP_ORIGIN,
+      process.env.BASE_URL,
+      typeof window !== "undefined" ? window.location.origin : undefined,
+    ].filter(Boolean) as string[];
+
+    for (const raw of candidates) {
+      try {
+        const parsed = new URL(raw);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          return parsed.origin;
+        }
+      } catch {
+        // Ignore invalid URL values and keep trying fallbacks.
+      }
+    }
+    return undefined;
+  };
+
   const handleSubmitInvite = async () => {
     const email = inviteEmail.trim().toLowerCase();
     if (!email) {
@@ -1049,7 +1072,12 @@ export function OrganizationSettings() {
 
     setIsSendingInvite(true);
     try {
-      const result = await orgAPI.createInvite(email, inviteRole);
+      const inviteFrontendBaseUrl = getInviteFrontendBaseUrl();
+      const result = await orgAPI.createInvite(
+        email,
+        inviteRole,
+        inviteFrontendBaseUrl,
+      );
       await loadInvites();
       toast({
         title: "Invite created",
@@ -1133,6 +1161,29 @@ export function OrganizationSettings() {
     });
   };
 
+  const handleRefreshAdminTab = async () => {
+    setIsRefreshingOrg(true);
+    try {
+      await reloadOrgData();
+      if (activeTab === "services") {
+        await loadSettingsPresets();
+      }
+      await refreshPermissions();
+      toast({
+        title: "Refreshed",
+        description: "Admin data has been refreshed.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Refresh failed",
+        description: err?.message || "Could not refresh admin data.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshingOrg(false);
+    }
+  };
+
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
       <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
@@ -1213,8 +1264,10 @@ export function OrganizationSettings() {
         </DialogContent>
       </Dialog>
       {/* Centered Tabs Header */}
-      <div className="flex justify-center pt-2 pb-4 overflow-x-auto">
-        <TabsList className="inline-flex h-10 sm:h-12 items-center justify-center rounded-xl bg-muted p-1 sm:p-1.5 gap-1">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-2 pb-4">
+        <div />
+        <div className="overflow-x-auto justify-self-center">
+          <TabsList className="inline-flex h-10 sm:h-12 items-center justify-center rounded-xl bg-muted p-1 sm:p-1.5 gap-1">
           <TabsTrigger
             value="organization"
             className="inline-flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap rounded-lg px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
@@ -1245,7 +1298,23 @@ export function OrganizationSettings() {
             <Cog className="w-4 h-4" />
             <span>Services</span>
           </TabsTrigger>
-        </TabsList>
+          </TabsList>
+        </div>
+        <div className="justify-self-end">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleRefreshAdminTab}
+            disabled={isRefreshingOrg}
+            aria-label="Refresh admin data"
+          >
+            {isRefreshingOrg ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Organization Settings Tab */}

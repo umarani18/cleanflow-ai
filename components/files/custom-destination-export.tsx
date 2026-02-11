@@ -26,11 +26,13 @@ import { useToast } from '@/hooks/use-toast'
 interface CustomDestinationExportProps {
   selectedFormat: string | null
   onFormatChange: (format: string) => void
+  onPermissionDenied?: () => void
 }
 
 export default function CustomDestinationExport({
   selectedFormat,
   onFormatChange,
+  onPermissionDenied,
 }: CustomDestinationExportProps) {
   const [files, setFiles] = useState<FileStatusResponse[]>([])
   const [loading, setLoading] = useState(false)
@@ -53,6 +55,10 @@ export default function CustomDestinationExport({
     ((error as Error)?.message || "").toLowerCase().includes("permission denied") ||
     ((error as Error)?.message || "").toLowerCase().includes("forbidden")
 
+  const notifyPermissionDenied = () => {
+    onPermissionDenied?.()
+  }
+
   const loadFiles = useCallback(async () => {
     if (!idToken) return
     setLoading(true)
@@ -61,16 +67,17 @@ export default function CustomDestinationExport({
       setFiles(response.items || [])
     } catch (error: any) {
       const message = (error?.message || "").toLowerCase()
-      if (!message.includes("permission denied") && !message.includes("forbidden")) {
+      const denied = message.includes("permission denied") || message.includes("forbidden")
+      if (denied) {
+        notifyPermissionDenied()
+      } else {
         console.warn("Failed to load files.")
+        toast({
+          title: 'Error',
+          description: 'Failed to load files',
+          variant: 'destructive',
+        })
       }
-      toast({
-        title: 'Error',
-        description: message.includes("permission denied") || message.includes("forbidden")
-          ? 'You do not have permission for this action. Contact your organization admin.'
-          : 'Failed to load files',
-        variant: 'destructive',
-      })
     } finally {
       setLoading(false)
     }
@@ -125,7 +132,9 @@ export default function CustomDestinationExport({
         setColumnsError('No columns detected for this file. You can still proceed with export.')
       }
     } catch (error) {
-      if (!isPermissionError(error)) {
+      if (isPermissionError(error)) {
+        notifyPermissionDenied()
+      } else {
         console.error('Failed to fetch columns:', error)
       }
       setAvailableColumns([])
@@ -209,21 +218,26 @@ export default function CustomDestinationExport({
             })
           }
         } catch (err) {
-          if (!isPermissionError(err)) {
+          if (isPermissionError(err)) {
+            notifyPermissionDenied()
+          } else {
             console.error('Error polling status:', err)
           }
         }
       }, 1000) // Poll every second
     } catch (error) {
-      if (!isPermissionError(error)) {
+      const denied = isPermissionError(error)
+      if (denied) {
+        notifyPermissionDenied()
+      } else {
         console.error('Error processing file:', error)
+        toast({
+          title: 'Processing Error',
+          description: (error as Error).message || 'Failed to process file',
+          variant: 'destructive',
+        })
       }
       setProcessing(false)
-      toast({
-        title: 'Processing Error',
-        description: (error as Error).message || 'Failed to process file',
-        variant: 'destructive',
-      })
     }
   }
 
@@ -271,12 +285,16 @@ export default function CustomDestinationExport({
 
       setShowDownloadModal(false)
     } catch (error) {
-      console.error('Download error:', error)
-      toast({
-        title: 'Download Error',
-        description: (error as Error).message || 'Failed to download file',
-        variant: 'destructive',
-      })
+      if (isPermissionError(error)) {
+        notifyPermissionDenied()
+      } else {
+        console.error('Download error:', error)
+        toast({
+          title: 'Download Error',
+          description: (error as Error).message || 'Failed to download file',
+          variant: 'destructive',
+        })
+      }
     } finally {
       setDownloading(false)
     }

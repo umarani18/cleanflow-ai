@@ -155,10 +155,15 @@ class OrgAPI {
     return this.makeRequest("/org/invites", authToken, { method: "GET" });
   }
 
-  createInvite(email: string, role: OrgRole, authToken?: string | null) {
+  createInvite(
+    email: string,
+    role: OrgRole,
+    frontendBaseUrl?: string,
+    authToken?: string | null
+  ) {
     return this.makeRequest("/org/invites", authToken, {
       method: "POST",
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, role, frontend_base_url: frontendBaseUrl }),
     });
   }
 
