@@ -3,13 +3,20 @@ import { Pinecone } from '@pinecone-database/pinecone'
 import { readFile } from 'fs/promises'
 import path from 'path'
 
-const PINECONE_API_KEY = process.env.PINECONE_API_KEY!
 const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME || 'cleanflowai-docs'
 
-// Initialize Pinecone
-const pinecone = new Pinecone({
-  apiKey: PINECONE_API_KEY,
-})
+// Lazy-initialize Pinecone to prevent build errors when env var is not set
+let pinecone: Pinecone | null = null
+function getPinecone(): Pinecone {
+  if (!pinecone) {
+    const apiKey = process.env.PINECONE_API_KEY
+    if (!apiKey) {
+      throw new Error('PINECONE_API_KEY environment variable is not set')
+    }
+    pinecone = new Pinecone({ apiKey })
+  }
+  return pinecone
+}
 
 // Helper function to generate embeddings
 async function generateEmbedding(text: string): Promise<number[]> {
@@ -82,7 +89,7 @@ export async function POST(req: NextRequest) {
         { path: 'docs/unified_bridge.md', source: 'unified-bridge' },
       ]
 
-      const index = pinecone.Index(PINECONE_INDEX_NAME)
+      const index = getPinecone().Index(PINECONE_INDEX_NAME)
       let totalChunksProcessed = 0
 
       for (const doc of documentationFiles) {

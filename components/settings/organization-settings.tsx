@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Sparkles,
   Plus,
+  Upload,
 } from "lucide-react";
 import {
   Card,
@@ -120,6 +121,49 @@ const ERP_OPTIONS = [
   { value: "sage", label: "SAGE INTACCT" },
   { value: "custom", label: "CUSTOM" },
 ];
+
+// Default preset template with example fields for user guidance
+const DEFAULT_PRESET_TEMPLATE = {
+  version: "1.0.0",
+  weights: {
+    fatal: "3",
+    high: "2",
+    medium: "1"
+  },
+  severity: {
+    missing_required: "high",
+    duplicate_primary_key: "fatal",
+    invalid_email: "medium"
+  },
+  policy: {
+    future_date_horizon_days: "365",
+    max_free_text_length: "2000",
+    round_scale_numeric: "4",
+    tolerance_amount: "0.01"
+  },
+  required_columns: ["id"],
+  primary_key_columns: ["id"],
+  enums: {
+    status: {
+      allowed: ["Active", "Inactive", "Pending"],
+      synonyms: {
+        "A": "Active",
+        "I": "Inactive"
+      }
+    }
+  },
+  rules: {
+    missing_required: {
+      description: "Required fields cannot be null or empty",
+      columns: ["id", "name"],
+      action: "quarantine"
+    },
+    leading_trailing_whitespace: {
+      description: "Remove leading and trailing whitespace",
+      action: "trim"
+    }
+  }
+};
 
 // Initial organization settings
 const INITIAL_ORG_SETTINGS = {
@@ -360,6 +404,7 @@ export function OrganizationSettings() {
   const [inviteRole, setInviteRole] = useState<AppRole>("Data Steward");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const presetFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const mapMemberToRow = (member: OrgMembership) => {
     const email = member.email || "";
@@ -407,7 +452,7 @@ export function OrganizationSettings() {
     setCurrentUserRole(nextRole);
     try {
       window.localStorage.setItem(ROLE_STORAGE_KEY, nextRole);
-    } catch {}
+    } catch { }
 
     setOrgSettings((prev) => ({
       ...prev,
@@ -446,10 +491,82 @@ export function OrganizationSettings() {
   const openCreatePresetDialog = () => {
     setPresetDialogMode("create");
     setPresetFormName("");
-    setPresetFormConfig("{\n\n}");
+    setPresetFormConfig(JSON.stringify(DEFAULT_PRESET_TEMPLATE, null, 2));
     setPresetFormDefault(false);
     setPresetEditing(null);
     setIsPresetDialogOpen(true);
+  };
+
+  // Handle JSON/CSV file upload for preset config
+  const handlePresetFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const fileName = file.name.toLowerCase();
+
+        if (fileName.endsWith('.json')) {
+          // Validate JSON and format it
+          const parsed = JSON.parse(content);
+          setPresetFormConfig(JSON.stringify(parsed, null, 2));
+          toast({
+            title: "File loaded",
+            description: "JSON file loaded successfully.",
+          });
+        } else if (fileName.endsWith('.csv')) {
+          // Convert CSV to JSON
+          const lines = content.trim().split('\n');
+          if (lines.length < 2) {
+            throw new Error("CSV must have header row and at least one data row");
+          }
+
+          const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+          const rows = lines.slice(1).map(line => {
+            const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+            const obj: Record<string, string> = {};
+            headers.forEach((header, index) => {
+              obj[header] = values[index] || '';
+            });
+            return obj;
+          });
+
+          // Create preset structure from CSV as rules
+          const presetConfig = {
+            ...DEFAULT_PRESET_TEMPLATE,
+            imported_data: rows
+          };
+          setPresetFormConfig(JSON.stringify(presetConfig, null, 2));
+          toast({
+            title: "CSV converted",
+            description: `Converted ${rows.length} rows to JSON format.`,
+          });
+        } else {
+          throw new Error("Please upload a .json or .csv file");
+        }
+      } catch (err: any) {
+        console.error("File upload error:", err);
+        toast({
+          title: "Invalid file",
+          description: err.message || "Could not parse the uploaded file.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    reader.onerror = () => {
+      toast({
+        title: "File read error",
+        description: "Could not read the file.",
+        variant: "destructive",
+      });
+    };
+
+    reader.readAsText(file);
+    // Reset input so same file can be uploaded again
+    event.target.value = '';
   };
 
   const openEditPresetDialog = (preset: SettingsPreset) => {
@@ -514,7 +631,7 @@ export function OrganizationSettings() {
       console.error("Failed to save preset", err);
       toast({
         title: "Save failed",
-        description: "Could not save the preset.",
+        description: "Invalid Format.",
         variant: "destructive",
       });
     } finally {
@@ -1872,7 +1989,28 @@ export function OrganizationSettings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Preset Config (JSON)</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Preset Config (JSON)</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={presetFileInputRef}
+                      onChange={handlePresetFileUpload}
+                      accept=".json,.csv"
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => presetFileInputRef.current?.click()}
+                      className="gap-1.5"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      Upload JSON/CSV
+                    </Button>
+                  </div>
+                </div>
                 <Textarea
                   value={presetFormConfig}
                   onChange={(e) => setPresetFormConfig(e.target.value)}

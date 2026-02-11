@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Pinecone } from '@pinecone-database/pinecone'
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY!
-const PINECONE_API_KEY = process.env.PINECONE_API_KEY!
+const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
 const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME || 'cleanflowai-docs'
 
-// Initialize Pinecone
-const pinecone = new Pinecone({
-  apiKey: PINECONE_API_KEY,
-})
+// Lazy-initialize Pinecone to prevent build errors when env var is not set
+let pinecone: Pinecone | null = null
+function getPinecone(): Pinecone {
+  if (!pinecone) {
+    const apiKey = process.env.PINECONE_API_KEY
+    if (!apiKey) {
+      throw new Error('PINECONE_API_KEY environment variable is not set')
+    }
+    pinecone = new Pinecone({ apiKey })
+  }
+  return pinecone
+}
 
 // Helper function to generate embeddings using HuggingFace
 async function generateEmbedding(text: string): Promise<number[]> {
@@ -63,10 +70,10 @@ async function queryGroqLLM(
   ]
 
   const groqUrl = 'https://api.groq.com/openai/v1/chat/completions'
-  
+
   try {
     console.log(`📤 Calling Groq API at ${groqUrl}...`)
-    
+
     const response = await fetch(groqUrl, {
       method: 'POST',
       headers: {
@@ -93,7 +100,7 @@ async function queryGroqLLM(
     return data.choices[0]?.message?.content || 'No response generated'
   } catch (error) {
     console.error('❌ Groq fetch error:', error)
-    
+
     // Provide helpful error messages
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
@@ -103,7 +110,7 @@ async function queryGroqLLM(
         throw new Error('Cannot reach Groq API. Check your internet connection and API key.')
       }
     }
-    
+
     throw error
   }
 }
@@ -128,7 +135,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Get the Pinecone index
-    const index = pinecone.Index(PINECONE_INDEX_NAME)
+    const index = getPinecone().Index(PINECONE_INDEX_NAME)
 
     // Generate embedding for the user's message
     console.log(`📝 Generating embedding...`)

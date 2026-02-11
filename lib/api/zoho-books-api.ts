@@ -129,7 +129,15 @@ class ZohoBooksService {
   }
 
   async importData(
-    entity: 'contacts' | 'items' | 'invoices' | 'customers' | 'vendors',
+    entity:
+      | 'contacts'
+      | 'items'
+      | 'invoices'
+      | 'customers'
+      | 'vendors'
+      | 'sales_orders'
+      | 'purchase_orders'
+      | 'inventory_items',
     filters: ZohoBooksImportFilters = {},
     orgId?: string
   ): Promise<ZohoBooksImportResponse> {

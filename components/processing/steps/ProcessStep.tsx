@@ -123,91 +123,98 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
     if (onComplete) onComplete()
   }
 
+  // Auto-close after 3 seconds on success
+  useEffect(() => {
+    if (status === "success") {
+      const timer = setTimeout(() => {
+        handleComplete()
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [status])
+
   return (
     <>
-    <div className="flex flex-col items-center justify-center h-[60vh] p-8">
-      {status === "idle" && (
-        <div className="text-center space-y-6">
-          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-            <Play className="w-10 h-10 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">Ready to Process</h2>
-            <p className="text-muted-foreground mt-2 max-w-md">
-              {selectedColumns.length} columns selected with {customRules.length} custom rules. Click below to start.
-            </p>
-          </div>
-          <div className="text-sm text-muted-foreground border border-muted rounded-lg p-4 max-w-md">
-            <div className="grid grid-cols-2 gap-y-2 text-left">
-              <span>Columns:</span>
-              <span className="font-medium">{selectedColumns.length}</span>
-              <span>Required:</span>
-              <span className="font-medium">{requiredColumns.length}</span>
-              <span>Custom Rules:</span>
-              <span className="font-medium">{customRules.length}</span>
+      <div className="flex flex-col items-center justify-center h-[60vh] p-8">
+        {status === "idle" && (
+          <div className="text-center space-y-6">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+              <Play className="w-10 h-10 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">Ready to Process</h2>
+              <p className="text-muted-foreground mt-2 max-w-md">
+                {selectedColumns.length} columns selected with {customRules.length} custom rules. Click below to start.
+              </p>
+            </div>
+            <div className="text-sm text-muted-foreground border border-muted rounded-lg p-4 max-w-md">
+              <div className="grid grid-cols-2 gap-y-2 text-left">
+                <span>Columns:</span>
+                <span className="font-medium">{selectedColumns.length}</span>
+                <span>Required:</span>
+                <span className="font-medium">{requiredColumns.length}</span>
+                <span>Custom Rules:</span>
+                <span className="font-medium">{customRules.length}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-center gap-3">
+              <Button variant="outline" size="lg" onClick={prevStep}>
+                Back
+              </Button>
+              <Button size="lg" onClick={handleStart} className="bg-green-600 hover:bg-green-700" disabled={!authToken}>
+                <Play className="w-5 h-5 mr-2" />
+                Start Processing
+              </Button>
             </div>
           </div>
-          <div className="flex items-center justify-center gap-3">
-            <Button variant="outline" size="lg" onClick={prevStep}>
-              Back
+        )}
+
+        {status === "processing" && (
+          <div className="text-center space-y-6 w-full max-w-md">
+            <Loader2 className="w-16 h-16 animate-spin text-primary mx-auto" />
+            <div>
+              <h2 className="text-xl font-semibold">Processing...</h2>
+              <p className="text-muted-foreground mt-2">{statusMessage}</p>
+            </div>
+          </div>
+        )}
+
+        {status === "success" && (
+          <div className="text-center space-y-6">
+            <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+              <CheckCircle className="w-12 h-12 text-green-500" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-green-500">Processing Complete!</h2>
+              <p className="text-muted-foreground mt-2">Your file has been processed successfully. Closing in 3 seconds...</p>
+            </div>
+          </div>
+        )}
+
+        {status === "error" && (
+          <div className="text-center space-y-6">
+            <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mx-auto">
+              <XCircle className="w-12 h-12 text-red-500" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-red-500">Processing Failed</h2>
+              <p className="text-muted-foreground mt-2 max-w-md">
+                Processing failed or timed out. Please retry.
+              </p>
+            </div>
+            <Button size="lg" variant="outline" onClick={handleRetry}>
+              <RotateCw className="w-4 h-4 mr-2" />
+              Retry
             </Button>
-            <Button size="lg" onClick={handleStart} className="bg-green-600 hover:bg-green-700" disabled={!authToken}>
-              <Play className="w-5 h-5 mr-2" />
-              Start Processing
-            </Button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {status === "processing" && (
-        <div className="text-center space-y-6 w-full max-w-md">
-          <Loader2 className="w-16 h-16 animate-spin text-primary mx-auto" />
-          <div>
-            <h2 className="text-xl font-semibold">Processing...</h2>
-            <p className="text-muted-foreground mt-2">{statusMessage}</p>
-          </div>
-        </div>
-      )}
-
-      {status === "success" && (
-        <div className="text-center space-y-6">
-          <div className="w-20 h-20 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
-            <CheckCircle className="w-12 h-12 text-green-500" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-green-500">Processing Complete!</h2>
-            <p className="text-muted-foreground mt-2">You can now view the results.</p>
-          </div>
-          <Button size="lg" onClick={handleComplete}>
-            View Results
-          </Button>
-        </div>
-      )}
-
-      {status === "error" && (
-        <div className="text-center space-y-6">
-          <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mx-auto">
-            <XCircle className="w-12 h-12 text-red-500" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-red-500">Processing Failed</h2>
-            <p className="text-muted-foreground mt-2 max-w-md">
-              Processing failed or timed out. Please retry.
-            </p>
-          </div>
-          <Button size="lg" variant="outline" onClick={handleRetry}>
-            <RotateCw className="w-4 h-4 mr-2" />
-            Retry
-          </Button>
-        </div>
-      )}
-    </div>
-
-    <FileDetailsDialog 
-      file={fileData} 
-      open={showDetailsDialog} 
-      onOpenChange={setShowDetailsDialog} 
-    />
+      <FileDetailsDialog
+        file={fileData}
+        open={showDetailsDialog}
+        onOpenChange={setShowDetailsDialog}
+      />
     </>
   )
 }

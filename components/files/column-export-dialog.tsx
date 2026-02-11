@@ -1,7 +1,7 @@
 "use client"
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Download, File, FileJson, FileSpreadsheet, Loader2, Columns, Edit2, Check, X, Undo } from 'lucide-react'
+import { Download, File, FileJson, FileSpreadsheet, Loader2, Columns, Edit2, Check, X, Undo, ShieldX } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 import { Button } from '@/components/ui/button'
@@ -77,11 +77,55 @@ export function ColumnExportContent({
   const [dataType, setDataType] = useState<'all' | 'clean' | 'quarantine'>('all')
   const [columnStates, setColumnStates] = useState<Record<string, ColumnState>>({})
 
+  // DQ suffixes that are added to original column names by the DQ engine
+  // Pattern: {column_name}_dq_{type} e.g., CUSTOMER_ID_dq_status
+  const DQ_SUFFIXES = [
+    '_dq_status', '_dq_fixed', '_dq_quarantined', '_dq_clean', '_dq_violations',
+    '_status', '_clean', '_quarantine', '_fixed', '_violations', '_fixes_applied',
+    '_issues', '_flagged', '_severity'
+  ]
+
+  // Standalone DQ columns (not tied to a base column)
+  const STANDALONE_DQ_COLUMNS = ['fixes_applied', 'dq_summary', 'dq_score', 'violations_count']
+
+  // Check if a column is a DQ-generated column
+  const isDQStatusColumn = (col: string, allColumns: string[]) => {
+    const lowerCol = col.toLowerCase()
+
+    // Check for standalone DQ columns
+    if (STANDALONE_DQ_COLUMNS.some(standalone => lowerCol === standalone.toLowerCase())) {
+      return true
+    }
+
+    // Check if this column ends with a DQ suffix AND the base column exists
+    for (const suffix of DQ_SUFFIXES) {
+      if (lowerCol.endsWith(suffix.toLowerCase())) {
+        // Extract base column name
+        const baseCol = col.slice(0, col.length - suffix.length)
+        if (baseCol.length === 0) continue
+        // Check if base column exists (case-insensitive)
+        const baseExists = allColumns.some(c => c.toLowerCase() === baseCol.toLowerCase())
+        if (baseExists) {
+          return true
+        }
+      }
+    }
+
+    // Also check for explicit DQ prefixes
+    if (lowerCol.startsWith('dq_') || lowerCol.startsWith('__dq')) {
+      return true
+    }
+
+    return false
+  }
+
   useEffect(() => {
     const initialState: Record<string, ColumnState> = {}
     columns.forEach(col => {
+      // By default, deselect DQ status columns
+      const isDQCol = isDQStatusColumn(col, columns)
       initialState[col] = {
-        selected: true,
+        selected: !isDQCol,
         exportName: col,
         isEditing: false
       }
@@ -159,6 +203,23 @@ export function ColumnExportContent({
       return newState
     })
   }
+
+  const handleClearDQStatus = () => {
+    setColumnStates(prev => {
+      const newState = { ...prev }
+      Object.keys(newState).forEach(col => {
+        if (isDQStatusColumn(col, columns)) {
+          newState[col] = { ...newState[col], selected: false }
+        }
+      })
+      return newState
+    })
+  }
+
+  const dqStatusCount = columns.filter(col => isDQStatusColumn(col, columns)).length
+  const dqStatusSelected = Object.entries(columnStates)
+    .filter(([col, state]) => isDQStatusColumn(col, columns) && state.selected)
+    .length
 
   const handleExport = () => {
     onExport({
@@ -276,13 +337,25 @@ export function ColumnExportContent({
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={handleSelectAll} disabled={exporting} className="text-xs h-8">
               Select All
             </Button>
             <Button variant="outline" size="sm" onClick={handleDeselectAll} disabled={exporting} className="text-xs h-8">
               Clear All
             </Button>
+            {dqStatusCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearDQStatus}
+                disabled={exporting}
+                className="text-xs h-8 gap-1.5"
+              >
+                <ShieldX className="h-3.5 w-3.5" />
+                Clear DQ Status
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -294,13 +367,12 @@ export function ColumnExportContent({
             const isRenamed = state.exportName !== col
 
             return (
-              <div 
-                key={col} 
-                className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${
-                  state.selected
-                    ? 'bg-blue-100/60 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700/50 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 shadow-sm'
-                    : 'bg-muted/30 border-muted/50 hover:bg-muted/50'
-                }`}
+              <div
+                key={col}
+                className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${state.selected
+                  ? 'bg-blue-100/60 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700/50 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 shadow-sm'
+                  : 'bg-muted/30 border-muted/50 hover:bg-muted/50'
+                  }`}
                 onClick={() => !exporting && handleToggleColumn(col)}
               >
                 <Checkbox
@@ -308,7 +380,7 @@ export function ColumnExportContent({
                   onCheckedChange={() => handleToggleColumn(col)}
                   disabled={exporting}
                 />
-                
+
                 <div className="flex-1 min-w-0">
                   {state.isEditing ? (
                     <div className="flex items-center gap-2">
@@ -323,20 +395,20 @@ export function ColumnExportContent({
                         }}
                       />
                       {state.exportName !== col && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30"
                           onClick={() => handleEndEdit(col)}
                           title="Confirm"
                         >
                           <Check className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
                         onClick={() => handleResetName(col)}
                         title="Cancel"
                       >
@@ -345,23 +417,20 @@ export function ColumnExportContent({
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className={`text-sm font-medium truncate ${
-                        state.selected
-                          ? isRenamed ? 'text-blue-700 dark:text-blue-300 line-through' : 'text-blue-900 dark:text-blue-100 font-semibold'
-                          : isRenamed ? 'text-muted-foreground line-through' : 'text-foreground'
-                      }`}>
+                      <span className={`text-sm font-medium truncate ${state.selected
+                        ? isRenamed ? 'text-blue-700 dark:text-blue-300 line-through' : 'text-blue-900 dark:text-blue-100 font-semibold'
+                        : isRenamed ? 'text-muted-foreground line-through' : 'text-foreground'
+                        }`}>
                         {col}
                       </span>
                       {isRenamed && (
                         <>
-                          <span className={`text-xs font-medium ${
-                            state.selected ? 'text-blue-600 dark:text-blue-300' : 'text-muted-foreground'
-                          }`}>→</span>
-                          <span className={`text-sm font-medium truncate px-2 py-0.5 rounded ${
-                            state.selected 
-                              ? 'text-green-700 dark:text-green-200 bg-green-200/50 dark:bg-green-900/50'
-                              : 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20'
-                          }`}>
+                          <span className={`text-xs font-medium ${state.selected ? 'text-blue-600 dark:text-blue-300' : 'text-muted-foreground'
+                            }`}>→</span>
+                          <span className={`text-sm font-medium truncate px-2 py-0.5 rounded ${state.selected
+                            ? 'text-green-700 dark:text-green-200 bg-green-200/50 dark:bg-green-900/50'
+                            : 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20'
+                            }`}>
                             {state.exportName}
                           </span>
                         </>
@@ -372,10 +441,10 @@ export function ColumnExportContent({
 
                 {!state.isEditing && state.selected && (
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleStartEdit(col)
@@ -386,10 +455,10 @@ export function ColumnExportContent({
                       <Edit2 className="h-4 w-4" />
                     </Button>
                     {isRenamed && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
                         onClick={(e) => {
                           e.stopPropagation()
                           handleResetName(col)

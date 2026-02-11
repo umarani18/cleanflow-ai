@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import * as XLSX from "xlsx";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store";
 import {
   fetchFiles,
@@ -165,6 +164,23 @@ const RULE_SEVERITY_STYLES: Record<string, string> = {
   info: "bg-blue-500/10 text-blue-700 border-blue-500/20",
 };
 
+const getDqQuality = (
+  score: number | null | undefined,
+): "excellent" | "good" | "bad" | null => {
+  if (typeof score !== "number") return null;
+  if (score >= 90) return "excellent";
+  if (score >= 70) return "good";
+  return "bad";
+};
+
+const getDqQualityLabel = (score: number | null | undefined): string => {
+  const quality = getDqQuality(score);
+  if (!quality) return "—";
+  if (quality === "excellent") return "Excellent";
+  if (quality === "good") return "Good";
+  return "Bad";
+};
+
 export default function FilesPage() {
   return (
     <AuthGuard>
@@ -180,6 +196,11 @@ function FilesPageContent() {
   // Use Redux state instead of local state
   const files = useAppSelector(selectFiles);
   const filesStatus = useAppSelector(selectFilesStatus);
+
+  // Debug: Print API response (files list)
+  useEffect(() => {
+    console.log("API Response / Table Source Data:", files);
+  }, [files]);
 
   const [loading, setLoading] = useState(false);
 
@@ -236,7 +257,15 @@ function FilesPageContent() {
   );
   const [selectedSource, setSelectedSource] = useState("local");
   const [selectedDestination, setSelectedDestination] = useState("null");
+  const [lastActiveSelector, setLastActiveSelector] = useState<'source' | 'destination'>('source');
   const [selectedErp, setSelectedErp] = useState("quickbooks");
+
+  // Helpers
+  const updateUploadProgress = useCallback((value: number) => {
+    // Clamp 0-100, round to 2 decimals to avoid long floating artefacts
+    const clamped = Math.min(100, Math.max(0, value));
+    setUploadProgress(Number(clamped.toFixed(2)));
+  }, []);
   const [selectedDestinationErp, setSelectedDestinationErp] =
     useState("quickbooks");
   const [sortField, setSortField] = useState<
@@ -366,7 +395,7 @@ function FilesPageContent() {
               className={cn(
                 "text-[10px] h-5 px-2 uppercase",
                 RULE_SEVERITY_STYLES[meta.severity] ||
-                  RULE_SEVERITY_STYLES.info,
+                RULE_SEVERITY_STYLES.info,
               )}
             >
               {meta.severity}
@@ -389,24 +418,9 @@ function FilesPageContent() {
     loadFiles();
   }, [loadFiles]);
 
-  const getDqQuality = (
-    score: number | null | undefined,
-  ): "excellent" | "good" | "bad" | null => {
-    if (typeof score !== "number") return null;
-    if (score >= 90) return "excellent";
-    if (score >= 70) return "good";
-    return "bad";
-  };
 
-  const getDqQualityLabel = (score: number | null | undefined): string => {
-    const quality = getDqQuality(score);
-    if (!quality) return "—";
-    if (quality === "excellent") return "Excellent";
-    if (quality === "good") return "Good";
-    return "Bad";
-  };
 
-  const filteredFiles = files
+  const filteredFiles = useMemo(() => files
     .filter((file) => {
       const name = (
         file.original_filename ||
@@ -470,7 +484,7 @@ function FilesPageContent() {
           break;
       }
       return sortDirection === "asc" ? comparison : -comparison;
-    });
+    }), [files, searchQuery, statusFilter, sortField, sortDirection]);
 
   const handleSort = (
     field: "name" | "score" | "status" | "uploaded" | "updated",
@@ -527,7 +541,7 @@ function FilesPageContent() {
         file,
         idToken,
         useAI,
-        (progress) => setUploadProgress(progress),
+        (progress) => updateUploadProgress(progress),
         (status) => {
           // Use Redux action to update store
           dispatch(updateFile(status));
@@ -551,7 +565,7 @@ function FilesPageContent() {
       });
     } finally {
       setUploading(false);
-      setUploadProgress(0);
+      updateUploadProgress(0);
     }
   };
 
@@ -1015,6 +1029,7 @@ function FilesPageContent() {
           return;
         }
       } else if (ext === "xlsx" || ext === "xls") {
+        const XLSX = await import("xlsx");
         const data = await file.arrayBuffer();
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];
@@ -1513,6 +1528,14 @@ function FilesPageContent() {
 
   const tableEmpty = filteredFiles.length === 0;
 
+  // Intent-based rendering mode
+  // - 'export': Last active selector is destination AND destination !== 'null'
+  // - 'import': Otherwise (source is always valid)
+  const pageMode: 'import' | 'export' =
+    lastActiveSelector === 'destination' && selectedDestination !== 'null'
+      ? 'export'
+      : 'import';
+
   return (
     <TooltipProvider>
       <div className="space-y-4 p-3 sm:p-0">
@@ -1578,6 +1601,7 @@ function FilesPageContent() {
                     value={selectedSource}
                     onValueChange={(value) => {
                       setSelectedSource(value);
+                      setLastActiveSelector('source');
                       console.log(`Selected Source: ${value}`);
                     }}
                   >
@@ -1615,6 +1639,9 @@ function FilesPageContent() {
                     value={selectedDestination}
                     onValueChange={(value) => {
                       setSelectedDestination(value);
+                      if (value !== 'null') {
+                        setLastActiveSelector('destination');
+                      }
                       console.log(`Selected Destination: ${value}`);
                     }}
                   >
@@ -1645,9 +1672,9 @@ function FilesPageContent() {
                 )}
             </div>
 
-            {/* Content Area - MUTUALLY EXCLUSIVE: Either Source OR Destination */}
-            {selectedDestination === "null" ? (
-              // ========= SOURCE SECTION =========
+            {/* Content Area - Rendering based on derived pageMode */}
+            {pageMode === 'import' ? (
+              // ========= SOURCE/IMPORT SECTION =========
               <div className="space-y-4">
                 {selectedSource === "local" ? (
                   <div
@@ -1671,7 +1698,7 @@ function FilesPageContent() {
                             Uploading...
                           </p>
                           <p className="text-2xl sm:text-3xl lg:text-4xl font-bold text-primary mt-1 sm:mt-2">
-                            {uploadProgress}%
+                            {uploadProgress.toFixed(2)}%
                           </p>
                         </div>
                         <Progress
@@ -1788,8 +1815,8 @@ function FilesPageContent() {
                   onChange={handleFileInput}
                 />
               </div>
-            ) : (
-              // ========= DESTINATION SECTION =========
+            ) : pageMode === 'export' ? (
+              // ========= DESTINATION/EXPORT SECTION =========
               <div className="space-y-4">
                 {selectedDestination === "local" ? (
                   <CustomDestinationExport
@@ -1869,7 +1896,7 @@ function FilesPageContent() {
                   </div>
                 ) : null}
               </div>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -2228,24 +2255,24 @@ function FilesPageContent() {
                                 file.status === "DQ_FAILED" ||
                                 file.status === "FAILED" ||
                                 file.status === "UPLOAD_FAILED") && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-7 w-7 sm:h-8 sm:w-8 text-primary hover:text-primary hover:bg-primary/10"
-                                      onClick={() =>
-                                        handleStartProcessing(file)
-                                      }
-                                    >
-                                      <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    Start Processing
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 sm:h-8 sm:w-8 text-primary hover:text-primary hover:bg-primary/10"
+                                        onClick={() =>
+                                          handleStartProcessing(file)
+                                        }
+                                      >
+                                        <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      Start Processing
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button
@@ -2645,7 +2672,7 @@ function FilesPageContent() {
                           className={cn(
                             "text-[10px] h-5 px-2 uppercase",
                             RULE_SEVERITY_STYLES[
-                              customRuleSuggestion.suggestion.severity
+                            customRuleSuggestion.suggestion.severity
                             ] || RULE_SEVERITY_STYLES.info,
                           )}
                         >
@@ -2654,13 +2681,13 @@ function FilesPageContent() {
                       )}
                       {typeof customRuleSuggestion.suggestion.confidence ===
                         "number" && (
-                        <span className="text-xs text-muted-foreground">
-                          {(
-                            customRuleSuggestion.suggestion.confidence * 100
-                          ).toFixed(0)}
-                          % confidence
-                        </span>
-                      )}
+                          <span className="text-xs text-muted-foreground">
+                            {(
+                              customRuleSuggestion.suggestion.confidence * 100
+                            ).toFixed(0)}
+                            % confidence
+                          </span>
+                        )}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Template: {customRuleSuggestion.suggestion.template}
@@ -2731,7 +2758,7 @@ function FilesPageContent() {
                                   className={cn(
                                     "text-[10px] h-5 px-2 uppercase",
                                     RULE_SEVERITY_STYLES[rule.severity] ||
-                                      RULE_SEVERITY_STYLES.info,
+                                    RULE_SEVERITY_STYLES.info,
                                   )}
                                 >
                                   {rule.severity}
@@ -3012,7 +3039,7 @@ function FilesPageContent() {
           dqStats={{
             cleanRows: erpModalConfig?.file.rows_out
               ? erpModalConfig.file.rows_out -
-                (erpModalConfig.file.rows_fixed || 0)
+              (erpModalConfig.file.rows_fixed || 0)
               : undefined,
             fixedRows: erpModalConfig?.file.rows_fixed,
             quarantinedRows: erpModalConfig?.file.rows_quarantined,

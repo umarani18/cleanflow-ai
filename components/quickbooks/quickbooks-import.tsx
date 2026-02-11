@@ -31,6 +31,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import quickBooksAPI, {
   QuickBooksConnectionStatus,
@@ -45,6 +53,8 @@ interface QuickBooksFile {
   original_filename?: string
   status: string
   rows_clean?: number
+  updated_at?: string
+  status_timestamp?: string
 }
 
 interface QuickBooksImportProps {
@@ -79,13 +89,17 @@ export default function QuickBooksImport({
 
   const [importResult, setImportResult] = useState<QuickBooksImportResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Column selection state
   const [columnModalOpen, setColumnModalOpen] = useState(false)
   const [availableColumns, setAvailableColumns] = useState<string[]>([])
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
   const [columnsLoading, setColumnsLoading] = useState(false)
   const [columnsError, setColumnsError] = useState<string | null>(null)
+
+  // Column mapping state
+  const [mappingOpen, setMappingOpen] = useState(false)
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
 
   // Load files from API
   const loadFiles = async () => {
@@ -104,6 +118,8 @@ export default function QuickBooksImport({
         original_filename: f.original_filename,
         status: f.status,
         rows_clean: f.rows_clean,
+        updated_at: f.updated_at,
+        status_timestamp: f.status_timestamp,
       }))
       setFiles(mappedFiles)
       console.log('Files loaded:', mappedFiles.length)
@@ -123,19 +139,20 @@ export default function QuickBooksImport({
     const file = files.find(f => f.upload_id === uploadId)
     if (file) {
       setSelectedFile(file)
-      
+
       // Fetch columns for the selected file
       if (mode === 'destination' && idToken) {
         setColumnModalOpen(true)
         setColumnsLoading(true)
         setColumnsError(null)
-        
+
         try {
           const resp = await fileManagementAPI.getFileColumns(uploadId, idToken)
           const cols = resp.columns || []
           setAvailableColumns(cols)
           setSelectedColumns(new Set(cols))
-          
+          setColumnMapping(autoMapColumns(config.entity, cols))
+
           if (cols.length === 0) {
             setColumnsError('No columns detected for this file. You can still proceed.')
           }
@@ -281,7 +298,7 @@ export default function QuickBooksImport({
 
       setImportResult(result)
       onNotification?.(`Successfully imported ${result.records_imported} records!`, 'success')
-      
+
       // Call parent's onImportComplete to trigger auto-processing
       onImportComplete?.(result.upload_id)
     } catch (err) {
@@ -310,9 +327,15 @@ export default function QuickBooksImport({
       return
     }
 
-    if (mode === 'destination' && selectedColumns.size === 0) {
-      setError('Please select at least one column to export')
-      return
+    // Validate column mapping for destination mode
+    if (mode === 'destination') {
+      const validation = validateMapping(config.entity, columnMapping, availableColumns)
+      if (!validation.valid) {
+        setError(validation.message)
+        onNotification?.(validation.message || 'Please complete column mapping', 'error')
+        setMappingOpen(true)
+        return
+      }
     }
 
     try {
@@ -321,35 +344,35 @@ export default function QuickBooksImport({
       setImportResult(null)
 
       const fileId = selectedFile?.upload_id || uploadId
-      
+
       if (!fileId) {
         setError('Please select a file to export')
         return
       }
 
-      console.log('Exporting to QuickBooks, uploadId:', fileId, 'Columns:', Array.from(selectedColumns))
-      
-      // For now, pass basic export request - columns will be filtered on backend
-      const result = await quickBooksAPI.exportToQuickBooks(fileId)
+      console.log('Exporting to QuickBooks, uploadId:', fileId, 'Entity:', config.entity, 'Mapping:', columnMapping)
+
+      // Pass entity and column mapping to the export API
+      const result = await quickBooksAPI.exportToQuickBooks(fileId, config.entity, columnMapping)
       console.log('QuickBooks export result:', result)
 
       setImportResult({
         success: result.success,
-        message: result.message,
+        message: 'Successfully exported to QuickBooks',
         records_imported: result.records_exported || 0,
-        filename: `exported_to_quickbooks_${config.entity}`,
+        filename: '',
         upload_id: fileId,
         entity: config.entity,
       })
-      
+
       // Close column modal after successful export
       setColumnModalOpen(false)
-      
-      onNotification?.(`Successfully exported ${result.records_exported} records to QuickBooks!`, 'success')
+
+      onNotification?.('Successfully exported to QuickBooks!', 'success')
     } catch (err) {
       console.error('Error exporting data:', err)
       const errorMsg = (err as Error).message || 'Failed to export data'
-      
+
       // Provide more helpful error messages
       let userMessage = 'Export failed: ' + errorMsg
       if (errorMsg.includes('NoSuchKey') || errorMsg.includes('does not exist')) {
@@ -357,13 +380,14 @@ export default function QuickBooksImport({
       } else if (errorMsg.includes('Connection')) {
         userMessage = 'Connection to QuickBooks failed. Please reconnect and try again.'
       }
-      
+
       setError(userMessage)
       onNotification?.(userMessage, 'error')
     } finally {
       setIsExporting(false)
     }
   }
+
 
   const entityOptions = [
     { value: 'customers', label: 'Customers' },
@@ -390,12 +414,12 @@ export default function QuickBooksImport({
         </Alert>
       )}
 
-      {/* Success Alert */}
-      {importResult && (
+      {/* Success Alert - only show for import mode */}
+      {importResult && mode !== "destination" && (
         <Alert className="border-green-200 bg-green-50 py-2 sm:py-3">
           <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
           <AlertDescription className="text-sm sm:text-base text-green-900">
-            {mode === "source" ? "Imported" : "Exported"} {importResult.records_imported || 0} records • {importResult.filename}
+            Imported {importResult.records_imported || 0} records • {importResult.filename}
           </AlertDescription>
         </Alert>
       )}
@@ -535,11 +559,17 @@ export default function QuickBooksImport({
                       <SelectValue placeholder="Choose a file to export" />
                     </SelectTrigger>
                     <SelectContent>
-                      {files.map((file) => (
-                        <SelectItem key={file.upload_id} value={file.upload_id}>
-                          {file.original_filename || file.filename}
-                        </SelectItem>
-                      ))}
+                      {[...files]
+                        .sort((a, b) => {
+                          const dateA = new Date(a.updated_at || a.status_timestamp || 0).getTime();
+                          const dateB = new Date(b.updated_at || b.status_timestamp || 0).getTime();
+                          return dateB - dateA; // Descending order (newest first)
+                        })
+                        .map((file) => (
+                          <SelectItem key={file.upload_id} value={file.upload_id}>
+                            {file.original_filename || file.filename}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 ) : (
@@ -584,23 +614,33 @@ export default function QuickBooksImport({
                 </Select>
               </div>
 
-              <Button
-                onClick={exportToQuickBooks}
-                disabled={isExporting || !selectedFile}
-                className="w-full bg-green-600 hover:bg-green-700 h-10 sm:h-12 text-sm sm:text-base"
-              >
-                {isExporting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
-                    Exporting...
-                  </>
-                ) : (
-                  <>
-                    <Download className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-                    Export to QuickBooks
-                  </>
-                )}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setMappingOpen(true)}
+                  disabled={!selectedFile}
+                  className="h-10 sm:h-12 text-sm sm:text-base"
+                >
+                  Mapping
+                </Button>
+                <Button
+                  onClick={exportToQuickBooks}
+                  disabled={isExporting || !selectedFile}
+                  className="flex-1 bg-green-600 hover:bg-green-700 h-10 sm:h-12 text-sm sm:text-base"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                      Export to QuickBooks
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -672,14 +712,234 @@ export default function QuickBooksImport({
               disabled={selectedColumns.size === 0 || isExporting}
               onClick={() => {
                 setColumnModalOpen(false)
-                exportToQuickBooks()
               }}
             >
-              {isExporting ? 'Exporting...' : 'Confirm & Export'}
+              Continue
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Column Mapping Dialog */}
+      <Dialog open={mappingOpen} onOpenChange={setMappingOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Map columns for QuickBooks</DialogTitle>
+            <DialogDescription>
+              Map your file columns to QuickBooks fields before export.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0 space-y-4 overflow-y-auto pr-2">
+            {getMappingFields(config.entity).map((field) => (
+              <div key={field.key} className="grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] gap-3 items-start">
+                <div>
+                  <div className="text-sm font-medium">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">{field.help}</div>
+                </div>
+                <Select
+                  value={columnMapping[field.key] || ''}
+                  onValueChange={(value) =>
+                    setColumnMapping((prev) => ({ ...prev, [field.key]: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableColumns.map((col) => (
+                      <SelectItem key={`${field.key}-${col}`} value={col}>
+                        {col}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setColumnMapping(autoMapColumns(config.entity, availableColumns))
+              }}
+            >
+              Auto map
+            </Button>
+            <Button
+              onClick={() => {
+                const validation = validateMapping(config.entity, columnMapping, availableColumns)
+                if (!validation.valid) {
+                  setError(validation.message)
+                  return
+                }
+                setMappingOpen(false)
+              }}
+            >
+              Save mapping
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+// QuickBooks field mapping definitions per entity
+function getMappingFields(entity: string) {
+  if (entity === 'customers') {
+    return [
+      { key: 'customer_name', label: 'Customer Name', required: true, help: 'Display name in QuickBooks (required)' },
+      { key: 'company_name', label: 'Company Name', required: false, help: 'Company name' },
+      { key: 'email', label: 'Email', required: false, help: 'Primary email address' },
+      { key: 'phone', label: 'Phone', required: false, help: 'Primary phone number' },
+      { key: 'billing_address', label: 'Billing Address', required: false, help: 'Street address line 1' },
+      { key: 'billing_city', label: 'Billing City', required: false, help: 'City' },
+      { key: 'billing_state', label: 'Billing State', required: false, help: 'State/Province' },
+      { key: 'billing_zip', label: 'Billing Zip', required: false, help: 'Postal/ZIP code' },
+      { key: 'billing_country', label: 'Billing Country', required: false, help: 'Country' },
+      { key: 'notes', label: 'Notes', required: false, help: 'Customer notes' },
+    ]
+  }
+  if (entity === 'invoices') {
+    return [
+      { key: 'customer_name', label: 'Customer Name', required: true, help: 'Customer display name (required)' },
+      { key: 'invoice_number', label: 'Invoice Number', required: false, help: 'DocNumber in QuickBooks' },
+      { key: 'invoice_date', label: 'Invoice Date', required: false, help: 'Transaction date (YYYY-MM-DD)' },
+      { key: 'due_date', label: 'Due Date', required: false, help: 'Payment due date' },
+      { key: 'total_amount', label: 'Total Amount', required: false, help: 'Invoice total' },
+      { key: 'description', label: 'Description', required: false, help: 'Line item description' },
+      { key: 'quantity', label: 'Quantity', required: false, help: 'Line item quantity' },
+      { key: 'rate', label: 'Rate', required: false, help: 'Unit price per item' },
+      { key: 'line_amount', label: 'Line Amount', required: false, help: 'Line total (qty × rate)' },
+    ]
+  }
+  if (entity === 'vendors') {
+    return [
+      { key: 'vendor_name', label: 'Vendor Name', required: true, help: 'Display name in QuickBooks (required)' },
+      { key: 'company_name', label: 'Company Name', required: false, help: 'Company name' },
+      { key: 'email', label: 'Email', required: false, help: 'Primary email address' },
+      { key: 'phone', label: 'Phone', required: false, help: 'Primary phone number' },
+      { key: 'billing_address', label: 'Billing Address', required: false, help: 'Street address' },
+      { key: 'billing_city', label: 'Billing City', required: false, help: 'City' },
+      { key: 'billing_state', label: 'Billing State', required: false, help: 'State/Province' },
+      { key: 'billing_zip', label: 'Billing Zip', required: false, help: 'Postal/ZIP code' },
+      { key: 'billing_country', label: 'Billing Country', required: false, help: 'Country' },
+    ]
+  }
+  if (entity === 'items') {
+    return [
+      { key: 'item_name', label: 'Item Name', required: true, help: 'Item name in QuickBooks (required)' },
+      { key: 'description', label: 'Description', required: false, help: 'Item description' },
+      { key: 'unit_price', label: 'Unit Price', required: false, help: 'Sales price' },
+      { key: 'cost', label: 'Cost', required: false, help: 'Purchase cost' },
+      { key: 'quantity_on_hand', label: 'Qty On Hand', required: false, help: 'Stock quantity' },
+      { key: 'sku', label: 'SKU', required: false, help: 'Stock keeping unit' },
+    ]
+  }
+  return []
+}
+
+// Normalize column names for matching
+function normalizeKey(value: string) {
+  return value.toLowerCase().replace(/[\s_-]+/g, '')
+}
+
+// Auto-map columns based on name similarity
+function autoMapColumns(entity: string, columns: string[]) {
+  const fields = getMappingFields(entity)
+  const mapping: Record<string, string> = {}
+  const normalized = new Map(columns.map((c) => [normalizeKey(c), c]))
+
+  for (const field of fields) {
+    // Direct match by normalized key
+    const match = normalized.get(normalizeKey(field.key))
+    if (match) {
+      mapping[field.key] = match
+      continue
+    }
+
+    // Alternative matching for common field names
+    if (field.key === 'customer_name') {
+      const alts = ['customername', 'displayname', 'name', 'customer', 'clientname']
+      for (const a of alts) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+    if (field.key === 'vendor_name') {
+      const alts = ['vendorname', 'displayname', 'name', 'vendor', 'suppliername']
+      for (const a of alts) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+    if (field.key === 'item_name') {
+      const alts = ['itemname', 'productname', 'name', 'item', 'product']
+      for (const a of alts) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+    if (field.key === 'invoice_number') {
+      const alts = ['invoicenumber', 'invoiceno', 'docnumber', 'invno', 'invoiceid']
+      for (const a of alts) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+    if (field.key === 'email') {
+      const alts = ['email', 'emailaddress', 'primaryemail']
+      for (const a of alts) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+    if (field.key === 'phone') {
+      const alts = ['phone', 'phonenumber', 'primaryphone', 'telephone']
+      for (const a of alts) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+  }
+  return mapping
+}
+
+// Validate that required fields are mapped
+function validateMapping(entity: string, mapping: Record<string, string>, columns: string[]) {
+  const fields = getMappingFields(entity)
+  const available = new Set(columns)
+
+  for (const field of fields) {
+    if (field.required) {
+      const source = mapping[field.key]
+      if (!source || !available.has(source)) {
+        return { valid: false, message: `Missing required mapping for ${field.label}.` }
+      }
+    }
+  }
+  return { valid: true, message: '' }
 }

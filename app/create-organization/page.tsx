@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { AuthGuard } from "@/components/auth/auth-guard";
@@ -13,7 +13,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { useToast } from "@/hooks/use-toast";
 import { orgAPI } from "@/lib/api/org-api";
 
-export default function CreateOrganizationPage() {
+function CreateOrganizationContent() {
   const { toast } = useToast();
   const { user } = useAuth();
   const searchParams = useSearchParams();
@@ -219,5 +219,13 @@ export default function CreateOrganizationPage() {
         </Card>
       </div>
     </AuthGuard>
+  );
+}
+
+export default function CreateOrganizationPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <CreateOrganizationContent />
+    </Suspense>
   );
 }

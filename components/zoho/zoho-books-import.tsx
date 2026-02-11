@@ -53,6 +53,9 @@ interface ZohoFile {
   original_filename?: string
   status: string
   rows_clean?: number
+  created_at?: string
+  updated_at?: string
+  status_timestamp?: string
 }
 
 interface ZohoBooksImportProps {
@@ -78,7 +81,15 @@ export default function ZohoBooksImport({
   const [files, setFiles] = useState<ZohoFile[]>([])
 
   const [config, setConfig] = useState({
-    entity: 'contacts' as 'contacts' | 'items' | 'invoices' | 'customers' | 'vendors',
+    entity: 'contacts' as
+      | 'contacts'
+      | 'items'
+      | 'invoices'
+      | 'customers'
+      | 'vendors'
+      | 'sales_orders'
+      | 'purchase_orders'
+      | 'inventory_items',
     dateFrom: '',
     dateTo: '',
     limit: 200,
@@ -115,7 +126,18 @@ export default function ZohoBooksImport({
         original_filename: f.original_filename,
         status: f.status,
         rows_clean: f.rows_clean,
+        created_at: f.created_at,
+        updated_at: f.updated_at,
+        status_timestamp: f.status_timestamp,
       }))
+
+      // Sort files by updated_at desc (newest first)
+      mappedFiles.sort((a, b) => {
+        const dateA = new Date(a.updated_at || a.status_timestamp || 0).getTime()
+        const dateB = new Date(b.updated_at || b.status_timestamp || 0).getTime()
+        return dateB - dateA
+      })
+
       setFiles(mappedFiles)
     } catch (err) {
       console.error('Error loading files:', err)
@@ -461,6 +483,9 @@ export default function ZohoBooksImport({
                 <SelectItem value="vendors">Vendors</SelectItem>
                 <SelectItem value="items">Items</SelectItem>
                 <SelectItem value="invoices">Invoices</SelectItem>
+                <SelectItem value="sales_orders">Sales Orders</SelectItem>
+                <SelectItem value="purchase_orders">Purchase Orders</SelectItem>
+                <SelectItem value="inventory_items">Inventory Items</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -473,11 +498,17 @@ export default function ZohoBooksImport({
                   <SelectValue placeholder="Select file" />
                 </SelectTrigger>
                 <SelectContent>
-                  {files.map((file) => (
-                    <SelectItem key={file.upload_id} value={file.upload_id}>
-                      {file.original_filename || file.filename}
-                    </SelectItem>
-                  ))}
+                  {[...files]
+                    .sort((a, b) => {
+                      const dateA = new Date(a.updated_at || a.status_timestamp || 0).getTime();
+                      const dateB = new Date(b.updated_at || b.status_timestamp || 0).getTime();
+                      return dateB - dateA; // Descending order (newest first)
+                    })
+                    .map((file) => (
+                      <SelectItem key={file.upload_id} value={file.upload_id}>
+                        {file.original_filename || file.filename}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -674,7 +705,7 @@ export default function ZohoBooksImport({
       </AlertDialog>
 
       <Dialog open={mappingOpen} onOpenChange={setMappingOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Map columns for Zoho Books</DialogTitle>
             <DialogDescription>
@@ -682,12 +713,15 @@ export default function ZohoBooksImport({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="flex-1 min-h-0 space-y-4 overflow-y-auto pr-2">
             {getMappingFields(config.entity).map((field) => (
-              <div key={field.key} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
-                <div className="text-sm font-medium">
-                  {field.label}
-                  {field.required && <span className="text-red-500 ml-1">*</span>}
+              <div key={field.key} className="grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] gap-3 items-start">
+                <div>
+                  <div className="text-sm font-medium">
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">{field.help}</div>
                 </div>
                 <Select
                   value={columnMapping[field.key] || ''}
@@ -706,7 +740,6 @@ export default function ZohoBooksImport({
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="text-xs text-muted-foreground">{field.help}</div>
               </div>
             ))}
           </div>
@@ -742,26 +775,112 @@ export default function ZohoBooksImport({
 function getMappingFields(entity: string) {
   if (entity === 'items') {
     return [
+      { key: 'item_id', label: 'Item ID', required: false, help: 'Zoho item ID' },
       { key: 'name', label: 'Item Name', required: true, help: 'Zoho item name' },
       { key: 'description', label: 'Description', required: false, help: 'Item description' },
+      { key: 'purchase_description', label: 'Purchase Description', required: false, help: 'Purchase description' },
+      { key: 'sales_description', label: 'Sales Description', required: false, help: 'Sales description' },
       { key: 'rate', label: 'Rate', required: false, help: 'Unit price / rate' },
+      { key: 'cost_price', label: 'Cost Price', required: false, help: 'Purchase rate/cost price' },
+      { key: 'unit', label: 'Unit', required: false, help: 'Unit type' },
+      { key: 'status', label: 'Status', required: false, help: 'Active/Inactive' },
+      { key: 'stock_on_hand', label: 'Stock On Hand', required: false, help: 'Quantity on hand' },
+      { key: 'reorder_level', label: 'Reorder Point', required: false, help: 'Reorder level' },
+      { key: 'vendor_id', label: 'Preferred Vendor ID', required: false, help: 'Preferred vendor' },
     ]
   }
   if (entity === 'customers' || entity === 'vendors' || entity === 'contacts') {
     return [
+      { key: 'contact_id', label: 'Contact ID', required: false, help: 'Zoho contact ID' },
       { key: 'contact_name', label: 'Contact Name', required: true, help: 'Customer/Vendor name' },
       { key: 'company_name', label: 'Company', required: false, help: 'Company name' },
       { key: 'email', label: 'Email', required: false, help: 'Email address' },
       { key: 'phone', label: 'Phone', required: false, help: 'Phone number' },
+      { key: 'contact_type', label: 'Contact Type', required: false, help: 'customer/vendor' },
+      { key: 'status', label: 'Status', required: false, help: 'Active/Inactive' },
+      { key: 'currency_code', label: 'Currency Code', required: false, help: 'Currency code' },
+      { key: 'created_time', label: 'Created Time', required: false, help: 'Created time' },
+      { key: 'last_modified_time', label: 'Last Modified', required: false, help: 'Last modified time' },
+      { key: 'billing_address', label: 'Billing Address', required: false, help: 'Address line 1' },
+      { key: 'billing_city', label: 'Billing City', required: false, help: 'City' },
+      { key: 'billing_state', label: 'Billing State', required: false, help: 'State' },
+      { key: 'billing_zip', label: 'Billing Zip', required: false, help: 'Postal code' },
+      { key: 'billing_country', label: 'Billing Country', required: false, help: 'Country' },
     ]
   }
   if (entity === 'invoices') {
     return [
+      { key: 'invoice_id', label: 'Invoice ID', required: false, help: 'Zoho invoice ID' },
+      { key: 'invoice_date', label: 'Invoice Date', required: false, help: 'Invoice date' },
       { key: 'customer_id', label: 'Customer ID', required: true, help: 'Zoho contact ID' },
+      { key: 'status', label: 'Status', required: false, help: 'Invoice status' },
+      { key: 'currency_code', label: 'Currency Code', required: false, help: 'Currency code' },
+      { key: 'total', label: 'Total Amount', required: false, help: 'Invoice total' },
+      { key: 'due_date', label: 'Due Date', required: false, help: 'Payment due date' },
+      { key: 'notes', label: 'Notes', required: false, help: 'Invoice notes' },
       { key: 'line_items', label: 'Line Items', required: false, help: 'JSON array of line items' },
       { key: 'item_id', label: 'Item ID', required: false, help: 'Fallback if no line_items' },
+      { key: 'item_name', label: 'Item Name', required: false, help: 'Item name' },
+      { key: 'description', label: 'Description', required: false, help: 'Line description' },
       { key: 'quantity', label: 'Quantity', required: false, help: 'Fallback if no line_items' },
       { key: 'rate', label: 'Rate', required: false, help: 'Fallback if no line_items' },
+      { key: 'line_amount', label: 'Line Amount', required: false, help: 'Line total amount' },
+      { key: 'tax_id', label: 'Tax ID', required: false, help: 'Tax ID' },
+    ]
+  }
+  if (entity === 'sales_orders') {
+    return [
+      { key: 'sales_order_id', label: 'Sales Order ID', required: false, help: 'Zoho sales order ID' },
+      { key: 'order_date', label: 'Order Date', required: false, help: 'Order date' },
+      { key: 'customer_id', label: 'Customer ID', required: true, help: 'Zoho contact ID' },
+      { key: 'status', label: 'Status', required: false, help: 'Order status' },
+      { key: 'currency_code', label: 'Currency Code', required: false, help: 'Currency code' },
+      { key: 'total_amount', label: 'Total Amount', required: false, help: 'Order total' },
+      { key: 'notes', label: 'Notes', required: false, help: 'Order notes' },
+      { key: 'line_items', label: 'Line Items', required: false, help: 'JSON array of line items' },
+      { key: 'item_id', label: 'Item ID', required: false, help: 'Fallback if no line_items' },
+      { key: 'item_name', label: 'Item Name', required: false, help: 'Item name' },
+      { key: 'description', label: 'Description', required: false, help: 'Line description' },
+      { key: 'quantity', label: 'Quantity', required: false, help: 'Quantity' },
+      { key: 'rate', label: 'Rate', required: false, help: 'Unit price / rate' },
+      { key: 'line_amount', label: 'Line Amount', required: false, help: 'Line total' },
+      { key: 'tax_id', label: 'Tax ID', required: false, help: 'Tax ID' },
+    ]
+  }
+  if (entity === 'purchase_orders') {
+    return [
+      { key: 'purchase_order_id', label: 'Purchase Order ID', required: false, help: 'Zoho purchase order ID' },
+      { key: 'po_date', label: 'PO Date', required: false, help: 'Purchase order date' },
+      { key: 'vendor_id', label: 'Vendor ID', required: true, help: 'Zoho vendor ID' },
+      { key: 'status', label: 'Status', required: false, help: 'Order status' },
+      { key: 'currency_code', label: 'Currency Code', required: false, help: 'Currency code' },
+      { key: 'total_amount', label: 'Total Amount', required: false, help: 'Order total' },
+      { key: 'expected_receipt_date', label: 'Expected Receipt Date', required: false, help: 'Expected receipt date' },
+      { key: 'notes', label: 'Notes', required: false, help: 'Order notes' },
+      { key: 'line_items', label: 'Line Items', required: false, help: 'JSON array of line items' },
+      { key: 'item_id', label: 'Item ID', required: false, help: 'Fallback if no line_items' },
+      { key: 'item_name', label: 'Item Name', required: false, help: 'Item name' },
+      { key: 'description', label: 'Description', required: false, help: 'Line description' },
+      { key: 'quantity', label: 'Quantity', required: false, help: 'Quantity' },
+      { key: 'rate', label: 'Rate', required: false, help: 'Unit price / rate' },
+      { key: 'line_amount', label: 'Line Amount', required: false, help: 'Line total' },
+      { key: 'tax_id', label: 'Tax ID', required: false, help: 'Tax ID' },
+    ]
+  }
+  if (entity === 'inventory_items') {
+    return [
+      { key: 'item_id', label: 'Item ID', required: false, help: 'Zoho item ID' },
+      { key: 'item_name', label: 'Item Name', required: true, help: 'Zoho item name' },
+      { key: 'description', label: 'Description', required: false, help: 'Item description' },
+      { key: 'purchase_description', label: 'Purchase Description', required: false, help: 'Purchase description' },
+      { key: 'sales_description', label: 'Sales Description', required: false, help: 'Sales description' },
+      { key: 'base_price', label: 'Base Price', required: false, help: 'Sales rate' },
+      { key: 'cost_price', label: 'Cost Price', required: false, help: 'Purchase rate' },
+      { key: 'unit_type', label: 'Unit Type', required: false, help: 'Unit type' },
+      { key: 'status', label: 'Status', required: false, help: 'Active/Inactive' },
+      { key: 'quantity_on_hand', label: 'Stock On Hand', required: false, help: 'Quantity on hand' },
+      { key: 'reorder_point', label: 'Reorder Point', required: false, help: 'Reorder level' },
+      { key: 'preferred_vendor_id', label: 'Preferred Vendor ID', required: false, help: 'Preferred vendor' },
     ]
   }
   return []
@@ -783,6 +902,36 @@ function autoMapColumns(entity: string, columns: string[]) {
     }
     if (field.key === 'contact_name') {
       const alt = ['name', 'itemname', 'companyname']
+      for (const a of alt) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+    if (field.key === 'item_name' || field.key === 'name') {
+      const alt = ['itemname', 'name', 'item_name']
+      for (const a of alt) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+    if (field.key === 'customer_id') {
+      const alt = ['customerid', 'contactid', 'customer_id', 'contact_id']
+      for (const a of alt) {
+        const found = normalized.get(a)
+        if (found) {
+          mapping[field.key] = found
+          break
+        }
+      }
+    }
+    if (field.key === 'vendor_id') {
+      const alt = ['vendorid', 'vendor_id', 'contact_id']
       for (const a of alt) {
         const found = normalized.get(a)
         if (found) {

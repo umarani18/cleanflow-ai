@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, memo } from "react";
 import {
   Card,
   CardContent,
@@ -112,7 +112,7 @@ const chartConfig = {
   },
 };
 
-export function DqCharts({ files }: DqChartsProps) {
+function DqChartsComponent({ files }: DqChartsProps) {
   const { idToken } = useAuth();
   const [overallReport, setOverallReport] =
     useState<OverallDqReportResponse | null>(null);
@@ -135,38 +135,38 @@ export function DqCharts({ files }: DqChartsProps) {
     loadOverallReport();
   }, [idToken]);
 
-  // Calculate data from files
-  const completedFiles = files.filter((f) => f.status === "DQ_FIXED");
-  const processingFiles = files.filter((f) =>
-    ["DQ_RUNNING", "NORMALIZING", "QUEUED", "UPLOADING"].includes(f.status)
-  );
-  const failedFiles = files.filter((f) =>
-    ["DQ_FAILED", "UPLOAD_FAILED"].includes(f.status)
-  );
+  // Memoize file categorization to avoid filtering on every render
+  const { completedFiles, processingFiles, failedFiles } = useMemo(() => ({
+    completedFiles: files.filter((f) => f.status === "DQ_FIXED"),
+    processingFiles: files.filter((f) =>
+      ["DQ_RUNNING", "NORMALIZING", "QUEUED", "UPLOADING"].includes(f.status)
+    ),
+    failedFiles: files.filter((f) =>
+      ["DQ_FAILED", "UPLOAD_FAILED"].includes(f.status)
+    ),
+  }), [files]);
 
-  const totalRowsIn = completedFiles.reduce(
-    (sum, f) => sum + (f.rows_in || 0),
-    0
-  );
-  const totalRowsFixed = completedFiles.reduce(
-    (sum, f) => sum + (f.rows_fixed || 0),
-    0
-  );
-  const totalRowsQuarantined = completedFiles.reduce(
-    (sum, f) => sum + (f.rows_quarantined || 0),
-    0
-  );
-  const totalRowsOut = totalRowsIn - totalRowsQuarantined;
-  const avgDqScore =
-    completedFiles.length > 0
-      ? completedFiles.reduce((sum, f) => sum + (f.dq_score || 0), 0) /
-        completedFiles.length
+  // Memoize row calculations
+  const { totalRowsIn, totalRowsFixed, totalRowsQuarantined, totalRowsOut, avgDqScore } = useMemo(() => {
+    const rowsIn = completedFiles.reduce((sum, f) => sum + (f.rows_in || 0), 0);
+    const rowsFixed = completedFiles.reduce((sum, f) => sum + (f.rows_fixed || 0), 0);
+    const rowsQuarantined = completedFiles.reduce((sum, f) => sum + (f.rows_quarantined || 0), 0);
+    const avgScore = completedFiles.length > 0
+      ? completedFiles.reduce((sum, f) => sum + (f.dq_score || 0), 0) / completedFiles.length
       : 0;
+    return {
+      totalRowsIn: rowsIn,
+      totalRowsFixed: rowsFixed,
+      totalRowsQuarantined: rowsQuarantined,
+      totalRowsOut: rowsIn - rowsQuarantined,
+      avgDqScore: avgScore,
+    };
+  }, [completedFiles]);
 
   // Prepare data from files based on time period
   const generateTimeBasedData = () => {
     const processedFiles = completedFiles.filter(f => f.uploaded_at || f.created_at);
-    
+
     if (processedFiles.length === 0) return [];
 
     if (timePeriod === 'day') {
@@ -174,14 +174,14 @@ export function DqCharts({ files }: DqChartsProps) {
       const hourGroups: Record<string, { rowsIn: number; cleanRows: number; rowsQuarantined: number; hour: number }> = {};
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
+
       // Initialize 24 hours with 3-hour intervals (8 time slots)
       for (let i = 0; i < 24; i += 3) {
         const hour = i;
         const displayHour = hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`;
         hourGroups[displayHour] = { rowsIn: 0, cleanRows: 0, rowsQuarantined: 0, hour };
       }
-      
+
       // Aggregate data by hour for today only
       processedFiles.forEach(f => {
         const fileDate = new Date(f.uploaded_at || f.created_at!);
@@ -191,7 +191,7 @@ export function DqCharts({ files }: DqChartsProps) {
           // Find the appropriate 3-hour bucket
           const bucketHour = Math.floor(hour / 3) * 3;
           const displayHour = bucketHour === 0 ? '12 AM' : bucketHour < 12 ? `${bucketHour} AM` : bucketHour === 12 ? '12 PM' : `${bucketHour - 12} PM`;
-          
+
           if (hourGroups[displayHour]) {
             hourGroups[displayHour].rowsIn += f.rows_in || 0;
             hourGroups[displayHour].cleanRows += (f.rows_in || 0) - (f.rows_quarantined || 0);
@@ -199,7 +199,7 @@ export function DqCharts({ files }: DqChartsProps) {
           }
         }
       });
-      
+
       // Sort by hour and return
       return Object.entries(hourGroups)
         .sort(([, a], [, b]) => a.hour - b.hour)
@@ -211,13 +211,13 @@ export function DqCharts({ files }: DqChartsProps) {
           cleanRows: data.cleanRows,
           rowsQuarantined: data.rowsQuarantined,
         }));
-      
+
     } else if (timePeriod === 'week') {
       // Group by weekday - last 7 days showing day names
       const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const dayGroups: Record<string, { rowsIn: number; cleanRows: number; rowsQuarantined: number; dayNum: number }> = {};
       const now = new Date();
-      
+
       // Initialize last 7 days with day names
       for (let i = 6; i >= 0; i--) {
         const date = new Date(now);
@@ -228,7 +228,7 @@ export function DqCharts({ files }: DqChartsProps) {
           dayGroups[key] = { rowsIn: 0, cleanRows: 0, rowsQuarantined: 0, dayNum };
         }
       }
-      
+
       // Aggregate data by weekday
       processedFiles.forEach(f => {
         const fileDate = new Date(f.uploaded_at || f.created_at!);
@@ -243,7 +243,7 @@ export function DqCharts({ files }: DqChartsProps) {
           }
         }
       });
-      
+
       // Sort by day of week (Sun-Sat)
       return Object.entries(dayGroups)
         .sort(([, a], [, b]) => a.dayNum - b.dayNum)
@@ -255,7 +255,7 @@ export function DqCharts({ files }: DqChartsProps) {
           cleanRows: data.cleanRows,
           rowsQuarantined: data.rowsQuarantined,
         }));
-      
+
     } else if (timePeriod === 'month') {
       // Month view - last 6 months
       if (overallReport?.months) {
@@ -281,7 +281,7 @@ export function DqCharts({ files }: DqChartsProps) {
       } else {
         // Fallback: aggregate by month from files - last 6 months
         const monthGroups: Record<string, { rowsIn: number; cleanRows: number; rowsQuarantined: number }> = {};
-        
+
         processedFiles.forEach(f => {
           const fileDate = new Date(f.uploaded_at || f.created_at!);
           const key = fileDate.toLocaleDateString('en-US', { month: 'short' });
@@ -292,7 +292,7 @@ export function DqCharts({ files }: DqChartsProps) {
           monthGroups[key].cleanRows += (f.rows_in || 0) - (f.rows_quarantined || 0);
           monthGroups[key].rowsQuarantined += f.rows_quarantined || 0;
         });
-        
+
         return Object.entries(monthGroups).map(([period, data]) => ({
           period,
           filesProcessed: 0,
@@ -305,12 +305,12 @@ export function DqCharts({ files }: DqChartsProps) {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const currentYear = new Date().getFullYear();
       const monthGroups: Record<string, { rowsIn: number; cleanRows: number; rowsQuarantined: number }> = {};
-      
+
       // Initialize all 12 months
       monthNames.forEach(month => {
         monthGroups[month] = { rowsIn: 0, cleanRows: 0, rowsQuarantined: 0 };
       });
-      
+
       // Aggregate data for current year
       processedFiles.forEach(f => {
         const fileDate = new Date(f.uploaded_at || f.created_at!);
@@ -322,7 +322,7 @@ export function DqCharts({ files }: DqChartsProps) {
           monthGroups[key].rowsQuarantined += f.rows_quarantined || 0;
         }
       });
-      
+
       return monthNames.map(month => ({
         period: month,
         filesProcessed: 0,
@@ -332,10 +332,11 @@ export function DqCharts({ files }: DqChartsProps) {
     }
   };
 
-  const monthlyData = generateTimeBasedData();
+  // Memoize time-based data generation
+  const monthlyData = useMemo(() => generateTimeBasedData(), [completedFiles, timePeriod, overallReport]);
 
-  // Data quality distribution pie chart data
-  const dqDistributionData = [
+  // Memoize data quality distribution pie chart data
+  const dqDistributionData = useMemo(() => [
     {
       name: "Validated",
       value: totalRowsOut - totalRowsFixed,
@@ -347,10 +348,10 @@ export function DqCharts({ files }: DqChartsProps) {
       value: totalRowsQuarantined,
       fill: CHART_COLORS.redSoft,
     },
-  ].filter((d) => d.value > 0);
+  ].filter((d) => d.value > 0), [totalRowsOut, totalRowsFixed, totalRowsQuarantined]);
 
-  // File status distribution
-  const fileStatusData = [
+  // Memoize file status distribution
+  const fileStatusData = useMemo(() => [
     {
       name: "Completed",
       value: completedFiles.length,
@@ -362,10 +363,10 @@ export function DqCharts({ files }: DqChartsProps) {
       fill: CHART_COLORS.blueSoft,
     },
     { name: "Failed", value: failedFiles.length, fill: CHART_COLORS.redSoft },
-  ].filter((d) => d.value > 0);
+  ].filter((d) => d.value > 0), [completedFiles.length, processingFiles.length, failedFiles.length]);
 
-  // Per-file DQ scores for bar chart
-  const fileScoresData = completedFiles.slice(0, 10).map((f) => ({
+  // Memoize per-file DQ scores for bar chart
+  const fileScoresData = useMemo(() => completedFiles.slice(0, 10).map((f) => ({
     name:
       (f.original_filename || f.filename || "File").slice(0, 15) +
       ((f.original_filename || f.filename || "").length > 15 ? "..." : ""),
@@ -374,9 +375,9 @@ export function DqCharts({ files }: DqChartsProps) {
       (f.dq_score || 0) >= 90
         ? CHART_COLORS.greenSoft
         : (f.dq_score || 0) >= 70
-        ? CHART_COLORS.yellowSoft
-        : CHART_COLORS.redSoft,
-  }));
+          ? CHART_COLORS.yellowSoft
+          : CHART_COLORS.redSoft,
+  })), [completedFiles]);
 
   if (loading) {
     return (
@@ -633,12 +634,15 @@ export function DqCharts({ files }: DqChartsProps) {
   );
 }
 
+// Export memoized component to prevent re-renders when parent re-renders with same props
+export const DqCharts = memo(DqChartsComponent);
+
 // Professional Charts Carousel Component
 function ProfessionalChartsCarousel() {
   const [currentChart, setCurrentChart] = useState(0);
 
   const trendData = [
-    { month: 'Jan', quarantined: 5,  clean: 80, fixed: 45 },
+    { month: 'Jan', quarantined: 5, clean: 80, fixed: 45 },
     { month: 'Feb', quarantined: 12, clean: 80, fixed: 47 },
     { month: 'Mar', quarantined: 25, clean: 79, fixed: 45 },
     { month: 'Apr', quarantined: 35, clean: 80, fixed: 43 },
@@ -688,40 +692,40 @@ function ProfessionalChartsCarousel() {
         <div className="h-[360px]">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={trendData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
-              <XAxis 
-                dataKey="month" 
+              <XAxis
+                dataKey="month"
                 tick={{ fontSize: 12 }}
                 stroke="#6B7280"
               />
-              <YAxis 
+              <YAxis
                 tick={{ fontSize: 11 }}
                 stroke="#6B7280"
               />
-              <ChartTooltip 
+              <ChartTooltip
                 contentStyle={{ backgroundColor: "#fff", border: "1px solid #E5E7EB" }}
                 formatter={(value) => value.toLocaleString()}
               />
               <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "20px" }} />
-              <Line 
-                type="monotone" 
-                dataKey="clean" 
-                stroke="#10B981" 
+              <Line
+                type="monotone"
+                dataKey="clean"
+                stroke="#10B981"
                 strokeWidth={3}
                 dot={{ r: 5, fill: "#10B981" }}
                 name="Cleaned"
               />
-              <Line 
-                type="monotone" 
-                dataKey="fixed" 
-                stroke="#3B82F6" 
+              <Line
+                type="monotone"
+                dataKey="fixed"
+                stroke="#3B82F6"
                 strokeWidth={3}
                 dot={{ r: 5, fill: "#3B82F6" }}
                 name="Fixed"
               />
-              <Line 
-                type="monotone" 
-                dataKey="quarantined" 
-                stroke="#F59E0B" 
+              <Line
+                type="monotone"
+                dataKey="quarantined"
+                stroke="#F59E0B"
                 strokeWidth={3}
                 dot={{ r: 5, fill: "#F59E0B" }}
                 name="Quarantined"
@@ -741,43 +745,43 @@ function ProfessionalChartsCarousel() {
             <AreaChart data={qualityMetricsData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
               <defs>
                 <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="colorErrors" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#EF4444" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#EF4444" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis 
-                dataKey="month" 
+              <XAxis
+                dataKey="month"
                 tick={{ fontSize: 12 }}
                 stroke="#6B7280"
               />
-              <YAxis 
+              <YAxis
                 tick={{ fontSize: 11 }}
                 stroke="#6B7280"
               />
-              <ChartTooltip 
+              <ChartTooltip
                 contentStyle={{ backgroundColor: "#fff", border: "1px solid #E5E7EB" }}
                 formatter={(value) => value.toLocaleString()}
               />
               <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "20px" }} />
-              <Area 
-                type="monotone" 
-                dataKey="score" 
-                stroke="#8B5CF6" 
+              <Area
+                type="monotone"
+                dataKey="score"
+                stroke="#8B5CF6"
                 strokeWidth={2}
-                fillOpacity={1} 
+                fillOpacity={1}
                 fill="url(#colorScore)"
                 name="Quality Score"
               />
-              <Area 
-                type="monotone" 
-                dataKey="errors" 
-                stroke="#EF4444" 
+              <Area
+                type="monotone"
+                dataKey="errors"
+                stroke="#EF4444"
                 strokeWidth={2}
-                fillOpacity={1} 
+                fillOpacity={1}
                 fill="url(#colorErrors)"
                 name="Error Rate %"
               />
@@ -794,16 +798,16 @@ function ProfessionalChartsCarousel() {
         <div className="h-[360px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={processingRateData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
-              <XAxis 
-                dataKey="month" 
+              <XAxis
+                dataKey="month"
                 tick={{ fontSize: 12 }}
                 stroke="#6B7280"
               />
-              <YAxis 
+              <YAxis
                 tick={{ fontSize: 11 }}
                 stroke="#6B7280"
               />
-              <ChartTooltip 
+              <ChartTooltip
                 contentStyle={{ backgroundColor: "#fff", border: "1px solid #E5E7EB" }}
                 formatter={(value) => value.toLocaleString()}
               />
@@ -830,7 +834,7 @@ function ProfessionalChartsCarousel() {
 
   return (
     <div className="space-y-4">
-     
+
       {/* Chart Header */}
       <div className="flex items-start justify-between border-b pb-4">
         <div>
@@ -848,7 +852,7 @@ function ProfessionalChartsCarousel() {
           </span>
         </div>
       </div>
- {/* Navigation Controls - Top */}
+      {/* Navigation Controls - Top */}
       <div className="flex items-center justify-between pb-2">
         <button
           onClick={goToPrevious}
@@ -902,20 +906,20 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
 
   const generateCompactData = () => {
     const completedFiles = files.filter((f) => f.status === "DQ_FIXED" && (f.uploaded_at || f.created_at));
-    
+
     if (timePeriod === 'day') {
       // Hourly view for today - 3-hour intervals
       const hourGroups: Record<string, { rows: number; fixed: number; hour: number }> = {};
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
+
       // Initialize 3-hour intervals
       for (let i = 0; i < 24; i += 3) {
         const hour = i;
         const displayHour = hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`;
         hourGroups[displayHour] = { rows: 0, fixed: 0, hour };
       }
-      
+
       completedFiles.forEach(f => {
         const fileDate = new Date(f.uploaded_at || f.created_at!);
         // Only include today's data
@@ -923,14 +927,14 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
           const hour = fileDate.getHours();
           const bucketHour = Math.floor(hour / 3) * 3;
           const displayHour = bucketHour === 0 ? '12 AM' : bucketHour < 12 ? `${bucketHour} AM` : bucketHour === 12 ? '12 PM' : `${bucketHour - 12} PM`;
-          
+
           if (hourGroups[displayHour]) {
             hourGroups[displayHour].rows += f.rows_in || 0;
             hourGroups[displayHour].fixed += f.rows_fixed || 0;
           }
         }
       });
-      
+
       return Object.entries(hourGroups)
         .sort(([, a], [, b]) => a.hour - b.hour)
         .map(([period, data]) => ({
@@ -938,16 +942,16 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
           rows: data.rows,
           fixed: data.fixed,
         }));
-        
+
     } else if (timePeriod === 'week') {
       // Last 7 days by weekday
       const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const dayGroups: Record<string, { rows: number; fixed: number; dayNum: number }> = {};
-      
+
       weekDays.forEach((day, idx) => {
         dayGroups[day] = { rows: 0, fixed: 0, dayNum: idx };
       });
-      
+
       completedFiles.forEach(f => {
         const fileDate = new Date(f.uploaded_at || f.created_at!);
         const dayOfWeek = new Date().getTime() - fileDate.getTime();
@@ -958,7 +962,7 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
           dayGroups[key].fixed += f.rows_fixed || 0;
         }
       });
-      
+
       return Object.entries(dayGroups)
         .sort(([, a], [, b]) => a.dayNum - b.dayNum)
         .map(([period, data]) => ({
@@ -966,7 +970,7 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
           rows: data.rows,
           fixed: data.fixed,
         }));
-        
+
     } else if (timePeriod === 'month') {
       // Month view - last 6 months
       if (overallReport?.months) {
@@ -987,7 +991,7 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
       } else {
         // Fallback: aggregate by month from files
         const monthGroups: Record<string, { rows: number; fixed: number }> = {};
-        
+
         completedFiles.forEach(f => {
           const fileDate = new Date(f.uploaded_at || f.created_at!);
           const key = fileDate.toLocaleDateString('en-US', { month: 'short' });
@@ -997,7 +1001,7 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
           monthGroups[key].rows += f.rows_in || 0;
           monthGroups[key].fixed += f.rows_fixed || 0;
         });
-        
+
         return Object.entries(monthGroups).map(([month, data]) => ({
           month,
           ...data,
@@ -1008,12 +1012,12 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const currentYear = new Date().getFullYear();
       const monthGroups: Record<string, { rows: number; fixed: number }> = {};
-      
+
       // Initialize all 12 months
       monthNames.forEach(month => {
         monthGroups[month] = { rows: 0, fixed: 0 };
       });
-      
+
       // Aggregate data for current year
       completedFiles.forEach(f => {
         const fileDate = new Date(f.uploaded_at || f.created_at!);
@@ -1024,7 +1028,7 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
           monthGroups[key].fixed += f.rows_fixed || 0;
         }
       });
-      
+
       return monthNames.map(month => ({
         month,
         ...monthGroups[month],
@@ -1109,12 +1113,12 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
                   if (active && payload && payload.length) {
                     const period = payload[0].payload.month;
                     let displayPeriod = period;
-                    
+
                     // Format month names for numeric months
                     if (timePeriod === 'month' && /^\d{2}$/.test(period)) {
                       displayPeriod = monthNames[parseInt(period) - 1] || period;
                     }
-                    
+
                     return (
                       <div className="bg-background border rounded-md shadow-sm p-2 text-xs">
                         <p className="font-medium">{displayPeriod}</p>
