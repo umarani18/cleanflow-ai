@@ -86,6 +86,9 @@ export default function QuickBooksImport({
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
   const [columnsLoading, setColumnsLoading] = useState(false)
   const [columnsError, setColumnsError] = useState<string | null>(null)
+  const isPermissionError = (error: unknown) =>
+    ((error as Error)?.message || "").toLowerCase().includes("permission denied") ||
+    ((error as Error)?.message || "").toLowerCase().includes("forbidden")
 
   // Load files from API
   const loadFiles = async () => {
@@ -107,8 +110,12 @@ export default function QuickBooksImport({
       }))
       setFiles(mappedFiles)
       console.log('Files loaded:', mappedFiles.length)
-    } catch (err) {
-      console.error('Error loading files:', err)
+    } catch (err: any) {
+      const message = (err?.message || "").toLowerCase()
+      if (!message.includes("permission denied") && !message.includes("forbidden")) {
+        console.warn("Failed to load files.")
+      }
+      setFiles([])
     }
   }
 
@@ -140,7 +147,9 @@ export default function QuickBooksImport({
             setColumnsError('No columns detected for this file. You can still proceed.')
           }
         } catch (err) {
-          console.error('Failed to fetch columns:', err)
+          if (!isPermissionError(err)) {
+            console.error('Failed to fetch columns:', err)
+          }
           setAvailableColumns([])
           setSelectedColumns(new Set())
           setColumnsError('Unable to fetch columns. You can proceed without column selection.')

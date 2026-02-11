@@ -9,14 +9,12 @@ import { TopIssuesChart } from "@/components/dashboard/top-issues-chart"
 import { AuthGuard } from "@/components/auth/auth-guard"
 import { useAuth } from "@/components/providers/auth-provider"
 import { fileManagementAPI, type FileStatusResponse, type OverallDqReportResponse, type TopIssue } from "@/lib/api/file-management-api"
-import { useToast } from "@/hooks/use-toast"
 
 export default function DashboardPage() {
   const [files, setFiles] = useState<FileStatusResponse[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
   const [topIssues, setTopIssues] = useState<TopIssue[]>([])
   const { idToken } = useAuth()
-  const { toast } = useToast()
 
   // Load files for analytics
   const loadFiles = useCallback(async () => {
@@ -25,8 +23,12 @@ export default function DashboardPage() {
     try {
       const response = await fileManagementAPI.getUploads(idToken)
       setFiles(response.items || [])
-    } catch (error) {
-      console.error('Error loading files for analytics:', error)
+    } catch (error: any) {
+      const message = (error?.message || "").toLowerCase()
+      if (!message.includes("permission denied") && !message.includes("organization membership required")) {
+        console.warn("Failed to load files for dashboard analytics.")
+      }
+      setFiles([])
     }
   }, [idToken])
 
@@ -58,8 +60,11 @@ export default function DashboardPage() {
         .slice(0, 5)
         .map(([violation, count]) => ({ violation, count: Number(count) }))
       setTopIssues(derived)
-    } catch (error) {
-      console.error('Error loading overall DQ report:', error)
+    } catch (error: any) {
+      const message = (error?.message || "").toLowerCase()
+      if (!message.includes("permission denied") && !message.includes("organization membership required")) {
+        console.warn("Failed to load overall DQ report.")
+      }
       setTopIssues([])
     }
   }, [idToken])

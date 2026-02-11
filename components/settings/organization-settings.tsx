@@ -1,9 +1,13 @@
 "use client";
 
+import { useAuth } from "@/components/providers/auth-provider";
+import { PermissionWrapper } from "@/components/auth/permission-wrapper";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Building2,
   Check,
+  ChevronDown,
   Edit,
   Loader2,
   Mail,
@@ -20,6 +24,8 @@ import {
   ShieldCheck,
   Sparkles,
   Plus,
+  UserCog,
+  UserMinus,
 } from "lucide-react";
 import {
   Card,
@@ -33,6 +39,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
@@ -76,6 +88,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -91,17 +104,7 @@ import {
 
 type AppRole = OrgRole;
 
-const ROLE_STORAGE_KEY = "cleanflowai.currentRole";
-
-const normalizeRole = (value: string | null | undefined): AppRole => {
-  if (value === "Admin") {
-    return "Admin";
-  }
-  if (value === "Data Steward") {
-    return "Data Steward";
-  }
-  return "Super Admin";
-};
+const VALID_ROLES = ["Super Admin", "Admin", "Data Steward"];
 
 // ERP Options
 const ERP_OPTIONS = [
@@ -127,6 +130,10 @@ const INITIAL_ORG_SETTINGS = {
   email: "",
   phone: "",
   address: "",
+  industry: "",
+  gst: "",
+  pan: "",
+  contact_person: "",
   subscriptionPlan: "standard",
 };
 
@@ -181,7 +188,15 @@ const INITIAL_PERMISSIONS = [
     dataSteward: true,
   },
   {
-    id: "members",
+    id: "members_view",
+    name: "View Members",
+    description: "View team members and pending invitations",
+    superadmin: true,
+    admin: true,
+    dataSteward: true,
+  },
+  {
+    id: "members_manage",
     name: "Manage Members",
     description: "Invite, remove, and manage team members",
     superadmin: true,
@@ -200,22 +215,6 @@ const INITIAL_PERMISSIONS = [
     id: "settings",
     name: "Organization Settings",
     description: "Modify organization details and preferences",
-    superadmin: true,
-    admin: true,
-    dataSteward: false,
-  },
-  {
-    id: "api",
-    name: "API Access",
-    description: "Generate and manage API keys",
-    superadmin: true,
-    admin: true,
-    dataSteward: false,
-  },
-  {
-    id: "audit",
-    name: "Audit Logs",
-    description: "View activity and audit logs",
     superadmin: true,
     admin: true,
     dataSteward: false,
@@ -303,18 +302,11 @@ const getStatusBadgeVariant = (status: string) => {
 export function OrganizationSettings() {
   const [activeTab, setActiveTab] = useState("organization");
   const { toast } = useToast();
-
-  // Current user role (for RBAC in this demo UI)
-  const [currentUserRole, setCurrentUserRole] =
-    useState<AppRole>("Super Admin");
-  useEffect(() => {
-    try {
-      const storedRole = window.localStorage.getItem(ROLE_STORAGE_KEY);
-      setCurrentUserRole(normalizeRole(storedRole));
-    } catch {
-      setCurrentUserRole("Super Admin");
-    }
-  }, []);
+  const { logout, userRole: authUserRole, refreshPermissions } = useAuth();
+  const currentUserRole = (authUserRole as AppRole) || "Data Steward";
+  const [canViewMembersPermission, setCanViewMembersPermission] = useState(false);
+  const [canManageMembersPermission, setCanManageMembersPermission] = useState(false);
+  const [canManageSettingsPermission, setCanManageSettingsPermission] = useState(false);
 
   // Organization settings state
   const [orgSettings, setOrgSettings] = useState(INITIAL_ORG_SETTINGS);
@@ -353,12 +345,15 @@ export function OrganizationSettings() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [invites, setInvites] = useState<OrgInvite[]>([]);
+  const [, setMembersLoadError] = useState<string | null>(null);
   const [isLoadingOrg, setIsLoadingOrg] = useState(true);
   const [logoDataUrl, setLogoDataUrl] = useState<string>("");
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<AppRole>("Data Steward");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
+  const [showPendingInvites, setShowPendingInvites] = useState(false);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
 
   const mapMemberToRow = (member: OrgMembership) => {
@@ -379,6 +374,7 @@ export function OrganizationSettings() {
     const response = await orgAPI.listMembers();
     const items = (response.members || []).map(mapMemberToRow);
     setMembers(items);
+    setMembersLoadError(null);
   };
 
   const loadInvites = async () => {
@@ -396,34 +392,74 @@ export function OrganizationSettings() {
   };
 
   const reloadOrgData = async () => {
-    const me = await orgAPI.getMe();
-
-    const nextOrgId = me.organization?.org_id || null;
-    const nextUserId = me.membership?.user_id || null;
-    const nextRole = me.membership?.role || "Super Admin";
-
-    setOrgId(nextOrgId);
-    setCurrentUserId(nextUserId);
-    setCurrentUserRole(nextRole);
     try {
-      window.localStorage.setItem(ROLE_STORAGE_KEY, nextRole);
-    } catch {}
+      const me = await orgAPI.getMe();
 
-    setOrgSettings((prev) => ({
-      ...prev,
-      name: me.organization?.name || prev.name,
-      email: me.organization?.email || prev.email,
-      phone: me.organization?.phone || prev.phone,
-      address: me.organization?.address || prev.address,
-      subscriptionPlan:
-        me.organization?.subscription_plan || prev.subscriptionPlan,
-    }));
-    setLogoDataUrl(
-      me.organization?.logo_url || me.organization?.logo_data_url || "",
-    );
+      const nextOrgId = me.organization?.org_id || null;
+      const nextUserId = me.membership?.user_id || null;
+      const nextCanViewMembers =
+        me?.role_permissions?.members_view === true ||
+        me?.role_permissions?.members === true;
+      const nextCanManageMembers =
+        me?.role_permissions?.members_manage === true ||
+        me?.role_permissions?.members === true;
+      const nextCanManageSettings = me?.role_permissions?.settings === true;
 
-    await Promise.all([loadMembers(), loadInvites(), loadPermissions()]);
-    return me;
+      setOrgId(nextOrgId);
+      setCurrentUserId(nextUserId);
+      setCanViewMembersPermission(nextCanViewMembers);
+      setCanManageMembersPermission(nextCanManageMembers);
+      setCanManageSettingsPermission(nextCanManageSettings);
+      setPermissions(mergePermissionsFromServer(me?.permissions_by_role));
+      setMembersLoadError(null);
+
+      setOrgSettings((prev) => ({
+        ...prev,
+        name: me.organization?.name || prev.name,
+        email: me.organization?.email || prev.email,
+        phone: me.organization?.phone || prev.phone,
+        address: me.organization?.address || prev.address,
+        industry: me.organization?.industry || prev.industry,
+        gst: me.organization?.gst || prev.gst,
+        pan: me.organization?.pan || prev.pan,
+        contact_person: me.organization?.contact_person || prev.contact_person,
+        subscriptionPlan:
+          me.organization?.subscription_plan || prev.subscriptionPlan,
+      }));
+      setLogoDataUrl(
+        me.organization?.logo_url || me.organization?.logo_data_url || "",
+      );
+
+      await Promise.all([
+        nextCanViewMembers
+          ? loadMembers().catch((e) => {
+              console.warn("Could not load members:", e.message);
+              setMembers([]);
+              setMembersLoadError(e?.message || "Could not load members.");
+            })
+          : Promise.resolve().then(() => {
+              setMembers([]);
+              setInvites([]);
+            }),
+        // Load invites only if caller has explicit members permission.
+        nextCanViewMembers
+          ? loadInvites().catch((e) => console.warn("Could not load invites:", e.message))
+          : Promise.resolve(),
+        // If settings permission is denied, rely on /org/me snapshot above.
+        nextCanManageSettings
+          ? loadPermissions().catch((e) => console.warn("Could not load permissions:", e.message))
+          : Promise.resolve(),
+      ]);
+      return me;
+    } catch (err: any) {
+      const message = err?.message || "";
+      if (message.includes("Organization membership required")) {
+        window.location.href = "/create-organization";
+        return;
+      }
+      console.error("Failed to reload data", err);
+      throw err;
+    }
   };
 
   const loadSettingsPresets = async () => {
@@ -611,24 +647,136 @@ export function OrganizationSettings() {
     }
   }, [activeTab]);
 
-  const canManageOrganization = currentUserRole === "Super Admin";
-  const canInviteMembers =
-    currentUserRole === "Super Admin" || currentUserRole === "Admin";
-  const canChangeAllRoles = currentUserRole === "Super Admin";
-  const canManageDataStewards = currentUserRole === "Admin";
-  const allowedInviteRoles: AppRole[] = canChangeAllRoles
-    ? ["Admin", "Data Steward"]
-    : ["Data Steward"];
+  useEffect(() => {
+    if (!orgId) return;
+    // Keep RBAC and member/invite state in sync when switching tabs.
+    reloadOrgData().catch((err) =>
+      console.warn("Could not refresh org data on tab switch:", err?.message || err),
+    );
+    // Intentionally driven by tab transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
-  const inviteHelpText = useMemo(() => {
+  const allowedInviteRoles: AppRole[] = useMemo(() => {
+    if (!canManageMembersPermission) {
+      return [];
+    }
     if (currentUserRole === "Super Admin") {
-      return "You can invite Admins and Data Stewards.";
+      return ["Super Admin", "Admin", "Data Steward"];
     }
     if (currentUserRole === "Admin") {
-      return "You can invite Data Stewards only.";
+      return ["Admin", "Data Steward"];
     }
-    return "Only Super Admins and Admins can invite members.";
-  }, [currentUserRole]);
+    if (currentUserRole === "Data Steward") {
+      return ["Data Steward"];
+    }
+    return [];
+  }, [currentUserRole, canManageMembersPermission]);
+
+  // Combine members and invites for the unified table
+  const allMembers = useMemo(() => {
+    const activeMembers = members.map((m) => ({
+      ...m,
+      isInvite: false,
+      displayId: m.id,
+      displayName: m.name,
+      displayEmail: m.email,
+      displayStatus: m.status,
+      displayRole: m.role,
+      displayJoined: m.joinedAt || "-",
+      displayLastLogin: m.lastLogin || "-",
+      displayAvatar: m.avatar,
+    }));
+
+    // Deduplicate: Don't show an invite if the email is already in the active members list
+    const activeEmails = new Set(members.map((m) => (m.email || "").toLowerCase()));
+
+    // Also deduplicate between invites themselves (latest one wins)
+    const uniqueInvitesMap = new Map<string, OrgInvite>();
+    invites.forEach(inv => {
+      const email = (inv.email || "").toLowerCase();
+      if (!activeEmails.has(email)) {
+        // Only keep the most recent invite for this email if multiple exist
+        const existing = uniqueInvitesMap.get(email);
+        if (!existing || (inv.created_at || "") > (existing.created_at || "")) {
+          uniqueInvitesMap.set(email, inv);
+        }
+      }
+    });
+
+    const pendingInvites = Array.from(uniqueInvitesMap.values()).map((i) => ({
+      id: i.invite_id,
+      isInvite: true,
+      displayId: i.invite_id,
+      displayName: i.email.split("@")[0], // Placeholder name from email
+      displayEmail: i.email,
+      displayStatus: "Pending",
+      displayRole: i.role,
+      displayJoined: formatDateTime(i.created_at),
+      displayLastLogin: "-",
+      displayAvatar: "",
+    }));
+
+    return [...activeMembers, ...pendingInvites].sort((a, b) => {
+      // Sort by Status (Active first)
+      if (a.displayStatus === "Active" && b.displayStatus !== "Active") return -1;
+      if (a.displayStatus !== "Active" && b.displayStatus === "Active") return 1;
+
+      // Secondary sort by Name
+      return a.displayName.localeCompare(b.displayName);
+    });
+  }, [members, invites]);
+
+  const canManageOrganization = canManageSettingsPermission;
+  const canInviteMembers = allowedInviteRoles.length > 0;
+  const canChangeAllRoles = currentUserRole === "Super Admin";
+  const canManageDataStewards = currentUserRole === "Admin";
+
+  const inviteHelpText = useMemo(() => {
+    if (!canManageMembersPermission) {
+      return "You do not have permission to manage invitations.";
+    }
+    if (currentUserRole === "Super Admin") {
+      return "You can invite anyone to any role.";
+    }
+    if (currentUserRole === "Admin") {
+      return "You can invite Admins and Data Stewards.";
+    }
+    if (currentUserRole === "Data Steward") {
+      return "You can invite other Data Stewards.";
+    }
+    return "Only Super Admins and Admins can manage team invitations.";
+  }, [currentUserRole, canManageMembersPermission]);
+
+  const handleRevokeInvite = async (inviteId: string, email: string) => {
+    if (!canManageMembersPermission) {
+      toast({
+        title: "Not allowed",
+        description: "You do not have permission to manage invitations.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!confirm(`Revoke invitation for ${email}?`)) return;
+
+    setRevokingInviteId(inviteId);
+    try {
+      await orgAPI.revokeInvite(inviteId);
+      await loadInvites();
+      toast({
+        title: "Invite revoked",
+        description: `Invitation for ${email} has been cancelled.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to revoke",
+        description: err?.message || "Could not revoke the invite.",
+        variant: "destructive",
+      });
+    } finally {
+      setRevokingInviteId(null);
+    }
+  };
 
   // Handle organization settings change
   const handleOrgChange = (field: string, value: string) => {
@@ -639,9 +787,9 @@ export function OrganizationSettings() {
   const handleSaveOrg = async () => {
     if (!canManageOrganization) {
       toast({
-        title: "Super Admin Only",
+        title: "Not allowed",
         description:
-          "Only the Super Admin can register or update organization settings.",
+          "You do not have permission to update organization settings.",
       });
       return;
     }
@@ -666,6 +814,10 @@ export function OrganizationSettings() {
         email,
         phone,
         address,
+        industry: orgSettings.industry,
+        gst: orgSettings.gst,
+        pan: orgSettings.pan,
+        contact_person: orgSettings.contact_person,
         subscriptionPlan: orgSettings.subscriptionPlan,
       });
       await reloadOrgData();
@@ -736,6 +888,11 @@ export function OrganizationSettings() {
       );
 
       await reloadOrgData();
+      await refreshPermissions();
+      window.localStorage.setItem(
+        "cleanflowai.permissionsUpdatedAt",
+        String(Date.now()),
+      );
       toast({
         title: "Permissions saved",
         description: "Role permissions have been updated successfully.",
@@ -752,6 +909,14 @@ export function OrganizationSettings() {
 
   // Update member role
   const updateMemberRole = async (memberId: string, newRole: AppRole) => {
+    if (!canManageMembersPermission) {
+      toast({
+        title: "Not allowed",
+        description: "You do not have permission to update member roles.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (currentUserId && memberId === currentUserId) {
       toast({
         title: "Not allowed",
@@ -808,36 +973,55 @@ export function OrganizationSettings() {
   };
 
   // Remove member
-  const removeMember = (memberId: string) => {
+  const removeMember = async (memberId: string) => {
+    if (!canManageMembersPermission) {
+      toast({
+        title: "Not allowed",
+        description: "You do not have permission to remove members.",
+        variant: "destructive",
+      });
+      return;
+    }
     const targetMember = members.find((m) => m.id === memberId);
     if (!targetMember) {
       return;
     }
 
-    if (!canChangeAllRoles) {
-      const canAdminRemove =
-        canManageDataStewards && targetMember.role === "Data Steward";
-      if (!canAdminRemove) {
-        toast({
-          title: "Not allowed",
-          description: "Admins can only remove Data Stewards.",
-        });
-        return;
-      }
+    if (currentUserRole !== "Super Admin") {
+      toast({
+        title: "Not allowed",
+        description: "Only Super Admins can remove members.",
+        variant: "destructive",
+      });
+      return;
     }
 
-    toast({
-      title: "Not implemented",
-      description:
-        "Member removal is not implemented in the backend yet. Use role changes instead.",
-    });
+    if (!confirm(`Are you sure you want to remove ${targetMember.name} (${targetMember.email}) from the organization? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await orgAPI.removeMember(memberId);
+      toast({
+        title: "Member removed",
+        description: `${targetMember.name} has been removed from the organization.`,
+      });
+      await loadMembers();
+    } catch (err: any) {
+      console.error("Failed to remove member", err);
+      toast({
+        title: "Remove failed",
+        description: err?.message || "Could not remove the member.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleInviteMember = () => {
     if (!canInviteMembers) {
       toast({
         title: "Not allowed",
-        description: "Only Super Admins and Admins can invite members.",
+        description: inviteHelpText,
       });
       return;
     }
@@ -869,10 +1053,7 @@ export function OrganizationSettings() {
       await loadInvites();
       toast({
         title: "Invite created",
-        description:
-          result?.email_sent === false
-            ? "Invite saved, but email was not sent. Check SES setup."
-            : `${email} invited as ${inviteRole}.`,
+        description: `${email} invited as ${inviteRole}.`,
       });
       setIsInviteDialogOpen(false);
     } catch (err: any) {
@@ -888,8 +1069,8 @@ export function OrganizationSettings() {
   const handleLogoUploadClick = () => {
     if (!canManageOrganization) {
       toast({
-        title: "Super Admin Only",
-        description: "Only the Super Admin can update the organization logo.",
+        title: "Not allowed",
+        description: "You do not have permission to update the organization logo.",
       });
       return;
     }
@@ -955,57 +1136,80 @@ export function OrganizationSettings() {
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
       <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Invite Member</DialogTitle>
-            <DialogDescription>
-              Send an invitation to join your organization.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="invite-email">Email</Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="name@company.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                disabled={isSendingInvite}
-              />
+        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden rounded-2xl border border-border shadow-2xl bg-card">
+          <div className="p-8 pb-4 flex flex-col items-center text-center">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6 border border-primary/20">
+              <UserPlus className="w-8 h-8 text-primary" />
             </div>
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select
-                value={inviteRole}
-                onValueChange={(value) => setInviteRole(value as AppRole)}
-                disabled={isSendingInvite}
+            <DialogHeader className="space-y-2">
+              <DialogTitle className="text-2xl font-bold tracking-tight text-foreground">Invite Team Member</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-sm leading-relaxed max-w-[320px]">
+                Enter the email address of the person you'd like to invite and select their role within the organization.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="px-8 pb-8 pt-4 space-y-6">
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="invite-email" className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-muted-foreground" />
+                  Email Address
+                </Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  placeholder="colleague@company.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  disabled={isSendingInvite}
+                  className="h-11 rounded-xl focus-visible:ring-primary/20 transition-all border-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invite-role" className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+                  Access Level
+                </Label>
+                <Select
+                  value={inviteRole}
+                  onValueChange={(value) => setInviteRole(value as AppRole)}
+                  disabled={isSendingInvite}
+                >
+                  <SelectTrigger id="invite-role" className="h-11 rounded-xl focus:ring-primary/20">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {allowedInviteRoles.map((role) => (
+                      <SelectItem key={role} value={role} className="rounded-lg">
+                        <span className="font-medium">{role}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <Button
+                onClick={handleSubmitInvite}
+                disabled={isSendingInvite || !inviteEmail.includes("@")}
+                className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl shadow-sm transition-all active:scale-95 group"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allowedInviteRoles.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {isSendingInvite ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Sending Invite...
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    Send Invitation
+                    <Plus className="w-4 h-4 transition-transform group-hover:rotate-90 text-primary-foreground/80" />
+                  </div>
+                )}
+              </Button>
             </div>
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsInviteDialogOpen(false)}
-              disabled={isSendingInvite}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSubmitInvite} disabled={isSendingInvite}>
-              {isSendingInvite ? "Sending..." : "Send Invite"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
       {/* Centered Tabs Header */}
@@ -1046,889 +1250,931 @@ export function OrganizationSettings() {
 
       {/* Organization Settings Tab */}
       <TabsContent value="organization" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="w-5 h-5" />
-              Organization Details
-            </CardTitle>
-            <CardDescription>
-              Manage your organization's information and preferences
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Logo Section */}
-            <div className="flex items-center gap-6">
-              <div className="w-20 h-20 bg-muted rounded-xl flex items-center justify-center border-2 border-dashed border-muted-foreground/30 overflow-hidden">
-                {logoDataUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={logoDataUrl}
-                    alt="Organization logo"
-                    className="w-full h-full object-contain"
+        <PermissionWrapper
+          permission={canManageSettingsPermission}
+          permissionKey="settings"
+          userRole={currentUserRole ?? undefined}
+          message="You do not have permission to manage organization profile."
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="w-5 h-5" />
+                Organization Details
+              </CardTitle>
+              <CardDescription>
+                Manage your organization's information and preferences
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Logo Section */}
+              <div className="flex items-center gap-6">
+                <div className="w-20 h-20 bg-muted rounded-xl flex items-center justify-center border-2 border-dashed border-muted-foreground/30 overflow-hidden">
+                  {logoDataUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoDataUrl}
+                      alt="Organization logo"
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <Building2 className="w-8 h-8 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <h4 className="font-medium">Organization Logo</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Upload a logo for your organization
+                  </p>
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleLogoSelected(e.target.files?.[0])}
                   />
-                ) : (
-                  <Building2 className="w-8 h-8 text-muted-foreground" />
-                )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLogoUploadClick}
+                    disabled={!canManageOrganization}
+                  >
+                    Upload Logo
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <h4 className="font-medium">Organization Logo</h4>
-                <p className="text-sm text-muted-foreground">
-                  Upload a logo for your organization
-                </p>
-                <input
-                  ref={logoInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => handleLogoSelected(e.target.files?.[0])}
-                />
+
+              <Separator />
+
+              {/* Organization Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="org-name">Organization Name</Label>
+                  <Input
+                    id="org-name"
+                    placeholder="Infiniqon"
+                    value={orgSettings.name}
+                    onChange={(e) => handleOrgChange("name", e.target.value)}
+                    disabled={!canManageOrganization}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="org-email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="org-email"
+                      className="pl-10"
+                      placeholder="contact@infiniqon.com"
+                      value={orgSettings.email}
+                      onChange={(e) => handleOrgChange("email", e.target.value)}
+                      disabled={!canManageOrganization}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="org-phone">Contact Number</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="org-phone"
+                      className="pl-10"
+                      placeholder="+91 63 4567 8900"
+                      value={orgSettings.phone}
+                      onChange={(e) => handleOrgChange("phone", e.target.value)}
+                      disabled={!canManageOrganization}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="org-address">Address</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="org-address"
+                      className="pl-10"
+                      placeholder="Ekkaduthangal, Chennai, Tamil Nadu"
+                      value={orgSettings.address}
+                      onChange={(e) => handleOrgChange("address", e.target.value)}
+                      disabled={!canManageOrganization}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Subscription Plan */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Plan</Label>
+                  <Select
+                    value={orgSettings.subscriptionPlan}
+                    onValueChange={(value) =>
+                      handleOrgChange("subscriptionPlan", value)
+                    }
+                    disabled={!canManageOrganization}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="standard">Standard</SelectItem>
+                      <SelectItem value="pro">Pro</SelectItem>
+                      <SelectItem value="enterprise">Enterprise</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex justify-end">
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLogoUploadClick}
-                  disabled={!canManageOrganization}
+                  onClick={handleSaveOrg}
+                  disabled={isSavingOrg || !canManageOrganization}
                 >
-                  Upload Logo
+                  {isSavingOrg && (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  )}
+                  {isSavingOrg ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
-            </div>
-
-            <Separator />
-
-            {/* Organization Info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="org-name">Organization Name</Label>
-                <Input
-                  id="org-name"
-                  placeholder="Infiniqon"
-                  value={orgSettings.name}
-                  onChange={(e) => handleOrgChange("name", e.target.value)}
-                  disabled={!canManageOrganization}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="org-email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="org-email"
-                    className="pl-10"
-                    placeholder="contact@infiniqon.com"
-                    value={orgSettings.email}
-                    onChange={(e) => handleOrgChange("email", e.target.value)}
-                    disabled={!canManageOrganization}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="org-phone">Contact Number</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="org-phone"
-                    className="pl-10"
-                    placeholder="+91 63 4567 8900"
-                    value={orgSettings.phone}
-                    onChange={(e) => handleOrgChange("phone", e.target.value)}
-                    disabled={!canManageOrganization}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="org-address">Address</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="org-address"
-                    className="pl-10"
-                    placeholder="Ekkaduthangal, Chennai, Tamil Nadu"
-                    value={orgSettings.address}
-                    onChange={(e) => handleOrgChange("address", e.target.value)}
-                    disabled={!canManageOrganization}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Subscription Plan */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Plan</Label>
-                <Select
-                  value={orgSettings.subscriptionPlan}
-                  onValueChange={(value) =>
-                    handleOrgChange("subscriptionPlan", value)
-                  }
-                  disabled={!canManageOrganization}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="pro">Pro</SelectItem>
-                    <SelectItem value="enterprise">Enterprise</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="flex justify-end">
-              <Button
-                onClick={handleSaveOrg}
-                disabled={isSavingOrg || !canManageOrganization}
-              >
-                {isSavingOrg && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                )}
-                {isSavingOrg ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </PermissionWrapper>
       </TabsContent>
 
       {/* Members Tab */}
       <TabsContent value="members" className="space-y-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Members & Roles
-              </CardTitle>
-            </div>
-            <Button
-              className="flex items-center gap-2"
-              onClick={handleInviteMember}
-              disabled={!canInviteMembers}
-              title={inviteHelpText}
-            >
-              <UserPlus className="w-4 h-4" />
-              Invite Member
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead>Last Login</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoadingOrg && (
+        <PermissionWrapper
+          permission={canViewMembersPermission}
+          permissionKey="members_view"
+          requiredRole={["Super Admin", "Admin", "Data Steward"]}
+          userRole={currentUserRole ?? undefined}
+          message="You do not have permission to view members."
+        >
+          <PermissionWrapper
+            permission={canManageMembersPermission}
+            permissionKey="members_manage"
+            requiredRole={["Super Admin", "Admin", "Data Steward"]}
+            userRole={currentUserRole ?? undefined}
+            message="You do not have permission to manage members."
+          >
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Members & Roles
+                </CardTitle>
+              </div>
+                <Button
+                  className="flex items-center gap-2"
+                  onClick={handleInviteMember}
+                  disabled={!canInviteMembers}
+                  title={inviteHelpText}
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Invite Member
+                </Button>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={6} className="text-muted-foreground">
-                      Loading members...
-                    </TableCell>
+                    <TableHead>Member</TableHead>
+                    <TableHead className="text-center">Role</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-center">Joined</TableHead>
+                    <TableHead className="text-center">Last Login</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                )}
-                {!isLoadingOrg && members.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-muted-foreground">
-                      No members yet. Use “Invite Member” to add your team.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!isLoadingOrg &&
-                  members.map((member) => {
-                    const isSelf = Boolean(
-                      currentUserId && member.id === currentUserId,
-                    );
-                    return (
-                      <TableRow key={member.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="w-9 h-9">
-                              <AvatarImage src={member.avatar} />
-                              <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                                {member.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium flex items-center gap-2">
-                                {member.name}
-                                {isSelf && (
-                                  <Badge variant="outline" className="text-xs">
-                                    You
-                                  </Badge>
-                                )}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {member.email}
-                              </p>
+                </TableHeader>
+                <TableBody>
+                  {isLoadingOrg && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-muted-foreground">
+                        Loading members...
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!isLoadingOrg && allMembers.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-muted-foreground">
+                        No team members or pending invites.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {!isLoadingOrg &&
+                    allMembers.map((person) => {
+                      const isSelf = Boolean(
+                        currentUserId && person.displayId === currentUserId,
+                      );
+                      const isInvite = person.isInvite;
+
+                      return (
+                        <TableRow key={person.displayId}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-9 h-9 border border-border/50">
+                                {person.displayAvatar ? (
+                                  <AvatarImage src={person.displayAvatar} />
+                                ) : null}
+                                <AvatarFallback className={`${isInvite ? 'bg-indigo-50 text-indigo-600 font-bold' : 'bg-primary/10 text-primary'} text-xs`}>
+                                  {person.displayName
+                                    .split(" ")
+                                    .map((n) => n?.[0])
+                                    .filter(Boolean)
+                                    .join("")
+                                    .toUpperCase() || "?"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium flex items-center gap-2 text-sm sm:text-base">
+                                  {person.displayName}
+                                  {isSelf && (
+                                    <Badge variant="outline" className="text-[10px] h-4">
+                                      You
+                                    </Badge>
+                                  )}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate max-w-[150px] sm:max-w-none">
+                                  {person.displayEmail}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getRoleBadgeVariant(member.role)}>
-                            {member.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={getStatusBadgeVariant(member.status)}
-                            className={
-                              member.status === "Active"
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
-                                : ""
-                            }
-                          >
-                            {member.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {member.joinedAt || "-"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {member.lastLogin || "-"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                disabled={isSelf}
-                                title={
-                                  isSelf
-                                    ? "You cannot change your own role here."
-                                    : undefined
-                                }
-                              >
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <>
-                                {canChangeAllRoles && (
-                                  <>
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        updateMemberRole(
-                                          member.id,
-                                          "Super Admin",
-                                        )
-                                      }
-                                    >
-                                      Make Super Admin
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        updateMemberRole(member.id, "Admin")
-                                      }
-                                    >
-                                      Make Admin
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        updateMemberRole(
-                                          member.id,
-                                          "Data Steward",
-                                        )
-                                      }
-                                    >
-                                      Make Data Steward
-                                    </DropdownMenuItem>
-                                  </>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-center">
+                              <Badge variant={getRoleBadgeVariant(person.displayRole)} className="text-[10px] h-5 min-w-[100px] justify-center">
+                                {person.displayRole}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-center">
+                              <Badge
+                                variant={isInvite ? "secondary" : getStatusBadgeVariant(person.displayStatus)}
+                                className={cn(
+                                  "text-[10px] h-5 px-3 min-w-[80px] justify-center",
+                                  person.displayStatus === "Active" && "bg-emerald-50 text-emerald-700 border-emerald-100",
+                                  isInvite && "bg-indigo-50 text-indigo-700 border-indigo-100"
                                 )}
-                                {canManageDataStewards &&
-                                  member.role === "Data Steward" && (
+                              >
+                                {person.displayStatus}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs text-center">
+                            {person.displayJoined}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs text-center">
+                            {person.displayLastLogin}
+                          </TableCell>
+                          <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    disabled={isSelf || !canManageMembersPermission}
+                                    title={
+                                      isSelf
+                                        ? "You cannot change your own role here."
+                                        : !canManageMembersPermission
+                                          ? "You do not have permission to manage members."
+                                          : undefined
+                                    }
+                                  >
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-[180px]">
+                                  <DropdownMenuLabel className="text-[10px] uppercase text-muted-foreground font-bold px-2 py-1.5">Actions</DropdownMenuLabel>
+
+                                  {isInvite ? (
                                     <DropdownMenuItem
-                                      onClick={() =>
-                                        updateMemberRole(
-                                          member.id,
-                                          "Data Steward",
-                                        )
-                                      }
+                                      className="text-red-600 focus:text-red-600 focus:bg-red-50 gap-2 cursor-pointer"
+                                      onClick={() => handleRevokeInvite(person.displayId, person.displayEmail)}
                                     >
-                                      Keep Data Steward
+                                      {revokingInviteId === person.displayId ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <X className="w-3.5 h-3.5" />
+                                      )}
+                                      Revoke Invite
                                     </DropdownMenuItem>
+                                  ) : (
+                                    <>
+                                      {canChangeAllRoles ? (
+                                        <>
+                                          {person.displayRole === "Super Admin" ? (
+                                            <DropdownMenuItem disabled className="text-xs italic">
+                                              Super Admin is fixed
+                                            </DropdownMenuItem>
+                                          ) : (
+                                            <DropdownMenuSub>
+                                              <DropdownMenuSubTrigger className="gap-2">
+                                                <UserCog className="w-3.5 h-3.5" />
+                                                Change Role
+                                              </DropdownMenuSubTrigger>
+                                              <DropdownMenuPortal>
+                                                <DropdownMenuSubContent className="w-[140px]">
+                                                  {VALID_ROLES.filter((r: string) => r !== person.displayRole).map((role: string) => (
+                                                    <DropdownMenuItem
+                                                      key={role}
+                                                      className="cursor-pointer"
+                                                      onClick={() => updateMemberRole(person.displayId, role as AppRole)}
+                                                    >
+                                                      {role}
+                                                    </DropdownMenuItem>
+                                                  ))}
+                                                </DropdownMenuSubContent>
+                                              </DropdownMenuPortal>
+                                            </DropdownMenuSub>
+                                          )}
+                                        </>
+                                      ) : (
+                                        canManageDataStewards && person.displayRole === "Data Steward" && (
+                                          <DropdownMenuItem disabled className="text-xs italic">
+                                            Admin cannot demote
+                                          </DropdownMenuItem>
+                                        )
+                                      )}
+
+                                      {currentUserRole === "Super Admin" && person.displayRole !== "Super Admin" && (
+                                        <>
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem
+                                            className="text-red-600 focus:text-red-600 focus:bg-red-50 gap-2 cursor-pointer"
+                                            onClick={() => removeMember(person.displayId)}
+                                          >
+                                            <UserMinus className="w-3.5 h-3.5" />
+                                            Remove Member
+                                          </DropdownMenuItem>
+                                        </>
+                                      )}
+                                    </>
                                   )}
-                                {!canChangeAllRoles &&
-                                  !(
-                                    canManageDataStewards &&
-                                    member.role === "Data Steward"
-                                  ) && (
-                                    <DropdownMenuItem disabled>
-                                      Only Super Admin can change this role
-                                    </DropdownMenuItem>
-                                  )}
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={() => removeMember(member.id)}
-                                  disabled={
-                                    isSelf ||
-                                    (!canChangeAllRoles &&
-                                      !(
-                                        canManageDataStewards &&
-                                        member.role === "Data Steward"
-                                      ))
-                                  }
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Remove Member
-                                </DropdownMenuItem>
-                              </>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          </PermissionWrapper>
+        </PermissionWrapper>
       </TabsContent>
 
       {/* Permissions Tab */}
       <TabsContent value="permissions" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="w-5 h-5" />
-              Role Permissions
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[300px]">Permission</TableHead>
-                  {/* <TableHead className="text-center">Owner</TableHead> */}
-                  <TableHead className="text-center">Super Admin</TableHead>
-                  <TableHead className="text-center">Admin</TableHead>
-                  <TableHead className="text-center">Data Stewards</TableHead>
-                  {/* <TableHead className="text-center">Viewer</TableHead> */}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {permissions.map((permission) => (
-                  <TableRow key={permission.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{permission.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {permission.description}
-                        </p>
-                      </div>
-                    </TableCell>
-                    {/* <TableCell className="text-center">
+        <PermissionWrapper
+          requiredRole={["Super Admin", "Admin"]}
+          userRole={currentUserRole ?? undefined}
+          message="Only Super Admins and Admins can modify role permissions."
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Role Permissions
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[300px]">Permission</TableHead>
+                    {/* <TableHead className="text-center">Owner</TableHead> */}
+                    <TableHead className="text-center">Super Admin</TableHead>
+                    <TableHead className="text-center">Admin</TableHead>
+                    <TableHead className="text-center">Data Stewards</TableHead>
+                    {/* <TableHead className="text-center">Viewer</TableHead> */}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {permissions.map((permission) => (
+                    <TableRow key={permission.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{permission.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {permission.description}
+                          </p>
+                        </div>
+                      </TableCell>
+                      {/* <TableCell className="text-center">
                       <div className="flex justify-center">
                         <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center cursor-not-allowed opacity-70">
                           <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         </div>
                       </div>
                     </TableCell> */}
-                    <TableCell className="text-center">
-                      <div className="flex justify-center">
-                        <button
-                          onClick={() =>
-                            togglePermission(permission.id, "superadmin")
-                          }
-                          disabled
-                          title="Super Admin permissions are fixed"
-                          className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {permission.superadmin ? (
-                            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
-                              <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                              <X className="w-4 h-4 text-muted-foreground" />
-                            </div>
-                          )}
-                        </button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex justify-center">
-                        <button
-                          onClick={() =>
-                            togglePermission(permission.id, "admin")
-                          }
-                          disabled={!canChangeAllRoles}
-                          className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-80"
-                        >
-                          {permission.admin ? (
-                            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
-                              <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                              <X className="w-4 h-4 text-muted-foreground" />
-                            </div>
-                          )}
-                        </button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex justify-center">
-                        <button
-                          onClick={() =>
-                            togglePermission(permission.id, "dataSteward")
-                          }
-                          disabled={
-                            !canChangeAllRoles && !canManageDataStewards
-                          }
-                          className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-80"
-                        >
-                          {permission.dataSteward ? (
-                            <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
-                              <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                          ) : (
-                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                              <X className="w-4 h-4 text-muted-foreground" />
-                            </div>
-                          )}
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-
-            <Separator className="my-6" />
-
-            <div className="flex justify-end">
-              <Button
-                onClick={handleSavePermissions}
-                disabled={
-                  isSavingPermissions ||
-                  (!canChangeAllRoles && !canManageDataStewards)
-                }
-              >
-                {isSavingPermissions && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                )}
-                {isSavingPermissions ? "Saving..." : "Save Permissions"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      {/* Services Tab */}
-      <TabsContent value="services" className="space-y-6">
-        {/* ERP Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="w-5 h-5" />
-              Configuration
-            </CardTitle>
-            <CardDescription>
-              Configure default input and export systems for your data
-              processing workflows
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Default Input ERP */}
-              <div className="space-y-3">
-                <Label>Import</Label>
-                <p className="text-sm text-muted-foreground">
-                  Select the default source for data imports
-                </p>
-                <Select
-                  value={servicesSettings.defaultInputErp}
-                  onValueChange={(value) =>
-                    handleServicesChange("defaultInputErp", value)
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select input ERP" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ERP_OPTIONS.map((erp) => (
-                      <SelectItem key={erp.value} value={erp.value}>
-                        {erp.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {servicesSettings.defaultInputErp === "custom" && (
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
-                    <Input
-                      placeholder="Enter custom ERP name"
-                      value={servicesSettings.customInputErpName}
-                      onChange={(e) =>
-                        handleServicesChange(
-                          "customInputErpName",
-                          e.target.value,
-                        )
-                      }
-                      className="flex-1"
-                    />
-                    <Button size="sm" variant="outline" className="shrink-0">
-                      <Plus className="w-4 h-4 mr-1" />
-                      Save
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Default Export ERP */}
-              <div className="space-y-3">
-                <Label>Export</Label>
-                <p className="text-sm text-muted-foreground">
-                  Select the default source for data exports
-                </p>
-                <Select
-                  value={servicesSettings.defaultExportErp}
-                  onValueChange={(value) =>
-                    handleServicesChange("defaultExportErp", value)
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select export ERP" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ERP_OPTIONS.map((erp) => (
-                      <SelectItem key={erp.value} value={erp.value}>
-                        {erp.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {servicesSettings.defaultExportErp === "custom" && (
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
-                    <Input
-                      placeholder="Enter custom ERP name"
-                      value={servicesSettings.customExportErpName}
-                      onChange={(e) =>
-                        handleServicesChange(
-                          "customExportErpName",
-                          e.target.value,
-                        )
-                      }
-                      className="flex-1"
-                    />
-                    <Button size="sm" variant="outline" className="shrink-0">
-                      <Plus className="w-4 h-4 mr-1" />
-                      Save
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Data Format */}
-              <div className="space-y-3">
-                <Label>Data Format</Label>
-                <p className="text-sm text-muted-foreground">
-                  Select the preferred data format
-                </p>
-                <Select
-                  value={servicesSettings.preferredFormat}
-                  onValueChange={(value) =>
-                    handleServicesChange("preferredFormat", value)
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select format" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="csv">CSV</SelectItem>
-                    <SelectItem value="json">JSON</SelectItem>
-                    <SelectItem value="xlsx">XLSX</SelectItem>
-                    <SelectItem value="sql">SQL</SelectItem>
-                    <SelectItem value="parquet">Parquet</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Services Selection */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Cog className="w-5 h-5" />
-              Services
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Data Transform */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="p-2 bg-blue-100 dark:bg-blue-500/20 rounded-lg shrink-0">
-                  <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="font-medium text-sm sm:text-base">
-                    Data Transform
-                  </h4>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    Transform and normalize data between different ERP formats
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={servicesSettings.dataTransformEnabled}
-                onCheckedChange={(checked) =>
-                  handleServicesChange("dataTransformEnabled", checked)
-                }
-                className="shrink-0"
-              />
-            </div>
-
-            {/* Data Quality */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="p-2 bg-green-100 dark:bg-green-500/20 rounded-lg shrink-0">
-                  <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="font-medium text-sm sm:text-base">
-                    Data Quality
-                  </h4>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    Validate, clean, and fix data quality issues automatically
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={servicesSettings.dataQualityEnabled}
-                onCheckedChange={(checked) =>
-                  handleServicesChange("dataQualityEnabled", checked)
-                }
-                className="shrink-0"
-              />
-            </div>
-
-            {/* CleanDataShield */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="p-2 bg-purple-100 dark:bg-purple-500/20 rounded-lg shrink-0">
-                  <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="font-medium text-sm sm:text-base">
-                      CleanDataShield™
-                    </h4>
-                    <Badge variant="secondary" className="text-xs">
-                      Premium
-                    </Badge>
-                  </div>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    Distributed Proxy & Privacy Layer — Work with AI without
-                    giving away your data
-                  </p>
-                </div>
-              </div>
-              <Switch
-                checked={servicesSettings.cleanDataShieldEnabled}
-                onCheckedChange={(checked) =>
-                  handleServicesChange("cleanDataShieldEnabled", checked)
-                }
-                className="shrink-0"
-              />
-            </div>
-
-            <Separator />
-
-            <div className="flex justify-end">
-              <Button onClick={handleSaveServices} disabled={isSavingServices}>
-                {isSavingServices && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                )}
-                {isSavingServices ? "Saving..." : "Save Services"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Global Settings Presets */}
-        <Card>
-          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                Global Settings Presets
-              </CardTitle>
-              <CardDescription>
-                Manage global DQ settings presets used across files and workflows.
-              </CardDescription>
-            </div>
-            <Button onClick={openCreatePresetDialog} className="gap-2">
-              <Plus className="w-4 h-4" />
-              New Preset
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {isLoadingPresets ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Loading presets...
-              </div>
-            ) : settingsPresets.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-                No presets yet. Create a new preset to define global defaults.
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Preset Name</TableHead>
-                    <TableHead>Default</TableHead>
-                    <TableHead>Updated</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {settingsPresets.map((preset) => (
-                    <TableRow key={preset.preset_id}>
-                      <TableCell className="font-medium">
-                        {preset.preset_name}
-                      </TableCell>
-                      <TableCell>
-                        {preset.is_default ? (
-                          <Badge variant="secondary">Default</Badge>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleSetDefaultPreset(preset)}
-                            disabled={isSavingPreset}
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <button
+                            onClick={() =>
+                              togglePermission(permission.id, "superadmin")
+                            }
+                            disabled
+                            title="Super Admin permissions are fixed"
+                            className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Set Default
-                          </Button>
-                        )}
+                            {permission.superadmin ? (
+                              <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                                <X className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                            )}
+                          </button>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {preset.updated_at
-                          ? new Date(preset.updated_at).toLocaleString()
-                          : "—"}
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <button
+                            onClick={() =>
+                              togglePermission(permission.id, "admin")
+                            }
+                            disabled={!canChangeAllRoles}
+                            className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-80"
+                          >
+                            {permission.admin ? (
+                              <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                                <X className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                            )}
+                          </button>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEditPresetDialog(preset)}
-                          disabled={isSavingPreset}
-                        >
-                          <Edit className="w-4 h-4 mr-1" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => {
-                            setPresetToDelete(preset);
-                            setIsDeletePresetOpen(true);
-                          }}
-                          disabled={isSavingPreset}
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Delete
-                        </Button>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <button
+                            onClick={() =>
+                              togglePermission(permission.id, "dataSteward")
+                            }
+                            disabled={
+                              !canChangeAllRoles && !canManageDataStewards
+                            }
+                            className="w-6 h-6 rounded-full flex items-center justify-center transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-80"
+                          >
+                            {permission.dataSteward ? (
+                              <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                                <X className="w-4 h-4 text-muted-foreground" />
+                              </div>
+                            )}
+                          </button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Dialog open={isPresetDialogOpen} onOpenChange={setIsPresetDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>
-                {presetDialogMode === "create" ? "Create Preset" : "Edit Preset"}
-              </DialogTitle>
-              <DialogDescription>
-                Define global DQ settings to reuse across workflows.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Preset Name</Label>
-                <Input
-                  value={presetFormName}
-                  onChange={(e) => setPresetFormName(e.target.value)}
-                  placeholder="e.g. Default DQ Rules"
-                />
+              <Separator className="my-6" />
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSavePermissions}
+                  disabled={
+                    isSavingPermissions ||
+                    (!canChangeAllRoles && !canManageDataStewards)
+                  }
+                >
+                  {isSavingPermissions && (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  )}
+                  {isSavingPermissions ? "Saving..." : "Save Permissions"}
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label>Preset Config (JSON)</Label>
-                <Textarea
-                  value={presetFormConfig}
-                  onChange={(e) => setPresetFormConfig(e.target.value)}
-                  className="min-h-[220px] font-mono text-xs"
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={presetFormDefault}
-                  onCheckedChange={setPresetFormDefault}
-                />
-                <Label>Set as default preset</Label>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsPresetDialogOpen(false)}
-                disabled={isSavingPreset}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleSavePreset} disabled={isSavingPreset}>
-                {isSavingPreset && (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                )}
-                {presetDialogMode === "create" ? "Create" : "Save"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <AlertDialog open={isDeletePresetOpen} onOpenChange={setIsDeletePresetOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete preset?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {presetToDelete
-                  ? `Delete preset "${presetToDelete.preset_name}"? This cannot be undone.`
-                  : "This action cannot be undone."}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isSavingPreset}>
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeletePreset}
-                disabled={isSavingPreset}
-              >
-                {isSavingPreset ? "Deleting..." : "Delete"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+            </CardContent>
+          </Card>
+        </PermissionWrapper>
       </TabsContent>
-    </Tabs>
+
+      {/* Services Tab */}
+      <TabsContent value="services" className="space-y-6">
+        <PermissionWrapper
+          permission={canManageSettingsPermission}
+          permissionKey="settings"
+          userRole={currentUserRole ?? undefined}
+          message="You do not have permission to manage connected services."
+        >
+          {/* ERP Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="w-5 h-5" />
+                Configuration
+              </CardTitle>
+              <CardDescription>
+                Configure default input and export systems for your data
+                processing workflows
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Default Input ERP */}
+                <div className="space-y-3">
+                  <Label>Import</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Select the default source for data imports
+                  </p>
+                  <Select
+                    value={servicesSettings.defaultInputErp}
+                    onValueChange={(value) =>
+                      handleServicesChange("defaultInputErp", value)
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select input ERP" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ERP_OPTIONS.map((erp) => (
+                        <SelectItem key={erp.value} value={erp.value}>
+                          {erp.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {servicesSettings.defaultInputErp === "custom" && (
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
+                      <Input
+                        placeholder="Enter custom ERP name"
+                        value={servicesSettings.customInputErpName}
+                        onChange={(e) =>
+                          handleServicesChange(
+                            "customInputErpName",
+                            e.target.value,
+                          )
+                        }
+                        className="flex-1"
+                      />
+                      <Button size="sm" variant="outline" className="shrink-0">
+                        <Plus className="w-4 h-4 mr-1" />
+                        Save
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Default Export ERP */}
+                <div className="space-y-3">
+                  <Label>Export</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Select the default source for data exports
+                  </p>
+                  <Select
+                    value={servicesSettings.defaultExportErp}
+                    onValueChange={(value) =>
+                      handleServicesChange("defaultExportErp", value)
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select export ERP" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ERP_OPTIONS.map((erp) => (
+                        <SelectItem key={erp.value} value={erp.value}>
+                          {erp.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {servicesSettings.defaultExportErp === "custom" && (
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
+                      <Input
+                        placeholder="Enter custom ERP name"
+                        value={servicesSettings.customExportErpName}
+                        onChange={(e) =>
+                          handleServicesChange(
+                            "customExportErpName",
+                            e.target.value,
+                          )
+                        }
+                        className="flex-1"
+                      />
+                      <Button size="sm" variant="outline" className="shrink-0">
+                        <Plus className="w-4 h-4 mr-1" />
+                        Save
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Data Format */}
+                <div className="space-y-3">
+                  <Label>Data Format</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Select the preferred data format
+                  </p>
+                  <Select
+                    value={servicesSettings.preferredFormat}
+                    onValueChange={(value) =>
+                      handleServicesChange("preferredFormat", value)
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="csv">CSV</SelectItem>
+                      <SelectItem value="json">JSON</SelectItem>
+                      <SelectItem value="xlsx">XLSX</SelectItem>
+                      <SelectItem value="sql">SQL</SelectItem>
+                      <SelectItem value="parquet">Parquet</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Services Selection */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Cog className="w-5 h-5" />
+                Services
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Data Transform */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-500/20 rounded-lg shrink-0">
+                    <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-medium text-sm sm:text-base">
+                      Data Transform
+                    </h4>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      Transform and normalize data between different ERP formats
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={servicesSettings.dataTransformEnabled}
+                  onCheckedChange={(checked) =>
+                    handleServicesChange("dataTransformEnabled", checked)
+                  }
+                  className="shrink-0"
+                />
+              </div>
+
+              {/* Data Quality */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-2 bg-green-100 dark:bg-green-500/20 rounded-lg shrink-0">
+                    <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-medium text-sm sm:text-base">
+                      Data Quality
+                    </h4>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      Validate, clean, and fix data quality issues automatically
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={servicesSettings.dataQualityEnabled}
+                  onCheckedChange={(checked) =>
+                    handleServicesChange("dataQualityEnabled", checked)
+                  }
+                  className="shrink-0"
+                />
+              </div>
+
+              {/* CleanDataShield */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-500/20 rounded-lg shrink-0">
+                    <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-medium text-sm sm:text-base">
+                        CleanDataShield™
+                      </h4>
+                      <Badge variant="secondary" className="text-xs">
+                        Premium
+                      </Badge>
+                    </div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      Distributed Proxy & Privacy Layer — Work with AI without
+                      giving away your data
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={servicesSettings.cleanDataShieldEnabled}
+                  onCheckedChange={(checked) =>
+                    handleServicesChange("cleanDataShieldEnabled", checked)
+                  }
+                  className="shrink-0"
+                />
+              </div>
+
+              <Separator />
+
+              <div className="flex justify-end">
+                <Button onClick={handleSaveServices} disabled={isSavingServices}>
+                  {isSavingServices && (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  )}
+                  {isSavingServices ? "Saving..." : "Save Services"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Global Settings Presets */}
+          <Card>
+            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="w-5 h-5" />
+                  Global Settings Presets
+                </CardTitle>
+                <CardDescription>
+                  Manage global DQ settings presets used across files and workflows.
+                </CardDescription>
+              </div>
+              <Button onClick={openCreatePresetDialog} className="gap-2">
+                <Plus className="w-4 h-4" />
+                New Preset
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {isLoadingPresets ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading presets...
+                </div>
+              ) : settingsPresets.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+                  No presets yet. Create a new preset to define global defaults.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Preset Name</TableHead>
+                      <TableHead>Default</TableHead>
+                      <TableHead>Updated</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {settingsPresets.map((preset) => (
+                      <TableRow key={preset.preset_id}>
+                        <TableCell className="font-medium">
+                          {preset.preset_name}
+                        </TableCell>
+                        <TableCell>
+                          {preset.is_default ? (
+                            <Badge variant="secondary">Default</Badge>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetDefaultPreset(preset)}
+                              disabled={isSavingPreset}
+                            >
+                              Set Default
+                            </Button>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {preset.updated_at
+                            ? new Date(preset.updated_at).toLocaleString()
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditPresetDialog(preset)}
+                            disabled={isSavingPreset}
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              setPresetToDelete(preset);
+                              setIsDeletePresetOpen(true);
+                            }}
+                            disabled={isSavingPreset}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Dialog open={isPresetDialogOpen} onOpenChange={setIsPresetDialogOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {presetDialogMode === "create" ? "Create Preset" : "Edit Preset"}
+                </DialogTitle>
+                <DialogDescription>
+                  Define global DQ settings to reuse across workflows.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Preset Name</Label>
+                  <Input
+                    value={presetFormName}
+                    onChange={(e) => setPresetFormName(e.target.value)}
+                    placeholder="e.g. Default DQ Rules"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Preset Config (JSON)</Label>
+                  <Textarea
+                    value={presetFormConfig}
+                    onChange={(e) => setPresetFormConfig(e.target.value)}
+                    className="min-h-[220px] font-mono text-xs"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={presetFormDefault}
+                    onCheckedChange={setPresetFormDefault}
+                  />
+                  <Label>Set as default preset</Label>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsPresetDialogOpen(false)}
+                  disabled={isSavingPreset}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleSavePreset} disabled={isSavingPreset}>
+                  {isSavingPreset && (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  )}
+                  {presetDialogMode === "create" ? "Create" : "Save"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <AlertDialog open={isDeletePresetOpen} onOpenChange={setIsDeletePresetOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete preset?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {presetToDelete
+                    ? `Delete preset "${presetToDelete.preset_name}"? This cannot be undone.`
+                    : "This action cannot be undone."}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isSavingPreset}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeletePreset}
+                  disabled={isSavingPreset}
+                >
+                  {isSavingPreset ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </PermissionWrapper>
+      </TabsContent >
+    </Tabs >
   );
 }

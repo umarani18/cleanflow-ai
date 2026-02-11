@@ -45,7 +45,7 @@ export function AppSidebar() {
 	const [mobileOpen, setMobileOpen] = useState(false)
 	const [chatOpen, setChatOpen] = useState(false)
 	const pathname = usePathname()
-	const { logout, isAuthenticated, user } = useAuth()
+	const { logout, isAuthenticated, user, userRole } = useAuth()
 	const { theme, setTheme } = useTheme()
 
 	const navContainer = {
@@ -70,7 +70,7 @@ export function AppSidebar() {
 				setCollapsed(false)
 			}
 		}
-		
+
 		checkMobile()
 		window.addEventListener('resize', checkMobile)
 		return () => window.removeEventListener('resize', checkMobile)
@@ -160,7 +160,8 @@ export function AppSidebar() {
 
 				<nav className="flex-1 p-3 space-y-1">
 					{navigation.map((item) => {
-						const isActive = pathname === item.href
+						const isActive = pathname === item.href;
+
 						return (
 							<Link key={item.name} href={item.href}>
 								<div
@@ -188,30 +189,30 @@ export function AppSidebar() {
 				<div className="p-4 border-t border-sidebar-border/60">
 					{!collapsed && (
 						<div className="space-y-3">
-						{isAuthenticated && (
-							<div className="px-4 py-2">
-								<div className="text-sm font-medium truncate">
-									{user?.name || 'User'}
+							{isAuthenticated && (
+								<div className="px-4 py-2">
+									<div className="text-sm font-medium truncate">
+										{user?.name || 'User'}
+									</div>
+									<div className="text-xs text-muted-foreground truncate">
+										{user?.email}
+									</div>
 								</div>
-								<div className="text-xs text-muted-foreground truncate">
-									{user?.email}
-								</div>
-							</div>
-						)}
-						<button
-							onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-							className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
-						>
-							{theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-							<span className="text-sm">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-						</button>
-						<button
-							onClick={() => setChatOpen(true)}
-							className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
-						>
-							<HelpCircle className="w-4 h-4" />
-							<span className="text-sm">Help & Support</span>
-						</button>
+							)}
+							<button
+								onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+								className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
+							>
+								{theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+								<span className="text-sm">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+							</button>
+							<button
+								onClick={() => setChatOpen(true)}
+								className="flex items-center space-x-3 px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg w-full"
+							>
+								<HelpCircle className="w-4 h-4" />
+								<span className="text-sm">Help & Support</span>
+							</button>
 							{isAuthenticated && (
 								<Button
 									onClick={handleLogout}

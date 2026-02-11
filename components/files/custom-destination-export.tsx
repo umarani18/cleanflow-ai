@@ -49,6 +49,9 @@ export default function CustomDestinationExport({
   
   const { idToken } = useAuth()
   const { toast } = useToast()
+  const isPermissionError = (error: unknown) =>
+    ((error as Error)?.message || "").toLowerCase().includes("permission denied") ||
+    ((error as Error)?.message || "").toLowerCase().includes("forbidden")
 
   const loadFiles = useCallback(async () => {
     if (!idToken) return
@@ -56,11 +59,16 @@ export default function CustomDestinationExport({
     try {
       const response = await fileManagementAPI.getUploads(idToken)
       setFiles(response.items || [])
-    } catch (error) {
-      console.error('Error loading files:', error)
+    } catch (error: any) {
+      const message = (error?.message || "").toLowerCase()
+      if (!message.includes("permission denied") && !message.includes("forbidden")) {
+        console.warn("Failed to load files.")
+      }
       toast({
         title: 'Error',
-        description: 'Failed to load files',
+        description: message.includes("permission denied") || message.includes("forbidden")
+          ? 'You do not have permission for this action. Contact your organization admin.'
+          : 'Failed to load files',
         variant: 'destructive',
       })
     } finally {
@@ -117,7 +125,9 @@ export default function CustomDestinationExport({
         setColumnsError('No columns detected for this file. You can still proceed with export.')
       }
     } catch (error) {
-      console.error('Failed to fetch columns:', error)
+      if (!isPermissionError(error)) {
+        console.error('Failed to fetch columns:', error)
+      }
       setAvailableColumns([])
       setSelectedColumns(new Set())
       setColumnsError('Unable to fetch columns. You can proceed without column selection.')
@@ -199,11 +209,15 @@ export default function CustomDestinationExport({
             })
           }
         } catch (err) {
-          console.error('Error polling status:', err)
+          if (!isPermissionError(err)) {
+            console.error('Error polling status:', err)
+          }
         }
       }, 1000) // Poll every second
     } catch (error) {
-      console.error('Error processing file:', error)
+      if (!isPermissionError(error)) {
+        console.error('Error processing file:', error)
+      }
       setProcessing(false)
       toast({
         title: 'Processing Error',

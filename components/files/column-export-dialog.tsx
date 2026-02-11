@@ -294,13 +294,12 @@ export function ColumnExportContent({
             const isRenamed = state.exportName !== col
 
             return (
-              <div 
-                key={col} 
-                className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${
-                  state.selected
+              <div
+                key={col}
+                className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${state.selected
                     ? 'bg-blue-100/60 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700/50 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 shadow-sm'
                     : 'bg-muted/30 border-muted/50 hover:bg-muted/50'
-                }`}
+                  }`}
                 onClick={() => !exporting && handleToggleColumn(col)}
               >
                 <Checkbox
@@ -308,7 +307,7 @@ export function ColumnExportContent({
                   onCheckedChange={() => handleToggleColumn(col)}
                   disabled={exporting}
                 />
-                
+
                 <div className="flex-1 min-w-0">
                   {state.isEditing ? (
                     <div className="flex items-center gap-2">
@@ -323,20 +322,20 @@ export function ColumnExportContent({
                         }}
                       />
                       {state.exportName !== col && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30"
                           onClick={() => handleEndEdit(col)}
                           title="Confirm"
                         >
                           <Check className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
                         onClick={() => handleResetName(col)}
                         title="Cancel"
                       >
@@ -345,23 +344,20 @@ export function ColumnExportContent({
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className={`text-sm font-medium truncate ${
-                        state.selected
+                      <span className={`text-sm font-medium truncate ${state.selected
                           ? isRenamed ? 'text-blue-700 dark:text-blue-300 line-through' : 'text-blue-900 dark:text-blue-100 font-semibold'
                           : isRenamed ? 'text-muted-foreground line-through' : 'text-foreground'
-                      }`}>
+                        }`}>
                         {col}
                       </span>
                       {isRenamed && (
                         <>
-                          <span className={`text-xs font-medium ${
-                            state.selected ? 'text-blue-600 dark:text-blue-300' : 'text-muted-foreground'
-                          }`}>→</span>
-                          <span className={`text-sm font-medium truncate px-2 py-0.5 rounded ${
-                            state.selected 
+                          <span className={`text-xs font-medium ${state.selected ? 'text-blue-600 dark:text-blue-300' : 'text-muted-foreground'
+                            }`}>→</span>
+                          <span className={`text-sm font-medium truncate px-2 py-0.5 rounded ${state.selected
                               ? 'text-green-700 dark:text-green-200 bg-green-200/50 dark:bg-green-900/50'
                               : 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20'
-                          }`}>
+                            }`}>
                             {state.exportName}
                           </span>
                         </>
@@ -372,10 +368,10 @@ export function ColumnExportContent({
 
                 {!state.isEditing && state.selected && (
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleStartEdit(col)
@@ -386,10 +382,10 @@ export function ColumnExportContent({
                       <Edit2 className="h-4 w-4" />
                     </Button>
                     {isRenamed && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
                         onClick={(e) => {
                           e.stopPropagation()
                           handleResetName(col)

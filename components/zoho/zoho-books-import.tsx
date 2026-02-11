@@ -111,6 +111,9 @@ export default function ZohoBooksImport({
   const [mappingOpen, setMappingOpen] = useState(false)
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
   const [orgIdInput, setOrgIdInput] = useState('')
+  const isPermissionError = (error: unknown) =>
+    ((error as Error)?.message || "").toLowerCase().includes("permission denied") ||
+    ((error as Error)?.message || "").toLowerCase().includes("forbidden")
 
   const loadFiles = async () => {
     if (!idToken) return
@@ -135,8 +138,12 @@ export default function ZohoBooksImport({
       })
 
       setFiles(mappedFiles)
-    } catch (err) {
-      console.error('Error loading files:', err)
+    } catch (err: any) {
+      const message = (err?.message || "").toLowerCase()
+      if (!message.includes("permission denied") && !message.includes("forbidden")) {
+        console.warn("Failed to load files.")
+      }
+      setFiles([])
     }
   }
 
@@ -168,7 +175,9 @@ export default function ZohoBooksImport({
           setColumnsError('No columns detected for this file. You can still proceed.')
         }
       } catch (err) {
-        console.error('Failed to fetch columns:', err)
+        if (!isPermissionError(err)) {
+          console.error('Failed to fetch columns:', err)
+        }
         setAvailableColumns([])
         setSelectedColumns(new Set())
         setColumnsError('Unable to fetch columns. You can proceed without column selection.')

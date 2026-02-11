@@ -276,9 +276,10 @@ class FileManagementAPI {
         const fallbackMsg = typeof raw === "string" ? raw : `HTTP ${response.status}`
         const error = new Error(errorData.error || errorData.message || fallbackMsg)
 
-        // Don't log 404 errors for settings presets (expected when backend doesn't have them)
+        // Don't log expected/handled errors to reduce console noise.
         const isSettingsNotFound = url.includes('/settings/presets') && response.status === 404
-        if (!isSettingsNotFound) {
+        const isPermissionDenied = response.status === 403
+        if (!isSettingsNotFound && !isPermissionDenied) {
           console.error('❌ API Error:', error)
         }
 
@@ -290,7 +291,8 @@ class FileManagementAPI {
       // Only log if not already logged above
       const url_lower = url.toLowerCase()
       const isSettingsError = url_lower.includes('/settings/presets')
-      if (!isSettingsError && !(error instanceof Error && error.message.includes('HTTP'))) {
+      const isPermissionDeniedError = error instanceof Error && error.message.toLowerCase().includes('permission denied')
+      if (!isSettingsError && !isPermissionDeniedError && !(error instanceof Error && error.message.includes('HTTP'))) {
         console.error('❌ API Error:', error)
       }
       throw error
@@ -310,7 +312,7 @@ class FileManagementAPI {
   }
 
   async getUploads(authToken: string): Promise<FileListResponse> {
-    console.log('📋 Fetching files list from /uploads endpoint')
+    console.log('Fetching files list from /uploads endpoint')
     try {
       const response = await this.makeRequest(ENDPOINTS.UPLOADS, authToken, { method: 'GET' })
       // /uploads endpoint returns { items: [...], count: N }
@@ -318,9 +320,13 @@ class FileManagementAPI {
         items: response.items || [],
         count: response.count || 0
       }
-    } catch (error) {
-      console.error('❌ Failed to fetch files')
-      return { items: [], count: 0 }
+    } catch (error: any) {
+      const message = (error?.message || "").toLowerCase()
+      if (message.includes("permission denied") || message.includes("forbidden")) {
+        // Expected when a role loses files permission; callers can render empty/read-only states.
+        return { items: [], count: 0 }
+      }
+      throw error
     }
   }
 
@@ -441,60 +447,6 @@ class FileManagementAPI {
     return this.makeRequest(ENDPOINTS.FILES_COLUMNS(uploadId), authToken, { method: 'GET' })
   }
 
-  async getSettingsPresets(authToken: string): Promise<{ presets: any[] }> {
-    try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS, authToken, { method: "GET" })
-    } catch (error) {
-      const message = (error as Error)?.message || ""
-      if (message.toLowerCase().includes("not found")) return { presets: [] }
-      console.warn("⚠️ Falling back to empty presets due to error:", message)
-      return { presets: [] }
-    }
-  }
-
-  async getSettingsPreset(presetId: string, authToken: string): Promise<any> {
-    try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), authToken, { method: "GET" })
-    } catch (error) {
-      const message = (error as Error)?.message || ""
-      // Silently return fallback for "not found" or other errors
-      // Don't log to console to avoid cluttering output
-      return { preset_id: presetId, preset_name: presetId, config: {} }
-    }
-  }
-
-  async createSettingsPreset(
-    presetName: string,
-    config: Record<string, any>,
-    authToken: string,
-    isDefault = false
-  ): Promise<any> {
-    return this.makeRequest(ENDPOINTS.SETTINGS_PRESETS, authToken, {
-      method: "POST",
-      body: JSON.stringify({
-        preset_name: presetName,
-        config,
-        is_default: isDefault,
-      }),
-    })
-  }
-
-  async updateSettingsPreset(
-    presetId: string,
-    payload: { preset_name?: string; config?: Record<string, any>; is_default?: boolean },
-    authToken: string
-  ): Promise<any> {
-    return this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    })
-  }
-
-  async deleteSettingsPreset(presetId: string, authToken: string): Promise<any> {
-    return this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, {
-      method: "DELETE",
-    })
-  }
 
   async getDQMatrix(uploadId: string, authToken: string, options?: { limit?: number; offset?: number; start?: number; end?: number }): Promise<any> {
     const params = new URLSearchParams()
@@ -1070,6 +1022,21 @@ class FileManagementAPI {
       if (response.status === 404) {
         return null as unknown as OverallDqReportResponse
       }
+      const raw = await response.json().catch(() => ({}))
+      const errorData = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw : {}
+      const fallbackMsg = typeof raw === "string" ? raw : (response.statusText || `HTTP ${response.status}`)
+      const errorMessage = (errorData.error || errorData.message || fallbackMsg || "").toLowerCase()
+
+      // Expected in first-login/setup or restricted-role scenarios.
+      if (
+        response.status === 401 ||
+        response.status === 403 ||
+        errorMessage.includes("permission denied") ||
+        errorMessage.includes("organization membership required")
+      ) {
+        return null as unknown as OverallDqReportResponse
+      }
+
       throw new Error(`Overall DQ report download failed: ${response.statusText}`)
     }
 
@@ -1446,3 +1413,5 @@ export interface UnifiedBridgeImportResponse {
 
 export const fileManagementAPI = new FileManagementAPI()
 export default fileManagementAPI
+
+

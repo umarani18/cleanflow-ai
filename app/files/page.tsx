@@ -114,7 +114,6 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RULE_IDS, getRuleMeta } from "@/lib/rule-metadata";
-
 const STATUS_OPTIONS = [
   { label: "All", value: "all", type: "status" },
   { label: "Uploaded", value: "UPLOADED", type: "status" },
@@ -369,7 +368,18 @@ function FilesPageContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectionFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { idToken } = useAuth();
+  const { idToken, hasPermission } = useAuth();
+
+  const ensureFilesPermission = useCallback(() => {
+    if (hasPermission("files")) return true;
+    toast({
+      title: "Permission denied",
+      description:
+        "You do not have permission for this action. Contact your organization admin.",
+      variant: "destructive",
+    });
+    return false;
+  }, [hasPermission, toast]);
 
   const renderRuleOption = (
     ruleId: string,
@@ -511,6 +521,10 @@ function FilesPageContent() {
   };
 
   const handleFileUpload = async (file: File) => {
+    if (!ensureFilesPermission()) {
+      return;
+    }
+
     if (!idToken) {
       toast({
         title: "Error",
@@ -557,9 +571,15 @@ function FilesPageContent() {
       await loadFiles();
     } catch (error) {
       console.error("Upload failed:", error);
+      const message =
+        error instanceof Error ? error.message.toLowerCase() : "";
       toast({
-        title: "Upload failed",
-        description: "Please try again",
+        title: message.includes("permission denied")
+          ? "Permission denied"
+          : "Upload failed",
+        description: message.includes("permission denied")
+          ? "You do not have permission for this action. Contact your organization admin."
+          : "Please try again",
         variant: "destructive",
       });
     } finally {
@@ -1106,9 +1126,14 @@ function FilesPageContent() {
       await loadFiles();
     } catch (error) {
       console.error("Delete error:", error);
+      const message =
+        error instanceof Error &&
+        error.message.toLowerCase().includes("permission denied")
+          ? "You do not have permission for this action. Contact your organization admin."
+          : "Unable to delete file";
       toast({
         title: "Delete failed",
-        description: "Unable to delete file",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -1284,9 +1309,14 @@ function FilesPageContent() {
       setActionsDialogOpen(false);
     } catch (error) {
       console.error("ERP export error:", error);
+      const message =
+        error instanceof Error &&
+        error.message.toLowerCase().includes("permission denied")
+          ? "You do not have permission for this action. Contact your organization admin."
+          : "Unable to export ERP file";
       toast({
         title: "ERP Export Failed",
-        description: "Unable to export ERP file",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -1675,7 +1705,11 @@ function FilesPageContent() {
                     onDragOver={handleDrag}
                     onDragLeave={handleDrag}
                     onDrop={handleDrop}
-                    onClick={() => !uploading && fileInputRef.current?.click()}
+                    onClick={() => {
+                      if (uploading) return;
+                      if (!ensureFilesPermission()) return;
+                      fileInputRef.current?.click();
+                    }}
                   >
                     {uploading ? (
                       <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
