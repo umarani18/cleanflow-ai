@@ -143,7 +143,7 @@ const DESTINATION_OPTIONS = [
 
 const ERP_OPTIONS = [
   { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
-  { label: "ZOHO BOOKS", value: "zoho-books" },
+  { label: "ZOHO BOOKS", value: "zohobooks" },
   { label: "ORACLE FUSION", value: "oracle" },
   { label: "SAP", value: "sap" },
   { label: "MICROSOFT DYNAMICS", value: "dynamics" },
@@ -1757,7 +1757,7 @@ function FilesPageContent() {
                       }}
                     />
                   </div>
-                ) : selectedSource === "erp" && selectedErp === "zoho-books" ? (
+                ) : selectedSource === "erp" && selectedErp === "zohobooks" ? (
                   <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
                     <ZohoBooksImport
                       mode="source"
@@ -1852,7 +1852,7 @@ function FilesPageContent() {
                     />
                   </div>
                 ) : selectedDestination === "erp" &&
-                  selectedDestinationErp === "zoho-books" ? (
+                  selectedDestinationErp === "zohobooks" ? (
                   <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
                     <ZohoBooksImport
                       mode="destination"

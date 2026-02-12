@@ -27,22 +27,24 @@ import { fileManagementAPI } from "@/lib/api/file-management-api"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ENTITY_OPTIONS = [
+const QB_ENTITY_OPTIONS = [
     { label: "Invoices", value: "invoices" },
     { label: "Customers", value: "customers" },
     { label: "Vendors", value: "vendors" },
     { label: "Items", value: "items" },
-    { label: "Payments", value: "payments" },
-    { label: "Bills", value: "bills" },
-    { label: "Journal Entries", value: "journal_entries" },
-    { label: "Estimates", value: "estimates" },
-    { label: "Credit Memos", value: "credit_memos" },
-    { label: "Purchase Orders", value: "purchase_orders" },
+]
+
+const ZOHO_ENTITY_OPTIONS = [
+    { label: "Contacts", value: "contacts" },
+    { label: "Invoices", value: "invoices" },
+    { label: "Items", value: "items" },
+    { label: "Sales Orders", value: "salesorders" },
+    { label: "Purchase Orders", value: "purchaseorders" },
 ]
 
 const ERP_OPTIONS = [
     { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
-    { label: "ZOHO BOOKS", value: "zoho-books" },
+    { label: "ZOHO BOOKS", value: "zohobooks" },
     { label: "ORACLE FUSION", value: "oracle" },
     { label: "SAP", value: "sap" },
     { label: "MICROSOFT DYNAMICS", value: "dynamics" },
@@ -59,7 +61,7 @@ const ERP_OPTIONS = [
 
 const SOURCE_ERP_OPTIONS = [
     { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
-    { label: "ZOHO BOOKS", value: "zoho-books" },
+    { label: "ZOHO BOOKS", value: "zohobooks" },
 ]
 
 // Default global rules (same as in processing wizard's RulesStep)
@@ -151,6 +153,18 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
 
     // Helper: Get current step index
     const currentStepIndex = ADVANCED_STEPS.indexOf(currentAdvancedStep)
+    const entityOptions = source === "zohobooks" ? ZOHO_ENTITY_OPTIONS : QB_ENTITY_OPTIONS
+
+    const normalizeEntityForSource = (value: string, src: ERPType): string => {
+        const v = String(value || "").trim().toLowerCase()
+        if (src === "zohobooks") {
+            if (v === "customers" || v === "vendors") return "contacts"
+            if (v === "sales_orders") return "salesorders"
+            if (v === "purchase_orders") return "purchaseorders"
+            return v
+        }
+        return v
+    }
 
     // ─── Populate / Reset ─────────────────────────────────────────────────────
 
@@ -192,6 +206,18 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
             setColumnProfiles({})
         }
     }, [job, open])
+
+    useEffect(() => {
+        const normalized = normalizeEntityForSource(entity, source)
+        const validValues = new Set(entityOptions.map((o) => o.value))
+        if (!validValues.has(normalized)) {
+            setEntity(entityOptions[0]?.value || "invoices")
+            return
+        }
+        if (normalized !== entity) {
+            setEntity(normalized)
+        }
+    }, [source, entity])
 
     // ─── Fetch Columns (from processing wizard pattern) ───────────────────────
 
@@ -396,11 +422,12 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
             // Translate frontend frequency to backend format
             const freqBackend = frequencyToBackend(frequency, cronExpression.trim())
 
+            const normalizedEntity = normalizeEntityForSource(entity, source)
             const base = {
                 name: name.trim(),
                 source,
                 destination,
-                entities: [entity],
+                entities: [normalizedEntity],
                 ...freqBackend,
                 dq_config,
             }
@@ -484,7 +511,7 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
                             <Select value={entity} onValueChange={setEntity}>
                                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {ENTITY_OPTIONS.map(e => (
+                                    {entityOptions.map(e => (
                                         <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
                                     ))}
                                 </SelectContent>
@@ -860,7 +887,7 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
                                                     disabled={saving}
                                                 >
                                                     {saving && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
-                                                    Create Job ✓
+                                                    Create Job
                                                 </Button>
                                             </div>
                                         </CollapsibleContent>

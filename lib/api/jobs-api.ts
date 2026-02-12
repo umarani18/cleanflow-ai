@@ -8,7 +8,7 @@ const API_BASE_URL = AWS_CONFIG.API_BASE_URL
 
 export type JobStatus = 'ACTIVE' | 'PAUSED' | 'FAILED'
 export type JobFrequency = '15min' | '1hr' | 'daily' | 'cron'
-export type ERPType = 'quickbooks' | 'zoho_books'
+export type ERPType = 'quickbooks' | 'zohobooks'
 export type DQMode = 'default' | 'custom'
 
 export interface DQConfig {
@@ -31,6 +31,8 @@ export interface Job {
     frequency?: JobFrequency
     cron_expression?: string
     dq_config: DQConfig
+    export_config?: Record<string, any>
+    batch_size?: number
     status: JobStatus
     max_records?: number
     created_at?: string
@@ -59,6 +61,8 @@ export interface CreateJobPayload {
     frequency_type: string
     frequency_value: string
     dq_config?: Partial<DQConfig>
+    export_config?: Record<string, any>
+    batch_size?: number
     max_records?: number
 }
 
@@ -70,6 +74,8 @@ export interface UpdateJobPayload {
     frequency_type?: string
     frequency_value?: string
     dq_config?: Partial<DQConfig>
+    export_config?: Record<string, any>
+    batch_size?: number
     max_records?: number
 }
 

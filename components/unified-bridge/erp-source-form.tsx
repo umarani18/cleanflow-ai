@@ -26,7 +26,7 @@ interface ErpSourceFormProps {
 
 const ERP_OPTIONS = [
   { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
-  { label: "ZOHO BOOKS", value: "zoho-books" },
+  { label: "ZOHO BOOKS", value: "zohobooks" },
   { label: "ORACLE FUSION", value: "oracle" },
   { label: "SAP", value: "sap" },
   { label: "MICROSOFT DYNAMICS", value: "dynamics" },
@@ -93,7 +93,7 @@ export default function ErpSourceForm({
             }
           }}
         />
-      ) : selectedErp === "zoho-books" ? (
+      ) : selectedErp === "zohobooks" ? (
         <ZohoBooksImport
           mode={mode}
           uploadId={uploadId}

@@ -27,7 +27,7 @@ interface ERPOption {
 
 const ERP_OPTIONS: ERPOption[] = [
   { value: 'quickbooks', label: 'QuickBooks Online', description: 'Push directly to your connected QuickBooks account', available: true },
-  { value: 'zoho-books', label: 'Zoho Books', description: 'Push directly to your connected Zoho Books account', available: true },
+  { value: 'zohobooks', label: 'Zoho Books', description: 'Push directly to your connected Zoho Books account', available: true },
   { value: 'oracle', label: 'Oracle Fusion', description: 'Export to Oracle ERP Cloud', available: false },
   { value: 'sap', label: 'SAP ERP', description: 'Push to SAP S/4HANA or Business One', available: false },
   { value: 'dynamics', label: 'Microsoft Dynamics', description: 'Export to Dynamics 365', available: false },
@@ -96,7 +96,7 @@ export function PushToERPModal({
           message: response.message || `Successfully exported ${response.records_exported || 0} records to QuickBooks`,
         })
         onSuccess?.()
-      } else if (selectedERP === 'zoho-books') {
+      } else if (selectedERP === 'zohobooks') {
         setStatus('Checking Zoho Books connection...')
         const connectionStatus = await zohoBooksAPI.getConnectionStatus()
 

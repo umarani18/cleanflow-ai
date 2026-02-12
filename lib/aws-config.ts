@@ -3,7 +3,7 @@ export const AWS_CONFIG = {
   // API Gateway
   API_BASE_URL:
     process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "https://oq92wt6zd9.execute-api.ap-south-1.amazonaws.com/prod",
+    "https://44a2xtd1f8.execute-api.ap-south-1.amazonaws.com/prod",
 
   // AWS Cognito
   COGNITO: {
