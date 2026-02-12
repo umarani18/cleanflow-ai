@@ -62,6 +62,7 @@ interface QuickBooksImportProps {
   uploadId?: string  // Required for export/destination mode
   onImportComplete?: (uploadId: string) => void
   onNotification?: (message: string, type: 'success' | 'error') => void
+  onPermissionDenied?: () => void
 }
 
 export default function QuickBooksImport({
@@ -69,6 +70,7 @@ export default function QuickBooksImport({
   uploadId,
   onImportComplete,
   onNotification,
+  onPermissionDenied,
 }: QuickBooksImportProps) {
   const { idToken } = useAuth()
   const [connected, setConnected] = useState(false)
@@ -96,6 +98,16 @@ export default function QuickBooksImport({
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set())
   const [columnsLoading, setColumnsLoading] = useState(false)
   const [columnsError, setColumnsError] = useState<string | null>(null)
+  const isPermissionError = (error: unknown) =>
+    ((error as Error)?.message || "").toLowerCase().includes("permission denied") ||
+    ((error as Error)?.message || "").toLowerCase().includes("forbidden")
+  const notifyPermissionDenied = (error: unknown) => {
+    if (isPermissionError(error)) {
+      onPermissionDenied?.()
+      return true
+    }
+    return false
+  }
 
   // Column mapping state
   const [mappingOpen, setMappingOpen] = useState(false)
@@ -123,8 +135,14 @@ export default function QuickBooksImport({
       }))
       setFiles(mappedFiles)
       console.log('Files loaded:', mappedFiles.length)
-    } catch (err) {
-      console.error('Error loading files:', err)
+    } catch (err: any) {
+      const message = (err?.message || "").toLowerCase()
+      if (message.includes("permission denied") || message.includes("forbidden")) {
+        onPermissionDenied?.()
+      } else {
+        console.warn("Failed to load files.")
+      }
+      setFiles([])
     }
   }
 
@@ -157,7 +175,9 @@ export default function QuickBooksImport({
             setColumnsError('No columns detected for this file. You can still proceed.')
           }
         } catch (err) {
-          console.error('Failed to fetch columns:', err)
+          if (!notifyPermissionDenied(err)) {
+            console.error('Failed to fetch columns:', err)
+          }
           setAvailableColumns([])
           setSelectedColumns(new Set())
           setColumnsError('Unable to fetch columns. You can proceed without column selection.')
@@ -243,7 +263,9 @@ export default function QuickBooksImport({
       console.error('Error connecting QuickBooks:', err)
       const message = (err as Error).message || 'Failed to connect to QuickBooks'
       setError(message)
-      onNotification?.('Failed to connect to QuickBooks', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to connect to QuickBooks', 'error')
+      }
     }
   }
 
@@ -261,7 +283,9 @@ export default function QuickBooksImport({
       console.error('Error disconnecting QuickBooks:', err)
       const message = (err as Error).message
       setError(message)
-      onNotification?.('Failed to disconnect from QuickBooks', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to disconnect from QuickBooks', 'error')
+      }
     }
   }
 
@@ -305,7 +329,9 @@ export default function QuickBooksImport({
       console.error('Error importing data:', err)
       const message = (err as Error).message || 'Failed to import data'
       setError(message)
-      onNotification?.('Import failed: ' + message, 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Import failed: ' + message, 'error')
+      }
     } finally {
       setIsImporting(false)
     }
@@ -382,7 +408,9 @@ export default function QuickBooksImport({
       }
 
       setError(userMessage)
-      onNotification?.(userMessage, 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.(userMessage, 'error')
+      }
     } finally {
       setIsExporting(false)
     }

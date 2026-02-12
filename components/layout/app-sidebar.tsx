@@ -58,7 +58,7 @@ function AppSidebarComponent() {
 	const [chatOpen, setChatOpen] = useState(false)
 	const pathname = usePathname()
 	const router = useRouter()
-	const { logout, isAuthenticated, user } = useAuth()
+	const { logout, isAuthenticated, user, userRole } = useAuth()
 	const { theme, setTheme } = useTheme()
 
 	// Prefetch all navigation routes on mount to eliminate first-visit compile delay
@@ -180,7 +180,8 @@ function AppSidebarComponent() {
 
 				<nav className="flex-1 p-3 space-y-1">
 					{navigation.map((item) => {
-						const isActive = pathname === item.href
+						const isActive = pathname === item.href;
+
 						return (
 							<Link key={item.name} href={item.href}>
 								<div

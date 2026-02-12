@@ -599,7 +599,7 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                                   const value = row && typeof row === 'object' ? row[header] : ''
                                   const status = String(row?.dq_status || "").toLowerCase()
                                   const cellStatus = row?.cell_status ? row.cell_status[header] : undefined
-                                  const resolvedStatus = (cellStatus || status) as string
+                                  const resolvedStatus = (cellStatus || "clean") as string
                                   const isStatusCell = header === 'dq_status'
                                   const isViolationCell = header === 'dq_violations'
                                   const cellClass =

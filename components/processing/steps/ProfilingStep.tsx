@@ -22,6 +22,11 @@ export function ProfilingStep() {
     allColumns,
     prevStep,
     nextStep,
+    crossFieldRules,
+    setCrossFieldRules,
+    setColumnKeyType,
+    setColumnNullable,
+    setBackendVersion,
   } = useProcessingWizard()
 
   const [loading, setLoading] = useState(false)
@@ -48,6 +53,20 @@ export function ProfilingStep() {
       if (Array.isArray(inferredRequired) && inferredRequired.length > 0) {
         setRequiredColumns(inferredRequired)
       }
+
+      // Store backend version
+      const summary = (response as any)?.summary || {}
+      setBackendVersion(summary.backend_version)
+
+      // Store cross-field rules from LLM
+      const cfr = (response as any)?.cross_field_rules || []
+      setCrossFieldRules(cfr.map((r: any) => ({ ...r, enabled: true })))
+
+      // Store key_type and nullable into wizard state
+      Object.entries(profiles).forEach(([col, p]: [string, any]) => {
+        if (p.key_type) setColumnKeyType(col, p.key_type)
+        if (p.nullable_suggested !== undefined) setColumnNullable(col, p.nullable_suggested)
+      })
     } catch (err: any) {
       setError(err.message || "Failed to fetch profiling data")
     } finally {
@@ -178,7 +197,15 @@ export function ProfilingStep() {
                         onClick={() => setActiveColumn(col)}
                       >
                         <div className="flex items-center justify-between">
-                          <h4 className="font-medium">{col}</h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium">{col}</h4>
+                            {profile.key_type === "primary_key" && (
+                              <Badge variant="default" className="text-[10px] px-1.5 py-0">PK</Badge>
+                            )}
+                            {profile.key_type === "unique" && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">UNIQUE</Badge>
+                            )}
+                          </div>
                           <Badge variant="outline">
                             {profile.type_guess}
                             {profile.type_confidence && (
@@ -212,6 +239,43 @@ export function ProfilingStep() {
                       </div>
                     )
                   })}
+              </div>
+            )}
+
+            {/* Cross-field Rules Panel */}
+            {hasProfiles && (
+              <div className="mt-4 border border-muted rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="font-medium text-sm">Cross-column Rules (LLM suggested)</h3>
+                  <Badge variant="outline" className="text-xs">{crossFieldRules.length}</Badge>
+                </div>
+                {crossFieldRules.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No cross-field rules returned by LLM</p>
+                ) : (
+                  <div className="space-y-2">
+                    {crossFieldRules.map((rule, i) => (
+                      <div key={i} className="flex items-center gap-3 text-sm p-2 rounded bg-muted/30">
+                        <span className="font-mono text-xs">{rule.rule_id}</span>
+                        <span className="text-muted-foreground">{rule.condition || rule.predicate}</span>
+                        {rule.relationship && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {rule.relationship}
+                          </Badge>
+                        )}
+                        <div className="flex gap-1">
+                          {rule.cols?.map((c: string) => (
+                            <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>
+                          ))}
+                        </div>
+                        {rule.confidence != null && (
+                          <Badge variant="secondary" className="text-[10px] ml-auto">
+                            {Math.round(rule.confidence * 100)}%
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -22,6 +22,7 @@ interface UnifiedBridgeImportProps {
   mode?: "source" | "destination"
   onImportComplete?: (uploadId: string) => void
   onNotification?: (message: string, type: "success" | "error") => void
+  onPermissionDenied?: () => void
 }
 
 type IngestionSource = "ftp" | "tcp" | "http" | "other"
@@ -30,12 +31,18 @@ export default function UnifiedBridgeImport({
   mode = "source",
   onImportComplete,
   onNotification,
+  onPermissionDenied,
 }: UnifiedBridgeImportProps) {
   const [activeSource, setActiveSource] = useState<IngestionSource>("ftp")
   const [isIngesting, setIsIngesting] = useState(false)
   const [lastResult, setLastResult] = useState<{ success: boolean; message: string; uploadId?: string } | null>(null)
 
   const { idToken } = useAuth()
+
+  const isPermissionDeniedMessage = (message: string) => {
+    const lower = (message || "").toLowerCase()
+    return lower.includes("permission denied") || lower.includes("forbidden")
+  }
 
   const handleIngestionStart = () => {
     setIsIngesting(true)
@@ -52,14 +59,24 @@ export default function UnifiedBridgeImport({
         onImportComplete?.(result.uploadId)
       }
     } else {
-      onNotification?.(result.message, "error")
+      const denied = isPermissionDeniedMessage(result.message)
+      if (denied) {
+        onPermissionDenied?.()
+      } else {
+        onNotification?.(result.message, "error")
+      }
     }
   }
 
   const handleIngestionError = (error: string) => {
     setIsIngesting(false)
     setLastResult({ success: false, message: error })
-    onNotification?.(error, "error")
+    const denied = isPermissionDeniedMessage(error)
+    if (denied) {
+      onPermissionDenied?.()
+    } else {
+      onNotification?.(error, "error")
+    }
   }
 
   const sourceIcons = {

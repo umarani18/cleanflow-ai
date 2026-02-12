@@ -13,7 +13,8 @@ export function AuthGuard({ children, redirectTo = '/auth/login' }: AuthGuardPro
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      window.location.href = redirectTo
+      const currentParams = window.location.search
+      window.location.href = `${redirectTo}${currentParams}`
     }
   }, [isAuthenticated, isLoading, redirectTo])
 

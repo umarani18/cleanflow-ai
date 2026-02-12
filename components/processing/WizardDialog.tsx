@@ -19,6 +19,7 @@ interface WizardDialogProps {
     file: FileStatusResponse | null
     authToken: string
     onComplete?: () => void
+    onStarted?: () => void
 }
 
 // Inner component that uses the wizard context
@@ -26,11 +27,13 @@ function WizardInitializer({
     file,
     authToken,
     onComplete,
+    onStarted,
     onClose,
 }: {
     file: FileStatusResponse
     authToken: string
     onComplete?: () => void
+    onStarted?: () => void
     onClose: () => void
 }) {
     const { initializeWithFile } = useProcessingWizard()
@@ -73,6 +76,7 @@ function WizardInitializer({
     return (
         <ProcessingWizard
             onClose={onClose}
+            onStarted={onStarted}
             onComplete={() => {
                 onClose()
                 if (onComplete) onComplete()
@@ -87,6 +91,7 @@ export function WizardDialog({
     file,
     authToken,
     onComplete,
+    onStarted,
 }: WizardDialogProps) {
     if (!file) return null
 
@@ -102,6 +107,7 @@ export function WizardDialog({
                             file={file}
                             authToken={authToken}
                             onComplete={onComplete}
+                            onStarted={onStarted}
                             onClose={() => onOpenChange(false)}
                         />
                     </ProcessingWizardProvider>

@@ -2,13 +2,18 @@
 
 import React, { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import { Loader2, CheckCircle, XCircle, Play, RotateCw } from "lucide-react"
 import { useProcessingWizard } from "../WizardContext"
 import { fileManagementAPI, type FileStatusResponse } from "@/lib/api/file-management-api"
 import { FileDetailsDialog } from "@/components/files/file-details-dialog"
 
-export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
+export function ProcessStep({
+  onComplete,
+  onStarted,
+}: {
+  onComplete?: () => void
+  onStarted?: () => void
+}) {
   const {
     uploadId,
     authToken,
@@ -17,6 +22,11 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
     customRules,
     globalRules,
     columnRules,
+    columnCoreTypes,
+    columnTypeAliases,
+    columnKeyTypes,
+    columnNullable,
+    crossFieldRules,
     selectedPreset,
     presetOverrides,
     setProcessing,
@@ -31,7 +41,7 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
   const [fileData, setFileData] = useState<FileStatusResponse | null>(null)
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null
+    let interval: ReturnType<typeof setInterval> | null = null
     const MAX_POLL = 5 * 60 * 1000
     const start = Date.now()
 
@@ -55,19 +65,24 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
             setStatus("error")
             setProcessingError("Processing failed")
             if (interval) clearInterval(interval)
-          } else if (fileStatus === "DQ_RUNNING") {
-            setProgress((prev) => Math.min(prev + 5, 90))
-            setStatusMessage("Running data quality checks...")
-          } else if (fileStatus === "QUEUED") {
+          } else if (["QUEUED", "DQ_DISPATCHED", "UPLOADING", "NORMALIZING"].includes(fileStatus)) {
+            setProgress((prev) => Math.max(prev, 20))
             setStatusMessage("Queued for processing...")
+          } else if (["DQ_RUNNING", "VALIDATED"].includes(fileStatus)) {
+            setProgress((prev) => Math.min(prev + 5, 92))
+            setStatusMessage("Running data quality checks...")
           }
         } catch (err) {
           console.error("Failed to get status", err)
         }
       }, 2000)
     }
-    return () => interval && clearInterval(interval)
-  }, [status, uploadId, authToken])
+    return () => {
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
+  }, [status, uploadId, authToken, setProcessingError])
 
   const handleStart = async () => {
     if (!authToken) {
@@ -88,6 +103,30 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
         if (disabled.length > 0) perColumnDisabled[col] = disabled
       })
 
+      const columnTypeOverrides: Record<string, any> = {}
+      selectedColumns.forEach((col) => {
+        columnTypeOverrides[col] = {
+          core_type: columnCoreTypes[col] || "string",
+          type_alias: columnTypeAliases[col] || null,
+          key_type: columnKeyTypes[col] || "none",
+          nullable: columnNullable[col] !== undefined ? columnNullable[col] : true,
+        }
+      })
+
+      const compactCrossRules = crossFieldRules
+        .filter((r) => r.enabled)
+        .map((r) => ({
+          rule_id: r.rule_id,
+          cols: r.cols,
+          predicate: r.predicate || r.condition || "",
+          relationship: r.relationship || "",
+          condition: r.condition || r.predicate || "",
+          confidence: r.confidence != null ? String(r.confidence) : undefined,
+          tolerance: r.tolerance != null ? String(r.tolerance) : undefined,
+          reasoning: r.reasoning || "",
+          enabled: true,
+        }))
+
       await fileManagementAPI.startProcessing(uploadId, authToken, {
         selected_columns: selectedColumns,
         required_columns: requiredColumns,
@@ -96,8 +135,11 @@ export function ProcessStep({ onComplete }: { onComplete?: () => void }) {
         disable_rules: perColumnDisabled,
         preset_id: selectedPreset?.preset_id,
         preset_overrides: presetOverrides,
+        column_type_overrides: columnTypeOverrides,
+        cross_field_rules: compactCrossRules,
       })
       setStatusMessage("Processing started, monitoring progress...")
+      if (onStarted) onStarted()
     } catch (err: any) {
       setStatus("error")
       setProcessingError(err.message || "Failed to start processing")

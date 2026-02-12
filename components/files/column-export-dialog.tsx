@@ -65,7 +65,7 @@ export function ColumnExportContent({
   exporting,
   onCancel,
   onSecondaryAction,
-  secondaryActionLabel = 'Push to ERP Tool',
+  secondaryActionLabel = 'Secondary Action',
   secondaryActionLoading = false,
   secondaryActionDisabled = false,
   primaryActionLabel,
@@ -265,7 +265,7 @@ export function ColumnExportContent({
             Select Columns for Export
           </div>
           <p className="text-xs text-muted-foreground">
-            Choose columns for Download or Push to ERP Tool, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
+            Choose columns for Download, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
           </p>
           <div className="text-xs mt-2 p-2 rounded bg-muted text-muted-foreground">
             File: <span className="font-mono font-medium text-foreground">{fileName}</span>
@@ -370,8 +370,8 @@ export function ColumnExportContent({
               <div
                 key={col}
                 className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${state.selected
-                  ? 'bg-blue-100/60 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700/50 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 shadow-sm'
-                  : 'bg-muted/30 border-muted/50 hover:bg-muted/50'
+                    ? 'bg-blue-100/60 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700/50 hover:bg-blue-100/80 dark:hover:bg-blue-900/60 shadow-sm'
+                    : 'bg-muted/30 border-muted/50 hover:bg-muted/50'
                   }`}
                 onClick={() => !exporting && handleToggleColumn(col)}
               >
@@ -418,8 +418,8 @@ export function ColumnExportContent({
                   ) : (
                     <div className="flex items-center gap-2">
                       <span className={`text-sm font-medium truncate ${state.selected
-                        ? isRenamed ? 'text-blue-700 dark:text-blue-300 line-through' : 'text-blue-900 dark:text-blue-100 font-semibold'
-                        : isRenamed ? 'text-muted-foreground line-through' : 'text-foreground'
+                          ? isRenamed ? 'text-blue-700 dark:text-blue-300 line-through' : 'text-blue-900 dark:text-blue-100 font-semibold'
+                          : isRenamed ? 'text-muted-foreground line-through' : 'text-foreground'
                         }`}>
                         {col}
                       </span>
@@ -428,8 +428,8 @@ export function ColumnExportContent({
                           <span className={`text-xs font-medium ${state.selected ? 'text-blue-600 dark:text-blue-300' : 'text-muted-foreground'
                             }`}>→</span>
                           <span className={`text-sm font-medium truncate px-2 py-0.5 rounded ${state.selected
-                            ? 'text-green-700 dark:text-green-200 bg-green-200/50 dark:bg-green-900/50'
-                            : 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20'
+                              ? 'text-green-700 dark:text-green-200 bg-green-200/50 dark:bg-green-900/50'
+                              : 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20'
                             }`}>
                             {state.exportName}
                           </span>
@@ -549,7 +549,7 @@ export function ColumnExportDialog({
             Select Columns for Export
           </DialogTitle>
           <DialogDescription className="text-sm mt-2">
-            Choose columns for Download or Push to ERP Tool, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
+            Choose columns for Download, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
           </DialogDescription>
           <div className="text-xs mt-3 p-2 rounded bg-muted text-muted-foreground">
             File: <span className="font-mono font-medium text-foreground">{fileName}</span>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { format } from "date-fns"
 import {
     CalendarClock, ChevronDown, ChevronRight, Clock, Edit2, Loader2, MoreHorizontal,
@@ -107,7 +107,9 @@ export function JobsList() {
     }, [toast])
 
     // Load on mount
-    useState(() => { loadJobs() })
+    useEffect(() => {
+        loadJobs()
+    }, [loadJobs])
 
     // ─── Filtering ──────────────────────────────────────────────────────────
 

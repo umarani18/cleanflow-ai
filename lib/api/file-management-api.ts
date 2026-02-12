@@ -135,7 +135,8 @@ export interface ColumnProfileRule {
   rule_name?: string
   confidence: number
   decision: 'auto' | 'human'
-  reasoning: string
+  reasoning?: string
+  source?: string
 }
 
 export interface CustomRuleDefinition {
@@ -153,6 +154,7 @@ export interface CustomRuleSuggestionResponse {
   suggestion?: CustomRuleDefinition & { confidence?: number }
   executable?: boolean
   error?: string
+  raw_response?: unknown
 }
 
 export interface SettingsPreset {
@@ -164,6 +166,22 @@ export interface SettingsPreset {
     date_formats?: string[]
     custom_patterns?: Record<string, string>
     required_columns?: string[]
+    ruleset_version?: string
+    policies?: {
+      allow_autofix?: boolean
+      strictness?: string
+      unknown_column_behavior?: string
+    }
+    rules_enabled?: Record<string, boolean>
+    required_fields?: {
+      placeholders_treated_as_missing?: string[]
+    }
+    enum_sets?: Record<string, string[]>
+    thresholds?: {
+      text?: {
+        max_len_default?: number
+      }
+    }
   }
   is_default?: boolean
   created_at?: string
@@ -175,9 +193,45 @@ export interface ColumnProfile {
   type_confidence: number
   null_rate: number
   unique_ratio: number
+  numeric_parse_rate?: number
+  int_like_rate?: number
+  date_parse_rate?: number
+  datetime_has_time_rate?: number
+  email_valid_rate?: number
+  phone_valid_rate?: number
+  iso4217_rate?: number
+  uom_code_rate?: number
+  fiscal_period_rate?: number
+  len_min?: number
+  len_max?: number
+  len_mean?: number
+  key_type?: 'none' | 'primary_key' | 'unique'
+  nullable_suggested?: boolean
+  llm_reasoning?: string
   rules: ColumnProfileRule[]
   profile_time_sec?: number
   llm_time_sec?: number
+}
+
+export interface CrossFieldRule {
+  rule_id: string
+  cols: string[]
+  relationship?: string
+  condition?: string
+  predicate?: string
+  tolerance?: number
+  confidence?: number
+  reasoning?: string
+  coverage?: number
+  pass_rate?: number
+  failed_rows?: number[]
+}
+
+export interface ColumnTypeOverride {
+  core_type: string
+  type_alias: string | null
+  key_type: 'none' | 'primary_key' | 'unique'
+  nullable: boolean
 }
 
 export interface ProfilingResponse {
@@ -186,8 +240,10 @@ export interface ProfilingResponse {
     total_rules: number
     processed_at: string
     engine_version: string
+    backend_version?: string
   }
   profiles: Record<string, ColumnProfile>
+  cross_field_rules?: CrossFieldRule[]
 }
 
 // Overall DQ Report (per-user aggregated)
@@ -245,6 +301,12 @@ export interface ExportResponse {
   filename: string
 }
 
+export interface ExportDownloadResult {
+  blob?: Blob
+  downloadUrl?: string
+  filename?: string
+}
+
 class FileManagementAPI {
   private baseURL: string
 
@@ -276,9 +338,12 @@ class FileManagementAPI {
         const fallbackMsg = typeof raw === "string" ? raw : `HTTP ${response.status}`
         const error = new Error(errorData.error || errorData.message || fallbackMsg)
 
-        // Don't log 404 errors for settings presets (expected when backend doesn't have them)
+        // Don't log expected/handled errors to reduce console noise.
         const isSettingsNotFound = url.includes('/settings/presets') && response.status === 404
-        if (!isSettingsNotFound) {
+        const errorMessage = (errorData.error || errorData.message || fallbackMsg || '').toLowerCase()
+        const isPermissionDenied = response.status === 403
+        const isMembershipRequired = errorMessage.includes('organization membership required')
+        if (!isSettingsNotFound && !isPermissionDenied && !isMembershipRequired) {
           console.error('❌ API Error:', error)
         }
 
@@ -290,7 +355,10 @@ class FileManagementAPI {
       // Only log if not already logged above
       const url_lower = url.toLowerCase()
       const isSettingsError = url_lower.includes('/settings/presets')
-      if (!isSettingsError && !(error instanceof Error && error.message.includes('HTTP'))) {
+      const messageLower = error instanceof Error ? error.message.toLowerCase() : ''
+      const isPermissionDeniedError = messageLower.includes('permission denied')
+      const isMembershipRequiredError = messageLower.includes('organization membership required')
+      if (!isSettingsError && !isPermissionDeniedError && !isMembershipRequiredError && !(error instanceof Error && error.message.includes('HTTP'))) {
         console.error('❌ API Error:', error)
       }
       throw error
@@ -310,7 +378,7 @@ class FileManagementAPI {
   }
 
   async getUploads(authToken: string): Promise<FileListResponse> {
-    console.log('📋 Fetching files list from /uploads endpoint')
+    console.log('Fetching files list from /uploads endpoint')
     try {
       const response = await this.makeRequest(ENDPOINTS.UPLOADS, authToken, { method: 'GET' })
       // /uploads endpoint returns { items: [...], count: N }
@@ -318,9 +386,17 @@ class FileManagementAPI {
         items: response.items || [],
         count: response.count || 0
       }
-    } catch (error) {
-      console.error('❌ Failed to fetch files')
-      return { items: [], count: 0 }
+    } catch (error: any) {
+      const message = (error?.message || "").toLowerCase()
+      if (
+        message.includes("permission denied") ||
+        message.includes("forbidden") ||
+        message.includes("organization membership required")
+      ) {
+        // Expected when a role loses files permission; callers can render empty/read-only states.
+        return { items: [], count: 0 }
+      }
+      throw error
     }
   }
 
@@ -378,6 +454,8 @@ class FileManagementAPI {
       custom_rules?: CustomRuleDefinition[]
       preset_id?: string
       preset_overrides?: Record<string, any>
+      column_type_overrides?: Record<string, ColumnTypeOverride>
+      cross_field_rules?: CrossFieldRule[]
     }
   ): Promise<any> {
     console.log('Starting processing:', uploadId, options?.custom_rules?.length ? '(with custom rules)' : '')
@@ -420,6 +498,14 @@ class FileManagementAPI {
       payload.preset_overrides = options.preset_overrides
     }
 
+    if (options?.column_type_overrides) {
+      payload.column_type_overrides = options.column_type_overrides
+    }
+
+    if (options?.cross_field_rules) {
+      payload.cross_field_rules = options.cross_field_rules
+    }
+
     return this.makeRequest(ENDPOINTS.FILES_PROCESS(uploadId), authToken, {
       method: "POST",
       body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined
@@ -441,61 +527,6 @@ class FileManagementAPI {
     return this.makeRequest(ENDPOINTS.FILES_COLUMNS(uploadId), authToken, { method: 'GET' })
   }
 
-  async getSettingsPresets(authToken: string): Promise<{ presets: any[] }> {
-    try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS, authToken, { method: "GET" })
-    } catch (error) {
-      const message = (error as Error)?.message || ""
-      if (message.toLowerCase().includes("not found")) return { presets: [] }
-      console.warn("⚠️ Falling back to empty presets due to error:", message)
-      return { presets: [] }
-    }
-  }
-
-  async getSettingsPreset(presetId: string, authToken: string): Promise<any> {
-    try {
-      return await this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), authToken, { method: "GET" })
-    } catch (error) {
-      const message = (error as Error)?.message || ""
-      // Silently return fallback for "not found" or other errors
-      // Don't log to console to avoid cluttering output
-      return { preset_id: presetId, preset_name: presetId, config: {} }
-    }
-  }
-
-  async createSettingsPreset(
-    presetName: string,
-    config: Record<string, any>,
-    authToken: string,
-    isDefault = false
-  ): Promise<any> {
-    return this.makeRequest(ENDPOINTS.SETTINGS_PRESETS, authToken, {
-      method: "POST",
-      body: JSON.stringify({
-        preset_name: presetName,
-        config,
-        is_default: isDefault,
-      }),
-    })
-  }
-
-  async updateSettingsPreset(
-    presetId: string,
-    payload: { preset_name?: string; config?: Record<string, any>; is_default?: boolean },
-    authToken: string
-  ): Promise<any> {
-    return this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    })
-  }
-
-  async deleteSettingsPreset(presetId: string, authToken: string): Promise<any> {
-    return this.makeRequest(ENDPOINTS.SETTINGS_PRESET(presetId), authToken, {
-      method: "DELETE",
-    })
-  }
-
   async getDQMatrix(uploadId: string, authToken: string, options?: { limit?: number; offset?: number; start?: number; end?: number }): Promise<any> {
     const params = new URLSearchParams()
     if (options?.limit !== undefined) params.set('limit', String(options.limit))
@@ -507,7 +538,7 @@ class FileManagementAPI {
     return this.makeRequest(endpoint, authToken, { method: "GET" })
   }
   async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine' | 'raw' | 'original' | 'all', authToken: string, targetErp?: string): Promise<Blob> {
-    let endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}`
+    let endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}&_ts=${Date.now()}`
 
     // Add ERP transformation parameter if specified
     if (targetErp) {
@@ -517,7 +548,8 @@ class FileManagementAPI {
     const url = `${this.baseURL}${endpoint}`
 
     const response = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${authToken}` }
+      headers: { 'Authorization': `Bearer ${authToken}` },
+      cache: 'no-store',
     })
 
     if (!response.ok) throw new Error(`Download failed: ${response.statusText}`)
@@ -567,18 +599,18 @@ class FileManagementAPI {
     authToken: string,
     options: {
       format: 'csv' | 'excel' | 'json'
-      data: 'all' | 'clean' | 'quarantine'
+      data: 'all' | 'clean' | 'quarantine' | 'raw' | 'original'
       columns?: string[]
       columnMapping?: Record<string, string>
       erp?: string
       entity?: string
     }
-  ): Promise<Blob> {
+  ): Promise<ExportDownloadResult> {
     const url = `${this.baseURL}${ENDPOINTS.FILES_EXPORT(uploadId)}`
 
     const body: Record<string, any> = {
       format: options.format,
-      data: options.data,
+      data: options.data === 'original' ? 'raw' : options.data,
     }
 
     if (options.columns && options.columns.length > 0) {
@@ -623,11 +655,16 @@ class FileManagementAPI {
       if (data.presigned_url) {
         console.log('📥 Fetching from presigned URL:', data.filename)
         // Fetch the actual file from S3 presigned URL
-        const s3Response = await fetch(data.presigned_url)
-        if (!s3Response.ok) {
-          throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
+        try {
+          const s3Response = await fetch(data.presigned_url)
+          if (!s3Response.ok) {
+            throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
+          }
+          return { blob: await s3Response.blob(), filename: data.filename }
+        } catch (error) {
+          console.warn('Direct S3 fetch failed, falling back to browser download link:', error)
+          return { downloadUrl: data.presigned_url, filename: data.filename }
         }
-        return s3Response.blob()
       }
       // If no presigned_url, might be an error - throw
       if (data.error) {
@@ -644,7 +681,7 @@ class FileManagementAPI {
       })
     }
 
-    return response.blob()
+    return { blob: await response.blob() }
   }
 
   async getFilePreviewFromS3(uploadId: string, authToken: string, maxRows: number = 20): Promise<{ headers: string[], sample_data: any[], total_rows: number, has_dq_status?: boolean }> {
@@ -1070,6 +1107,21 @@ class FileManagementAPI {
       if (response.status === 404) {
         return null as unknown as OverallDqReportResponse
       }
+      const raw = await response.json().catch(() => ({}))
+      const errorData = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw : {}
+      const fallbackMsg = typeof raw === "string" ? raw : (response.statusText || `HTTP ${response.status}`)
+      const errorMessage = (errorData.error || errorData.message || fallbackMsg || "").toLowerCase()
+
+      // Expected in first-login/setup or restricted-role scenarios.
+      if (
+        response.status === 401 ||
+        response.status === 403 ||
+        errorMessage.includes("permission denied") ||
+        errorMessage.includes("organization membership required")
+      ) {
+        return null as unknown as OverallDqReportResponse
+      }
+
       throw new Error(`Overall DQ report download failed: ${response.statusText}`)
     }
 
@@ -1262,24 +1314,27 @@ class FileManagementAPI {
   /**
    * Get all user settings presets
    */
-  async getSettingsPresets(): Promise<{ presets: SettingsPreset[]; count: number }> {
-    const token = await this.getAuth()
+  async getSettingsPresets(authToken?: string): Promise<{ presets: SettingsPreset[]; count: number }> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS, token, { method: 'GET' })
   }
 
   /**
    * Get a specific settings preset
    */
-  async getSettingsPreset(presetId: string): Promise<SettingsPreset> {
-    const token = await this.getAuth()
+  async getSettingsPreset(presetId: string, authToken?: string): Promise<SettingsPreset> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'GET' })
   }
 
   /**
    * Create a new settings preset
    */
-  async createSettingsPreset(preset: { preset_name: string; config: any; is_default?: boolean }): Promise<{ preset_id: string; message: string }> {
-    const token = await this.getAuth()
+  async createSettingsPreset(
+    preset: { preset_name: string; config: any; is_default?: boolean },
+    authToken?: string
+  ): Promise<{ preset_id: string; message: string }> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS, token, {
       method: 'POST',
       body: JSON.stringify(preset)
@@ -1289,8 +1344,12 @@ class FileManagementAPI {
   /**
    * Update a settings preset
    */
-  async updateSettingsPreset(presetId: string, updates: { preset_name?: string; config?: any; is_default?: boolean }): Promise<{ message: string }> {
-    const token = await this.getAuth()
+  async updateSettingsPreset(
+    presetId: string,
+    updates: { preset_name?: string; config?: any; is_default?: boolean },
+    authToken?: string
+  ): Promise<{ message: string }> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, {
       method: 'PUT',
       body: JSON.stringify(updates)
@@ -1300,8 +1359,8 @@ class FileManagementAPI {
   /**
    * Delete a settings preset
    */
-  async deleteSettingsPreset(presetId: string): Promise<{ message: string }> {
-    const token = await this.getAuth()
+  async deleteSettingsPreset(presetId: string, authToken?: string): Promise<{ message: string }> {
+    const token = authToken ?? (await this.getAuth())
     return this.makeRequest(ENDPOINTS.SETTINGS_BY_ID(presetId), token, { method: 'DELETE' })
   }
 

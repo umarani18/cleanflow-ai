@@ -42,6 +42,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import zohoBooksAPI, {
   ZohoBooksConnectionStatus,
+  ZohoBooksExportStatusResponse,
   ZohoBooksImportResponse,
 } from '@/lib/api/zoho-books-api'
 import { fileManagementAPI, type FileStatusResponse } from '@/lib/api/file-management-api'
@@ -63,6 +64,7 @@ interface ZohoBooksImportProps {
   uploadId?: string
   onImportComplete?: (uploadId: string) => void
   onNotification?: (message: string, type: 'success' | 'error') => void
+  onPermissionDenied?: () => void
 }
 
 export default function ZohoBooksImport({
@@ -70,6 +72,7 @@ export default function ZohoBooksImport({
   uploadId,
   onImportComplete,
   onNotification,
+  onPermissionDenied,
 }: ZohoBooksImportProps) {
   const { idToken } = useAuth()
   const [connected, setConnected] = useState(false)
@@ -113,6 +116,32 @@ export default function ZohoBooksImport({
   const [mappingOpen, setMappingOpen] = useState(false)
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
   const [orgIdInput, setOrgIdInput] = useState('')
+  const isPermissionError = (error: unknown) =>
+    ((error as Error)?.message || "").toLowerCase().includes("permission denied") ||
+    ((error as Error)?.message || "").toLowerCase().includes("forbidden")
+  const notifyPermissionDenied = (error: unknown) => {
+    if (isPermissionError(error)) {
+      onPermissionDenied?.()
+      return true
+    }
+    return false
+  }
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  const waitForZohoExportCompletion = async (
+    fileId: string,
+    maxAttempts: number = 40,
+    intervalMs: number = 1500
+  ): Promise<ZohoBooksExportStatusResponse | null> => {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const status = await zohoBooksAPI.getExportStatus(fileId)
+      if (status.status === 'completed' || status.status === 'failed') {
+        return status
+      }
+      await sleep(intervalMs)
+    }
+    return null
+  }
 
   const loadFiles = async () => {
     if (!idToken) return
@@ -127,20 +156,24 @@ export default function ZohoBooksImport({
         status: f.status,
         rows_clean: f.rows_clean,
         created_at: f.created_at,
-        updated_at: f.updated_at,
-        status_timestamp: f.status_timestamp,
       }))
 
-      // Sort files by updated_at desc (newest first)
+      // Sort files by created_at desc (newest first)
       mappedFiles.sort((a, b) => {
-        const dateA = new Date(a.updated_at || a.status_timestamp || 0).getTime()
-        const dateB = new Date(b.updated_at || b.status_timestamp || 0).getTime()
+        const dateA = new Date(a.created_at || 0).getTime()
+        const dateB = new Date(b.created_at || 0).getTime()
         return dateB - dateA
       })
 
       setFiles(mappedFiles)
-    } catch (err) {
-      console.error('Error loading files:', err)
+    } catch (err: any) {
+      const message = (err?.message || "").toLowerCase()
+      if (message.includes("permission denied") || message.includes("forbidden")) {
+        onPermissionDenied?.()
+      } else {
+        console.warn("Failed to load files.")
+      }
+      setFiles([])
     }
   }
 
@@ -172,7 +205,9 @@ export default function ZohoBooksImport({
           setColumnsError('No columns detected for this file. You can still proceed.')
         }
       } catch (err) {
-        console.error('Failed to fetch columns:', err)
+        if (!notifyPermissionDenied(err)) {
+          console.error('Failed to fetch columns:', err)
+        }
         setAvailableColumns([])
         setSelectedColumns(new Set())
         setColumnsError('Unable to fetch columns. You can proceed without column selection.')
@@ -273,7 +308,9 @@ export default function ZohoBooksImport({
       console.error('Error connecting Zoho Books:', err)
       const message = (err as Error).message || 'Failed to connect to Zoho Books'
       setError(message)
-      onNotification?.('Failed to connect to Zoho Books', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to connect to Zoho Books', 'error')
+      }
     }
   }
 
@@ -289,7 +326,9 @@ export default function ZohoBooksImport({
       console.error('Error disconnecting Zoho Books:', err)
       const message = (err as Error).message || 'Failed to disconnect from Zoho Books'
       setError(message)
-      onNotification?.('Failed to disconnect from Zoho Books', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to disconnect from Zoho Books', 'error')
+      }
     }
   }
 
@@ -326,7 +365,9 @@ export default function ZohoBooksImport({
       console.error('Zoho Books import error:', err)
       const message = (err as Error).message || 'Failed to import from Zoho Books'
       setError(message)
-      onNotification?.('Failed to import from Zoho Books', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to import from Zoho Books', 'error')
+      }
     } finally {
       setIsImporting(false)
     }
@@ -363,21 +404,50 @@ export default function ZohoBooksImport({
         orgIdInput || connectionInfo?.org_id,
         columnMapping
       )
-      const errors = (result.results || [])
-        .filter((r) => r.status === 'failed' && r.error)
-        .slice(0, 5)
-        .map((r) => r.error as string)
-      setExportSummary({
-        success_count: result.success_count || 0,
-        failed_count: result.failed_count || 0,
-        total_records: result.total_records || 0,
-        errors,
-      })
 
-      onNotification?.(
-        `Exported ${result.success_count || 0} records to Zoho Books (${result.failed_count || 0} failed).`,
-        'success'
-      )
+      if (result.status === 'processing') {
+        const finalStatus = await waitForZohoExportCompletion(fileId)
+        if (!finalStatus) {
+          throw new Error('Zoho export is still processing. Please refresh in a moment.')
+        }
+        if (finalStatus.status === 'failed') {
+          throw new Error(finalStatus.error || finalStatus.message || 'Zoho export failed')
+        }
+
+        const finalSuccess = finalStatus.success_count || 0
+        const finalFailed = finalStatus.failed_count || 0
+        const finalTotal = finalStatus.total_count ?? (finalSuccess + finalFailed)
+        setExportSummary({
+          success_count: finalSuccess,
+          failed_count: finalFailed,
+          total_records: finalTotal,
+          errors: [],
+        })
+
+        onNotification?.(
+          `Exported ${finalSuccess} records to Zoho Books (${finalFailed} failed).`,
+          'success'
+        )
+      } else {
+        const errors = (result.results || [])
+          .filter((r) => r.status === 'failed' && r.error)
+          .slice(0, 5)
+          .map((r) => r.error as string)
+        const successCount = result.success_count || 0
+        const failedCount = result.failed_count || 0
+        const totalRecords = result.total_records ?? result.total_count ?? (successCount + failedCount)
+        setExportSummary({
+          success_count: successCount,
+          failed_count: failedCount,
+          total_records: totalRecords,
+          errors,
+        })
+
+        onNotification?.(
+          `Exported ${successCount} records to Zoho Books (${failedCount} failed).`,
+          'success'
+        )
+      }
 
       if (onImportComplete) {
         onImportComplete(fileId)
@@ -387,7 +457,9 @@ export default function ZohoBooksImport({
       const message = (err as Error).message || 'Failed to export to Zoho Books'
       setError(message)
       setExportSummary(null)
-      onNotification?.('Failed to export to Zoho Books', 'error')
+      if (!notifyPermissionDenied(err)) {
+        onNotification?.('Failed to export to Zoho Books', 'error')
+      }
     } finally {
       setIsExporting(false)
     }
@@ -715,13 +787,10 @@ export default function ZohoBooksImport({
 
           <div className="flex-1 min-h-0 space-y-4 overflow-y-auto pr-2">
             {getMappingFields(config.entity).map((field) => (
-              <div key={field.key} className="grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] gap-3 items-start">
-                <div>
-                  <div className="text-sm font-medium">
-                    {field.label}
-                    {field.required && <span className="text-red-500 ml-1">*</span>}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">{field.help}</div>
+              <div key={field.key} className="grid grid-cols-1 md:grid-cols-[200px_minmax(0,1fr)_minmax(0,220px)] gap-3 items-center">
+                <div className="text-sm font-medium">
+                  {field.label}
+                  {field.required && <span className="text-red-500 ml-1">*</span>}
                 </div>
                 <Select
                   value={columnMapping[field.key] || ''}

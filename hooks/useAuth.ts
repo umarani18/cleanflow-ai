@@ -22,6 +22,7 @@ interface AuthState {
   isAuthenticated: boolean
   idToken: string | null
   accessToken: string | null
+  refreshToken: string | null
   // MFA state
   mfaRequired: boolean
   mfaSession: string | null
@@ -40,6 +41,7 @@ export function useAuth() {
     isAuthenticated: false,
     idToken: null,
     accessToken: null,
+    refreshToken: null,
     mfaRequired: false,
     mfaSession: null,
     mfaUsername: null
@@ -54,9 +56,10 @@ export function useAuth() {
     const storedTokens = localStorage.getItem('authTokens')
     if (storedTokens) {
       try {
-        const { idToken, accessToken } = JSON.parse(storedTokens)
+        const { idToken, accessToken, refreshToken } = JSON.parse(storedTokens)
         const payload = parseJWT(idToken)
         console.log('Parsed JWT payload:', payload)
+
         if (payload && payload.exp > Date.now() / 1000) {
           setAuthState({
             user: {
@@ -69,10 +72,14 @@ export function useAuth() {
             isAuthenticated: true,
             idToken,
             accessToken,
+            refreshToken: refreshToken || null,
             mfaRequired: false,
             mfaSession: null,
             mfaUsername: null
           })
+        } else if (refreshToken) {
+          // Attempt silent refresh on mount if tokens are expired but refresh token exists
+          refreshSession(refreshToken)
         } else {
           localStorage.removeItem('authTokens')
           setAuthState(prev => ({ ...prev, isLoading: false }))
@@ -85,6 +92,97 @@ export function useAuth() {
       setAuthState(prev => ({ ...prev, isLoading: false }))
     }
   }, [])
+
+  // Auto-refresh tokens before they expire
+  useEffect(() => {
+    if (!authState.isAuthenticated || !authState.refreshToken || !authState.idToken || authState.mfaSession) return
+
+    const checkAndRefresh = () => {
+      const payload = parseJWT(authState.idToken!)
+      if (!payload) return
+
+      const expiresIn = payload.exp - (Date.now() / 1000)
+
+      // If expires in less than 5 minutes (300s), refresh
+      if (expiresIn < 300) {
+        console.log('Token expiring soon, refreshing session...')
+        refreshSession(authState.refreshToken!)
+      }
+    }
+
+    const interval = setInterval(checkAndRefresh, 60000) // Check every minute
+    return () => clearInterval(interval)
+  }, [authState.isAuthenticated, authState.refreshToken, authState.idToken])
+
+  const refreshSession = async (refreshToken: string) => {
+    try {
+      const authParams = {
+        ClientId: CONFIG.clientId,
+        AuthFlow: AuthFlowType.REFRESH_TOKEN_AUTH,
+        AuthParameters: {
+          REFRESH_TOKEN: refreshToken
+        }
+      }
+
+      const authResult = await cognitoClient.initiateAuth(authParams)
+
+      if (authResult.AuthenticationResult) {
+        const idToken = authResult.AuthenticationResult.IdToken!
+        const accessToken = authResult.AuthenticationResult.AccessToken!
+        // Refresh token might be returned, or we keep the old one
+        const newRefreshToken = authResult.AuthenticationResult.RefreshToken || refreshToken
+
+        const payload = parseJWT(idToken)
+        if (payload) {
+          const user = {
+            email: payload.email,
+            sub: payload.sub,
+            username: payload['cognito:username'],
+            name: payload.name || payload.email.split('@')[0]
+          }
+
+          localStorage.setItem('authTokens', JSON.stringify({
+            idToken,
+            accessToken,
+            refreshToken: newRefreshToken
+          }))
+
+          setAuthState(prev => ({
+            ...prev,
+            user,
+            isLoading: false,
+            isAuthenticated: true,
+            idToken,
+            accessToken,
+            refreshToken: newRefreshToken,
+            mfaRequired: false,
+          }))
+
+          return { success: true }
+        }
+      }
+      throw new Error('Refresh failed')
+    } catch (error) {
+      console.error('Session refresh failed:', error)
+      // Only logout if we definitely don't have a pending challenge
+      setAuthState(prev => {
+        if (prev.mfaSession) {
+          return { ...prev, isAuthenticated: false, isLoading: false }
+        }
+        localStorage.removeItem('authTokens')
+        return {
+          ...prev,
+          user: null,
+          isLoading: false,
+          isAuthenticated: false,
+          idToken: null,
+          accessToken: null,
+          refreshToken: null,
+        }
+      })
+      return { success: false }
+    }
+  }
 
   const parseJWT = (token: string) => {
     try {
@@ -120,7 +218,7 @@ export function useAuth() {
           Value: email
         }
       ]
-      
+
       if (name) {
         userAttributes.push({
           Name: 'name',
@@ -170,6 +268,20 @@ export function useAuth() {
       throw new Error('Please enter both email and password')
     }
 
+    // Clear existing session state before starting new login
+    localStorage.removeItem('authTokens')
+    setAuthState(prev => ({
+      ...prev,
+      isAuthenticated: false,
+      user: null,
+      idToken: null,
+      accessToken: null,
+      refreshToken: null,
+      mfaRequired: false,
+      mfaSession: null,
+      mfaUsername: null
+    }))
+
     try {
       const authParams = {
         ClientId: CONFIG.clientId,
@@ -192,10 +304,27 @@ export function useAuth() {
           mfaUsername: email,
           isLoading: false
         }))
-        return { 
-          success: false, 
-          mfaRequired: true, 
-          message: 'Please enter your MFA code' 
+        return {
+          success: false,
+          mfaRequired: true,
+          message: 'Please enter your MFA code'
+        }
+      }
+
+      // Check if temporary password needs to be changed (Invited users)
+      if (authResult.ChallengeName === 'NEW_PASSWORD_REQUIRED') {
+        setAuthState(prev => ({
+          ...prev,
+          mfaRequired: false,
+          mfaSession: authResult.Session || null,
+          mfaUsername: email,
+          isLoading: false
+        }))
+        return {
+          success: false,
+          newPasswordRequired: true,
+          session: authResult.Session,
+          message: 'Please set your permanent password'
         }
       }
 
@@ -208,11 +337,11 @@ export function useAuth() {
           mfaUsername: email,
           isLoading: false
         }))
-        return { 
-          success: false, 
-          mfaSetupRequired: true, 
+        return {
+          success: false,
+          mfaSetupRequired: true,
           session: authResult.Session,
-          message: 'Please set up MFA' 
+          message: 'Please set up MFA'
         }
       }
 
@@ -220,6 +349,7 @@ export function useAuth() {
       if (authResult.AuthenticationResult) {
         const idToken = authResult.AuthenticationResult.IdToken!
         const accessToken = authResult.AuthenticationResult.AccessToken!
+        const refreshToken = authResult.AuthenticationResult.RefreshToken!
 
         const payload = parseJWT(idToken)
         if (payload) {
@@ -230,7 +360,7 @@ export function useAuth() {
             name: payload.name || payload.email.split('@')[0]
           }
 
-          localStorage.setItem('authTokens', JSON.stringify({ idToken, accessToken }))
+          localStorage.setItem('authTokens', JSON.stringify({ idToken, accessToken, refreshToken }))
 
           setAuthState({
             user,
@@ -238,6 +368,7 @@ export function useAuth() {
             isAuthenticated: true,
             idToken,
             accessToken,
+            refreshToken,
             mfaRequired: false,
             mfaSession: null,
             mfaUsername: null
@@ -286,6 +417,7 @@ export function useAuth() {
       if (result.AuthenticationResult) {
         const idToken = result.AuthenticationResult.IdToken!
         const accessToken = result.AuthenticationResult.AccessToken!
+        const refreshToken = result.AuthenticationResult.RefreshToken!
 
         const payload = parseJWT(idToken)
         if (payload) {
@@ -296,7 +428,7 @@ export function useAuth() {
             name: payload.name || payload.email.split('@')[0]
           }
 
-          localStorage.setItem('authTokens', JSON.stringify({ idToken, accessToken }))
+          localStorage.setItem('authTokens', JSON.stringify({ idToken, accessToken, refreshToken }))
 
           setAuthState({
             user,
@@ -304,6 +436,7 @@ export function useAuth() {
             isAuthenticated: true,
             idToken,
             accessToken,
+            refreshToken,
             mfaRequired: false,
             mfaSession: null,
             mfaUsername: null
@@ -337,7 +470,7 @@ export function useAuth() {
         // Generate QR code URL for authenticator apps
         const email = authState.user?.email || 'user'
         const qrCodeUrl = `otpauth://totp/CleanFlowAI:${email}?secret=${result.SecretCode}&issuer=CleanFlowAI`
-        
+
         return {
           secretCode: result.SecretCode,
           qrCodeUrl
@@ -362,7 +495,7 @@ export function useAuth() {
       if (result.SecretCode) {
         // Generate QR code URL for authenticator apps
         const qrCodeUrl = `otpauth://totp/CleanFlowAI:${email}?secret=${result.SecretCode}&issuer=CleanFlowAI`
-        
+
         return {
           secretCode: result.SecretCode,
           qrCodeUrl,
@@ -404,6 +537,78 @@ export function useAuth() {
     }
   }
 
+  // Complete new password challenge (for invited users)
+  const completeNewPassword = async (newPassword: string) => {
+    if (!authState.mfaSession || !authState.mfaUsername) {
+      throw new Error('Session not found. Please login again.')
+    }
+
+    try {
+      const command = new RespondToAuthChallengeCommand({
+        ClientId: CONFIG.clientId,
+        ChallengeName: ChallengeNameType.NEW_PASSWORD_REQUIRED,
+        Session: authState.mfaSession,
+        ChallengeResponses: {
+          USERNAME: authState.mfaUsername,
+          NEW_PASSWORD: newPassword
+        }
+      })
+
+      const result = await cognitoClient.send(command)
+
+      // The result might trigger another challenge (like MFA) or return tokens
+      if (result.ChallengeName === 'SOFTWARE_TOKEN_MFA') {
+        setAuthState(prev => ({
+          ...prev,
+          mfaRequired: true,
+          mfaSession: result.Session || null,
+          isLoading: false
+        }))
+        return {
+          success: false,
+          mfaRequired: true,
+          message: 'Please enter your MFA code'
+        }
+      }
+
+      if (result.AuthenticationResult) {
+        const idToken = result.AuthenticationResult.IdToken!
+        const accessToken = result.AuthenticationResult.AccessToken!
+        const refreshToken = result.AuthenticationResult.RefreshToken!
+
+        const payload = parseJWT(idToken)
+        if (payload) {
+          const user = {
+            email: payload.email,
+            sub: payload.sub,
+            username: payload['cognito:username'],
+            name: payload.name || payload.email.split('@')[0]
+          }
+
+          localStorage.setItem('authTokens', JSON.stringify({ idToken, accessToken, refreshToken }))
+
+          setAuthState({
+            user,
+            isLoading: false,
+            isAuthenticated: true,
+            idToken,
+            accessToken,
+            refreshToken,
+            mfaRequired: false,
+            mfaSession: null,
+            mfaUsername: null
+          })
+
+          return { success: true, message: 'Password set successfully!' }
+        }
+      }
+
+      throw new Error('Failed to set new password')
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to set password')
+    }
+  }
+
   // Confirm MFA setup using session (for MFA_SETUP challenge during login)
   const confirmMfaSetupWithSession = async (session: string, mfaCode: string, username: string) => {
     if (!mfaCode || mfaCode.length !== 6 || !/^\d{6}$/.test(mfaCode)) {
@@ -435,6 +640,7 @@ export function useAuth() {
         if (authResult.AuthenticationResult) {
           const idToken = authResult.AuthenticationResult.IdToken!
           const accessToken = authResult.AuthenticationResult.AccessToken!
+          const refreshToken = authResult.AuthenticationResult.RefreshToken!
 
           const payload = parseJWT(idToken)
           if (payload) {
@@ -445,7 +651,7 @@ export function useAuth() {
               name: payload.name || payload.email.split('@')[0]
             }
 
-            localStorage.setItem('authTokens', JSON.stringify({ idToken, accessToken }))
+            localStorage.setItem('authTokens', JSON.stringify({ idToken, accessToken, refreshToken }))
 
             setAuthState({
               user,
@@ -453,6 +659,7 @@ export function useAuth() {
               isAuthenticated: true,
               idToken,
               accessToken,
+              refreshToken,
               mfaRequired: false,
               mfaSession: null,
               mfaUsername: null
@@ -492,6 +699,7 @@ export function useAuth() {
       isAuthenticated: false,
       idToken: null,
       accessToken: null,
+      refreshToken: null,
       mfaRequired: false,
       mfaSession: null,
       mfaUsername: null
@@ -504,6 +712,8 @@ export function useAuth() {
     confirmSignup,
     login,
     logout,
+    // Password functions
+    completeNewPassword,
     // MFA functions
     verifyMfaCode,
     setupMfa,
