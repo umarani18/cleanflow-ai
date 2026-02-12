@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode } from "react"
 import type { CustomRuleDefinition, ColumnProfile } from "@/lib/api/file-management-api"
+import { deriveRulesV2 } from "@/lib/type-catalog"
 
 // Wizard step type
 export type WizardStep = "columns" | "profiling" | "settings" | "rules" | "process"
@@ -16,6 +17,22 @@ export interface SettingsPreset {
         date_formats?: string[]
         custom_patterns?: Record<string, string>
         required_columns?: string[]
+        ruleset_version?: string
+        policies?: {
+            allow_autofix?: boolean
+            strictness?: string
+            unknown_column_behavior?: string
+        }
+        rules_enabled?: Record<string, boolean>
+        required_fields?: {
+            placeholders_treated_as_missing?: string[]
+        }
+        enum_sets?: Record<string, string[]>
+        thresholds?: {
+            text?: {
+                max_len_default?: number
+            }
+        }
     }
     is_default?: boolean
 }
@@ -30,6 +47,22 @@ export interface RuleWithState {
     column?: string
     severity?: "critical" | "warning" | "info"
     code?: string // For LLM-generated code rules
+    source?: string
+}
+
+export interface CrossFieldRuleWithState {
+    rule_id: string
+    cols: string[]
+    relationship?: string
+    condition?: string
+    predicate?: string
+    tolerance?: number
+    confidence?: number
+    reasoning?: string
+    coverage?: number
+    pass_rate?: number
+    failed_rows?: number[]
+    enabled: boolean
 }
 
 // Wizard state
@@ -49,6 +82,12 @@ export interface WizardState {
     // Step 2: Profiling
     columnProfiles: Record<string, ColumnProfile>
     requiredColumns: string[]
+    columnCoreTypes: Record<string, string>
+    columnTypeAliases: Record<string, string | null>
+    columnKeyTypes: Record<string, "none" | "primary_key" | "unique">
+    columnNullable: Record<string, boolean>
+    backendVersion?: string
+    crossFieldRules: CrossFieldRuleWithState[]
 
     // Step 3: Settings
     selectedPreset: SettingsPreset | null
@@ -78,6 +117,15 @@ interface WizardActions {
     // Profiling
     setColumnProfiles: (profiles: Record<string, ColumnProfile>) => void
     setRequiredColumns: (columns: string[]) => void
+    setColumnCoreType: (column: string, core: string) => void
+    setColumnTypeAlias: (column: string, alias: string | null) => void
+    setColumnKeyType: (column: string, key: "none" | "primary_key" | "unique") => void
+    setColumnNullable: (column: string, nullable: boolean) => void
+    setBackendVersion: (version: string | undefined) => void
+    setCrossFieldRules: (rules: CrossFieldRuleWithState[]) => void
+    toggleCrossFieldRule: (ruleId: string) => void
+    setCrossFieldRules: (rules: CrossFieldRuleWithState[]) => void
+    toggleCrossFieldRule: (ruleId: string) => void
 
     // Settings
     setSelectedPreset: (preset: SettingsPreset | null) => void
@@ -113,6 +161,12 @@ const initialState: WizardState = {
     selectedColumns: [],
     columnProfiles: {},
     requiredColumns: [],
+    columnCoreTypes: {},
+    columnTypeAliases: {},
+    columnKeyTypes: {},
+    columnNullable: {},
+    backendVersion: undefined,
+    crossFieldRules: [],
     selectedPreset: null,
     presetOverrides: {},
     globalRules: [],
@@ -168,6 +222,41 @@ export function ProcessingWizardProvider({ children }: { children: ReactNode }) 
 
         setRequiredColumns: (columns) => setState((s) => ({ ...s, requiredColumns: columns })),
 
+        setColumnCoreType: (column, core) => setState((s) => ({
+            ...s,
+            columnCoreTypes: { ...s.columnCoreTypes, [column]: core },
+            columnTypeAliases: { ...s.columnTypeAliases, [column]: null }, // reset alias on core change
+        })),
+
+        setColumnTypeAlias: (column, alias) => setState((s) => ({
+            ...s,
+            columnTypeAliases: { ...s.columnTypeAliases, [column]: alias },
+        })),
+
+        setColumnKeyType: (column, key) => setState((s) => ({
+            ...s,
+            columnKeyTypes: { ...s.columnKeyTypes, [column]: key },
+            columnNullable: key === "primary_key"
+                ? { ...s.columnNullable, [column]: false }
+                : s.columnNullable,
+        })),
+
+        setColumnNullable: (column, nullable) => setState((s) => ({
+            ...s,
+            columnNullable: { ...s.columnNullable, [column]: nullable },
+        })),
+
+        setBackendVersion: (version) => setState((s) => ({ ...s, backendVersion: version })),
+
+        setCrossFieldRules: (rules) => setState((s) => ({ ...s, crossFieldRules: rules })),
+
+        toggleCrossFieldRule: (ruleId) => setState((s) => ({
+            ...s,
+            crossFieldRules: s.crossFieldRules.map((r) =>
+                r.rule_id === ruleId ? { ...r, enabled: !r.enabled } : r
+            ),
+        })),
+
         setSelectedPreset: (preset) => setState((s) => ({ ...s, selectedPreset: preset })),
 
         setPresetOverrides: (overrides) => setState((s) => ({ ...s, presetOverrides: overrides })),
@@ -210,6 +299,15 @@ export function ProcessingWizardProvider({ children }: { children: ReactNode }) 
             }))
         },
 
+        setCrossFieldRules: (rules) => setState((s) => ({ ...s, crossFieldRules: rules })),
+
+        toggleCrossFieldRule: (ruleId) => setState((s) => ({
+            ...s,
+            crossFieldRules: s.crossFieldRules.map((r) =>
+                r.rule_id === ruleId ? { ...r, enabled: !r.enabled } : r
+            ),
+        })),
+
         setProcessing: (processing) => setState((s) => ({ ...s, isProcessing: processing })),
 
         startProcessing: () => setState((s) => ({ ...s, isProcessing: true, processingError: null })),
@@ -226,6 +324,11 @@ export function ProcessingWizardProvider({ children }: { children: ReactNode }) 
                 authToken,
                 allColumns: columns,
                 selectedColumns: columns, // Select all by default
+                columnCoreTypes: Object.fromEntries(columns.map((c) => [c, "string"])),
+                columnTypeAliases: Object.fromEntries(columns.map((c) => [c, null])),
+                columnKeyTypes: Object.fromEntries(columns.map((c) => [c, "none"] as const)),
+                columnNullable: Object.fromEntries(columns.map((c) => [c, true])),
+                crossFieldRules: [],
             })
         },
     }
