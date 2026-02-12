@@ -1,6 +1,6 @@
 "use client"
 
-import { BarChart3, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react"
+import { BarChart3, CalendarClock, ChevronLeft, ChevronRight, FileText, HelpCircle, LogOut, Menu, Moon, Settings, Sun, X } from "lucide-react"
 import { memo, useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 
@@ -36,6 +36,12 @@ const navigation = [
 		href: "/files",
 		icon: FileText,
 		description: "Manage file uploads, processing workflows, and exports",
+	},
+	{
+		name: "Create Jobs",
+		href: "/jobs",
+		icon: CalendarClock,
+		description: "Manage automated ERP sync schedules",
 	},
 	{
 		name: "Admin",
