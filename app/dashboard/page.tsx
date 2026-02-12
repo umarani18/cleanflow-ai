@@ -1,11 +1,11 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import dynamic from "next/dynamic"
 import { MainLayout } from "@/components/layout/main-layout"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { ActivityFeed } from "@/components/dashboard/activity-feed"
 import { TopIssuesChart } from "@/components/dashboard/top-issues-chart"
+import { DqCharts, ProcessingSummary } from "@/components/dashboard/dq-charts"
 import { AuthGuard } from "@/components/auth/auth-guard"
 import { useAuth } from "@/components/providers/auth-provider"
 import { fileManagementAPI, type FileStatusResponse, type OverallDqReportResponse, type TopIssue } from "@/lib/api/file-management-api"
@@ -115,3 +115,21 @@ export default function DashboardPage() {
   )
 }
 
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="h-10 w-72 rounded-md bg-muted/70" />
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+        <div className="xl:col-span-3 space-y-6">
+          <div className="h-96 rounded-xl border bg-card" />
+          <div className="h-80 rounded-xl border bg-card" />
+        </div>
+        <div className="xl:col-span-1 space-y-4">
+          <div className="h-56 rounded-xl border bg-card" />
+          <div className="h-56 rounded-xl border bg-card" />
+          <div className="h-56 rounded-xl border bg-card" />
+        </div>
+      </div>
+    </div>
+  )
+}

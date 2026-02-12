@@ -42,6 +42,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import zohoBooksAPI, {
   ZohoBooksConnectionStatus,
+  ZohoBooksExportStatusResponse,
   ZohoBooksImportResponse,
 } from '@/lib/api/zoho-books-api'
 import { fileManagementAPI, type FileStatusResponse } from '@/lib/api/file-management-api'
@@ -124,6 +125,22 @@ export default function ZohoBooksImport({
       return true
     }
     return false
+  }
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  const waitForZohoExportCompletion = async (
+    fileId: string,
+    maxAttempts: number = 40,
+    intervalMs: number = 1500
+  ): Promise<ZohoBooksExportStatusResponse | null> => {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const status = await zohoBooksAPI.getExportStatus(fileId)
+      if (status.status === 'completed' || status.status === 'failed') {
+        return status
+      }
+      await sleep(intervalMs)
+    }
+    return null
   }
 
   const loadFiles = async () => {
@@ -387,21 +404,50 @@ export default function ZohoBooksImport({
         orgIdInput || connectionInfo?.org_id,
         columnMapping
       )
-      const errors = (result.results || [])
-        .filter((r) => r.status === 'failed' && r.error)
-        .slice(0, 5)
-        .map((r) => r.error as string)
-      setExportSummary({
-        success_count: result.success_count || 0,
-        failed_count: result.failed_count || 0,
-        total_records: result.total_records || 0,
-        errors,
-      })
 
-      onNotification?.(
-        `Exported ${result.success_count || 0} records to Zoho Books (${result.failed_count || 0} failed).`,
-        'success'
-      )
+      if (result.status === 'processing') {
+        const finalStatus = await waitForZohoExportCompletion(fileId)
+        if (!finalStatus) {
+          throw new Error('Zoho export is still processing. Please refresh in a moment.')
+        }
+        if (finalStatus.status === 'failed') {
+          throw new Error(finalStatus.error || finalStatus.message || 'Zoho export failed')
+        }
+
+        const finalSuccess = finalStatus.success_count || 0
+        const finalFailed = finalStatus.failed_count || 0
+        const finalTotal = finalStatus.total_count ?? (finalSuccess + finalFailed)
+        setExportSummary({
+          success_count: finalSuccess,
+          failed_count: finalFailed,
+          total_records: finalTotal,
+          errors: [],
+        })
+
+        onNotification?.(
+          `Exported ${finalSuccess} records to Zoho Books (${finalFailed} failed).`,
+          'success'
+        )
+      } else {
+        const errors = (result.results || [])
+          .filter((r) => r.status === 'failed' && r.error)
+          .slice(0, 5)
+          .map((r) => r.error as string)
+        const successCount = result.success_count || 0
+        const failedCount = result.failed_count || 0
+        const totalRecords = result.total_records ?? result.total_count ?? (successCount + failedCount)
+        setExportSummary({
+          success_count: successCount,
+          failed_count: failedCount,
+          total_records: totalRecords,
+          errors,
+        })
+
+        onNotification?.(
+          `Exported ${successCount} records to Zoho Books (${failedCount} failed).`,
+          'success'
+        )
+      }
 
       if (onImportComplete) {
         onImportComplete(fileId)

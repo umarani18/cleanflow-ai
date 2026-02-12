@@ -23,10 +23,26 @@ export interface ZohoBooksImportResponse {
 }
 
 export interface ZohoBooksExportResponse {
-  total_records: number
-  success_count: number
-  failed_count: number
+  total_records?: number
+  success_count?: number
+  failed_count?: number
+  status?: 'processing' | 'completed' | 'failed'
+  processed_count?: number
+  total_count?: number
+  message?: string
+  error?: string
   results?: Array<{ row: number; status: string; id?: string; error?: string }>
+}
+
+export interface ZohoBooksExportStatusResponse {
+  upload_id: string
+  status: 'processing' | 'completed' | 'failed' | 'not_started'
+  message?: string
+  processed_count?: number
+  success_count?: number
+  failed_count?: number
+  total_count?: number
+  error?: string
 }
 
 export interface ZohoBooksImportFilters {
@@ -165,6 +181,13 @@ class ZohoBooksService {
         org_id: orgId,
         column_mapping: columnMapping,
       }),
+    })
+  }
+
+  async getExportStatus(uploadId: string): Promise<ZohoBooksExportStatusResponse> {
+    const params = new URLSearchParams({ upload_id: uploadId })
+    return await this.makeRequest<ZohoBooksExportStatusResponse>(`/zoho-books/export-status?${params.toString()}`, {
+      method: 'GET',
     })
   }
 

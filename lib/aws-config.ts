@@ -1,20 +1,36 @@
+const getRequiredEnv = (name: string, value: string | undefined) => {
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
+  return value
+}
+
+const normalizeApiBaseUrl = (value: string | undefined) => {
+  if (!value) return value
+  return value.trim().replace(/\/+$/, "")
+}
+
 // AWS Configuration for CleanFlowAI
 export const AWS_CONFIG = {
   // API Gateway
-  API_BASE_URL:
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "https://oq92wt6zd9.execute-api.ap-south-1.amazonaws.com/prod",
+  API_BASE_URL: normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL),
 
   // AWS Cognito
   COGNITO: {
-    USER_POOL_ID: "ap-south-1_wgdr8tHyP",
-    CLIENT_ID: "13ucambt8aqqdk2n7gcmlk7gp4",
+    USER_POOL_ID: getRequiredEnv(
+      "NEXT_PUBLIC_COGNITO_USER_POOL_ID",
+      process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID
+    ),
+    CLIENT_ID: getRequiredEnv(
+      "NEXT_PUBLIC_COGNITO_CLIENT_ID",
+      process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID
+    ),
     REGION: "ap-south-1",
   },
 
   // S3 Configuration
   S3: {
-    BUCKET_NAME: "base-cleanflowaidatalake9697f7f3-2hy7aq4aajii",
+    BUCKET_NAME: process.env.NEXT_PUBLIC_S3_BUCKET_NAME,
     REGION: "ap-south-1",
   },
 
@@ -28,13 +44,14 @@ export const AWS_CONFIG = {
 
     // Upload Management
     UPLOADS: "/uploads", // POST to init upload, GET to list uploads
-    
+
     // File Processing
     FILES_PROCESS: (id: string) => `/files/${id}/process`, // POST to start processing
     FILES_STATUS: (id: string) => `/files/${id}/status`, // GET status
-    FILES_EXPORT: (id: string, type: string, data: string) => `/files/${id}/export?type=${type}&data=${data}`, // GET download
+    FILES_EXPORT: (id: string, type: string, data: string) =>
+      `/files/${id}/export?type=${type}&data=${data}`, // GET download
   },
-}
+};
 
 // Demo mode configuration
 export const DEMO_CONFIG = {
@@ -43,4 +60,4 @@ export const DEMO_CONFIG = {
     { email: "demo@cleanflowai.com", password: "demo123" },
     { email: "test@example.com", password: "test123" },
   ],
-}
+};

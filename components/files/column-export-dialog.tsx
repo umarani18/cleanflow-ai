@@ -65,7 +65,7 @@ export function ColumnExportContent({
   exporting,
   onCancel,
   onSecondaryAction,
-  secondaryActionLabel = 'Push to ERP Tool',
+  secondaryActionLabel = 'Secondary Action',
   secondaryActionLoading = false,
   secondaryActionDisabled = false,
   primaryActionLabel,
@@ -265,7 +265,7 @@ export function ColumnExportContent({
             Select Columns for Export
           </div>
           <p className="text-xs text-muted-foreground">
-            Choose columns for Download or Push to ERP Tool, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
+            Choose columns for Download, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
           </p>
           <div className="text-xs mt-2 p-2 rounded bg-muted text-muted-foreground">
             File: <span className="font-mono font-medium text-foreground">{fileName}</span>
@@ -549,7 +549,7 @@ export function ColumnExportDialog({
             Select Columns for Export
           </DialogTitle>
           <DialogDescription className="text-sm mt-2">
-            Choose columns for Download or Push to ERP Tool, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
+            Choose columns for Download, then pick clean, quarantined, or all data in CSV, Excel, or JSON.
           </DialogDescription>
           <div className="text-xs mt-3 p-2 rounded bg-muted text-muted-foreground">
             File: <span className="font-mono font-medium text-foreground">{fileName}</span>

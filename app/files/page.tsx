@@ -47,7 +47,6 @@ import {
   type CustomRuleDefinition,
   type CustomRuleSuggestionResponse,
 } from "@/lib/api/file-management-api";
-import { AWS_CONFIG } from "@/lib/aws-config";
 import { cn, formatBytes, formatToIST } from "@/lib/utils";
 import { DownloadFormatModal } from "@/components/files/download-format-modal";
 import {
@@ -1243,7 +1242,7 @@ function FilesPageContent() {
     setDownloading(columnExportFile.upload_id);
 
     try {
-      const blob = await fileManagementAPI.exportWithColumns(
+      const exportResult = await fileManagementAPI.exportWithColumns(
         columnExportFile.upload_id,
         idToken,
         {
@@ -1267,14 +1266,26 @@ function FilesPageContent() {
             : ".csv";
       const filename = `${baseFilename}_export${extension}`;
 
-      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      if (exportResult.blob) {
+        const url = URL.createObjectURL(exportResult.blob);
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else if (exportResult.downloadUrl) {
+        link.href = exportResult.downloadUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        throw new Error("No downloadable export payload received");
+      }
 
       toast({
         title: "Export Complete",
@@ -1307,7 +1318,7 @@ function FilesPageContent() {
     setDownloading(columnExportFile.upload_id);
 
     try {
-      const blob = await fileManagementAPI.exportWithColumns(
+      const exportResult = await fileManagementAPI.exportWithColumns(
         columnExportFile.upload_id,
         idToken,
         {
@@ -1332,14 +1343,26 @@ function FilesPageContent() {
             : ".csv";
       const filename = `${baseFilename}_erp${extension}`;
 
-      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      if (exportResult.blob) {
+        const url = URL.createObjectURL(exportResult.blob);
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else if (exportResult.downloadUrl) {
+        link.href = exportResult.downloadUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        throw new Error("No downloadable export payload received");
+      }
 
       toast({
         title: "ERP Export Complete",
@@ -1394,46 +1417,14 @@ function FilesPageContent() {
     setDownloading(file.upload_id);
 
     try {
-      const typeParam =
-        format === "excel" ? "excel" : format === "json" ? "json" : "csv";
-      const downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=${dataType}`;
-
-      const response = await fetch(downloadUrl, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-
-      if (!response.ok)
-        throw new Error(`Download failed: ${response.statusText}`);
-
-      // Check if response is JSON (presigned URL response) vs direct file content
-      const contentType = response.headers.get("Content-Type") || "";
-      let blob: Blob;
-
-      if (contentType.includes("application/json")) {
-        // Response may contain presigned URL - parse and fetch from S3
-        const data = await response.json();
-        if (data.presigned_url) {
-          console.log(
-            "📥 Fetching from presigned URL:",
-            data.filename || "file",
-          );
-          const s3Response = await fetch(data.presigned_url);
-          if (!s3Response.ok) {
-            throw new Error(
-              `Failed to download from S3: ${s3Response.statusText}`,
-            );
-          }
-          blob = await s3Response.blob();
-        } else if (data.error) {
-          throw new Error(data.error);
-        } else {
-          // Fallback - return JSON as blob
-          blob = new Blob([JSON.stringify(data)], { type: "application/json" });
-        }
-      } else {
-        // Direct blob response
-        blob = await response.blob();
-      }
+      const exportResult = await fileManagementAPI.exportWithColumns(
+        file.upload_id,
+        idToken,
+        {
+          format,
+          data: dataType === "original" ? "raw" : "clean",
+        },
+      );
 
       const baseFilename = (
         file.original_filename ||
@@ -1445,14 +1436,26 @@ function FilesPageContent() {
       const dataSuffix = dataType === "original" ? "_original" : "_clean";
       const filename = `${baseFilename}${dataSuffix}${extension}`;
 
-      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      if (exportResult.blob) {
+        const url = URL.createObjectURL(exportResult.blob);
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else if (exportResult.downloadUrl) {
+        link.href = exportResult.downloadUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        throw new Error("No downloadable export payload received");
+      }
 
       toast({ title: "Success", description: "File downloaded" });
     } catch (error) {
@@ -1481,46 +1484,16 @@ function FilesPageContent() {
     setShowErpModal(false);
 
     try {
-      const typeParam =
-        format === "excel" ? "excel" : format === "json" ? "json" : "csv";
-      let downloadUrl = `${AWS_CONFIG.API_BASE_URL}/files/${file.upload_id}/export?type=${typeParam}&data=${dataType}`;
-      if (targetErp) downloadUrl += `&erp=${encodeURIComponent(targetErp)}`;
+      const exportResult = await fileManagementAPI.exportWithColumns(
+        file.upload_id,
+        idToken,
+        {
+          format,
+          data: dataType,
+          erp: targetErp || undefined,
+        },
+      );
 
-      const response = await fetch(downloadUrl, {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-
-      if (!response.ok)
-        throw new Error(`Download failed: ${response.statusText}`);
-
-      // Check if response is JSON (presigned URL for large files) or direct file
-      const contentType = response.headers.get("Content-Type") || "";
-
-      if (contentType.includes("application/json")) {
-        // Parse JSON to get presigned URL
-        const data = await response.json();
-        if (data.presigned_url) {
-          // Open presigned URL directly - browser will download the file
-          console.log(
-            "📥 Opening presigned URL for download:",
-            data.filename || "file",
-          );
-          window.open(data.presigned_url, "_blank");
-          toast({
-            title: "Success",
-            description: targetErp
-              ? `Downloaded with ${targetErp}`
-              : "File download started",
-          });
-          return;
-        }
-        if (data.error) {
-          throw new Error(data.error);
-        }
-      }
-
-      // For small files, get blob directly
-      const blob = await response.blob();
       const baseFilename = (
         file.original_filename ||
         file.filename ||
@@ -1531,7 +1504,6 @@ function FilesPageContent() {
       const erpSuffix = targetErp
         ? `_${targetErp.replace(/\s+/g, "_").toLowerCase()}`
         : "";
-      // Add data type suffix
       const dataTypeSuffix =
         dataType === "clean"
           ? "_clean"
@@ -1540,14 +1512,26 @@ function FilesPageContent() {
             : "_full";
       const filename = `${baseFilename}${dataTypeSuffix}${erpSuffix}${extension}`;
 
-      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      if (exportResult.blob) {
+        const url = URL.createObjectURL(exportResult.blob);
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else if (exportResult.downloadUrl) {
+        link.href = exportResult.downloadUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        throw new Error("No downloadable export payload received");
+      }
 
       toast({
         title: "Success",
@@ -3286,18 +3270,6 @@ function FilesPageContent() {
                   }
                   columns={columnExportColumns}
                   onExport={handleColumnExport}
-                  onSecondaryAction={handleColumnExportWithErp}
-                  secondaryActionLabel="Push to ERP Tool"
-                  secondaryActionLoading={
-                    downloading === columnExportFile?.upload_id
-                  }
-                  secondaryActionDisabled={
-                    !actionsDialogFile ||
-                    !(
-                      actionsDialogFile.status === "DQ_FIXED" ||
-                      actionsDialogFile.status === "COMPLETED"
-                    )
-                  }
                   primaryActionLabel="Download"
                   exporting={
                     downloading === columnExportFile?.upload_id ||
@@ -3354,3 +3326,4 @@ function FilesPageContent() {
     </TooltipProvider>
   );
 }
+

@@ -301,6 +301,12 @@ export interface ExportResponse {
   filename: string
 }
 
+export interface ExportDownloadResult {
+  blob?: Blob
+  downloadUrl?: string
+  filename?: string
+}
+
 class FileManagementAPI {
   private baseURL: string
 
@@ -532,7 +538,7 @@ class FileManagementAPI {
     return this.makeRequest(endpoint, authToken, { method: "GET" })
   }
   async downloadFile(uploadId: string, fileType: 'csv' | 'excel' | 'json', dataType: 'clean' | 'quarantine' | 'raw' | 'original' | 'all', authToken: string, targetErp?: string): Promise<Blob> {
-    let endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}`
+    let endpoint = `${ENDPOINTS.FILES_EXPORT(uploadId)}?type=${fileType}&data=${dataType}&_ts=${Date.now()}`
 
     // Add ERP transformation parameter if specified
     if (targetErp) {
@@ -542,7 +548,8 @@ class FileManagementAPI {
     const url = `${this.baseURL}${endpoint}`
 
     const response = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${authToken}` }
+      headers: { 'Authorization': `Bearer ${authToken}` },
+      cache: 'no-store',
     })
 
     if (!response.ok) throw new Error(`Download failed: ${response.statusText}`)
@@ -592,18 +599,18 @@ class FileManagementAPI {
     authToken: string,
     options: {
       format: 'csv' | 'excel' | 'json'
-      data: 'all' | 'clean' | 'quarantine'
+      data: 'all' | 'clean' | 'quarantine' | 'raw' | 'original'
       columns?: string[]
       columnMapping?: Record<string, string>
       erp?: string
       entity?: string
     }
-  ): Promise<Blob> {
+  ): Promise<ExportDownloadResult> {
     const url = `${this.baseURL}${ENDPOINTS.FILES_EXPORT(uploadId)}`
 
     const body: Record<string, any> = {
       format: options.format,
-      data: options.data,
+      data: options.data === 'original' ? 'raw' : options.data,
     }
 
     if (options.columns && options.columns.length > 0) {
@@ -648,11 +655,16 @@ class FileManagementAPI {
       if (data.presigned_url) {
         console.log('📥 Fetching from presigned URL:', data.filename)
         // Fetch the actual file from S3 presigned URL
-        const s3Response = await fetch(data.presigned_url)
-        if (!s3Response.ok) {
-          throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
+        try {
+          const s3Response = await fetch(data.presigned_url)
+          if (!s3Response.ok) {
+            throw new Error(`Failed to download from S3: ${s3Response.statusText}`)
+          }
+          return { blob: await s3Response.blob(), filename: data.filename }
+        } catch (error) {
+          console.warn('Direct S3 fetch failed, falling back to browser download link:', error)
+          return { downloadUrl: data.presigned_url, filename: data.filename }
         }
-        return s3Response.blob()
       }
       // If no presigned_url, might be an error - throw
       if (data.error) {
@@ -669,7 +681,7 @@ class FileManagementAPI {
       })
     }
 
-    return response.blob()
+    return { blob: await response.blob() }
   }
 
   async getFilePreviewFromS3(uploadId: string, authToken: string, maxRows: number = 20): Promise<{ headers: string[], sample_data: any[], total_rows: number, has_dq_status?: boolean }> {
@@ -1493,5 +1505,3 @@ export interface UnifiedBridgeImportResponse {
 
 export const fileManagementAPI = new FileManagementAPI()
 export default fileManagementAPI
-
-
