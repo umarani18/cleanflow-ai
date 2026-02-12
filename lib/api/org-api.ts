@@ -14,6 +14,10 @@ export interface OrgRecord {
   logo_key?: string;
   logo_url?: string;
   logo_data_url?: string;
+  industry?: string;
+  gst?: string;
+  pan?: string;
+  contact_person?: string;
   superadmin_user_id?: string;
   created_at?: string;
   updated_at?: string;
@@ -115,6 +119,10 @@ class OrgAPI {
       email: string;
       phone: string;
       address: string;
+      industry?: string;
+      gst?: string;
+      pan?: string;
+      contact_person?: string;
       subscriptionPlan?: string;
     },
     authToken?: string | null
@@ -147,17 +155,48 @@ class OrgAPI {
     return this.makeRequest("/org/invites", authToken, { method: "GET" });
   }
 
-  createInvite(email: string, role: OrgRole, authToken?: string | null) {
+  createInvite(
+    email: string,
+    role: OrgRole,
+    frontendBaseUrl?: string,
+    authToken?: string | null
+  ) {
     return this.makeRequest("/org/invites", authToken, {
       method: "POST",
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, role, frontend_base_url: frontendBaseUrl }),
     });
   }
 
-  acceptInvite(orgId: string, inviteId: string, authToken?: string | null) {
+  acceptInvite(orgId: string, inviteId: string, token: string, authToken?: string | null) {
     return this.makeRequest("/org/invites/accept", authToken, {
       method: "POST",
-      body: JSON.stringify({ org_id: orgId, invite_id: inviteId }),
+      body: JSON.stringify({ org_id: orgId, invite_id: inviteId, token }),
+    });
+  }
+
+  setInvitePassword(
+    orgId: string,
+    inviteId: string,
+    token: string,
+    email: string,
+    password: string,
+    authToken?: string | null
+  ) {
+    return this.makeRequest("/org/invites/set-password", authToken, {
+      method: "POST",
+      body: JSON.stringify({ org_id: orgId, invite_id: inviteId, token, email, password }),
+    });
+  }
+
+  revokeInvite(inviteId: string, authToken?: string | null) {
+    return this.makeRequest(`/org/invites/${encodeURIComponent(inviteId)}`, authToken, {
+      method: "DELETE",
+    });
+  }
+
+  removeMember(userId: string, authToken?: string | null) {
+    return this.makeRequest(`/org/members/${encodeURIComponent(userId)}`, authToken, {
+      method: "DELETE",
     });
   }
 

@@ -26,11 +26,13 @@ import { useToast } from '@/hooks/use-toast'
 interface CustomDestinationExportProps {
   selectedFormat: string | null
   onFormatChange: (format: string) => void
+  onPermissionDenied?: () => void
 }
 
 export default function CustomDestinationExport({
   selectedFormat,
   onFormatChange,
+  onPermissionDenied,
 }: CustomDestinationExportProps) {
   const [files, setFiles] = useState<FileStatusResponse[]>([])
   const [loading, setLoading] = useState(false)
@@ -49,6 +51,13 @@ export default function CustomDestinationExport({
 
   const { idToken } = useAuth()
   const { toast } = useToast()
+  const isPermissionError = (error: unknown) =>
+    ((error as Error)?.message || "").toLowerCase().includes("permission denied") ||
+    ((error as Error)?.message || "").toLowerCase().includes("forbidden")
+
+  const notifyPermissionDenied = () => {
+    onPermissionDenied?.()
+  }
 
   const loadFiles = useCallback(async () => {
     if (!idToken) return
@@ -56,13 +65,19 @@ export default function CustomDestinationExport({
     try {
       const response = await fileManagementAPI.getUploads(idToken)
       setFiles(response.items || [])
-    } catch (error) {
-      console.error('Error loading files:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to load files',
-        variant: 'destructive',
-      })
+    } catch (error: any) {
+      const message = (error?.message || "").toLowerCase()
+      const denied = message.includes("permission denied") || message.includes("forbidden")
+      if (denied) {
+        notifyPermissionDenied()
+      } else {
+        console.warn("Failed to load files.")
+        toast({
+          title: 'Error',
+          description: 'Failed to load files',
+          variant: 'destructive',
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -117,7 +132,11 @@ export default function CustomDestinationExport({
         setColumnsError('No columns detected for this file. You can still proceed with export.')
       }
     } catch (error) {
-      console.error('Failed to fetch columns:', error)
+      if (isPermissionError(error)) {
+        notifyPermissionDenied()
+      } else {
+        console.error('Failed to fetch columns:', error)
+      }
       setAvailableColumns([])
       setSelectedColumns(new Set())
       setColumnsError('Unable to fetch columns. You can proceed without column selection.')
@@ -199,17 +218,26 @@ export default function CustomDestinationExport({
             })
           }
         } catch (err) {
-          console.error('Error polling status:', err)
+          if (isPermissionError(err)) {
+            notifyPermissionDenied()
+          } else {
+            console.error('Error polling status:', err)
+          }
         }
       }, 1000) // Poll every second
     } catch (error) {
-      console.error('Error processing file:', error)
+      const denied = isPermissionError(error)
+      if (denied) {
+        notifyPermissionDenied()
+      } else {
+        console.error('Error processing file:', error)
+        toast({
+          title: 'Processing Error',
+          description: (error as Error).message || 'Failed to process file',
+          variant: 'destructive',
+        })
+      }
       setProcessing(false)
-      toast({
-        title: 'Processing Error',
-        description: (error as Error).message || 'Failed to process file',
-        variant: 'destructive',
-      })
     }
   }
 
@@ -257,12 +285,16 @@ export default function CustomDestinationExport({
 
       setShowDownloadModal(false)
     } catch (error) {
-      console.error('Download error:', error)
-      toast({
-        title: 'Download Error',
-        description: (error as Error).message || 'Failed to download file',
-        variant: 'destructive',
-      })
+      if (isPermissionError(error)) {
+        notifyPermissionDenied()
+      } else {
+        console.error('Download error:', error)
+        toast({
+          title: 'Download Error',
+          description: (error as Error).message || 'Failed to download file',
+          variant: 'destructive',
+        })
+      }
     } finally {
       setDownloading(false)
     }

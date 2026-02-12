@@ -12,6 +12,7 @@ import Image from "next/image"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/components/providers/auth-provider"
 import {
   Dialog,
@@ -37,7 +38,7 @@ export function LoginForm() {
   const [mfaCode, setMfaCode] = useState('')
   const [mfaError, setMfaError] = useState('')
   const [isVerifyingMfa, setIsVerifyingMfa] = useState(false)
-  
+
   // MFA Setup state
   const [showMfaSetupModal, setShowMfaSetupModal] = useState(false)
   const [mfaSetupStep, setMfaSetupStep] = useState<'qr' | 'verify'>('qr')
@@ -47,12 +48,26 @@ export function LoginForm() {
   const [mfaSetupSession, setMfaSetupSession] = useState<string | null>(null)
   const [copiedSecret, setCopiedSecret] = useState(false)
 
-  const { login, verifyMfaCode, setupMfaWithSession, confirmMfaSetupWithSession, mfaRequired, mfaSession, cancelMfa } = useAuth()
+  // New Password state
+  const [showNewPasswordModal, setShowNewPasswordModal] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [isSettingPassword, setIsSettingPassword] = useState(false)
+
+  const { login, verifyMfaCode, setupMfaWithSession, confirmMfaSetupWithSession, completeNewPassword, mfaRequired, mfaSession, cancelMfa } = useAuth()
   const { toast } = useToast()
+
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     setMounted(true)
-  }, [])
+
+    // Prefill email if provided in URL (from invite link)
+    const emailParam = searchParams.get('email')
+    if (emailParam) {
+      setEmail(decodeURIComponent(emailParam))
+    }
+  }, [searchParams])
 
   // NOTE: Removed automatic MFA modal trigger - the login handler now explicitly
   // decides whether to show MFA verification modal or MFA setup modal
@@ -76,16 +91,42 @@ export function LoginForm() {
 
   const redirectAfterLogin = async () => {
     try {
-      await orgAPI.getMe()
+      const me = await orgAPI.getMe()
+      sessionStorage.removeItem("pending_org_details")
+      const role = me.membership?.role || "Super Admin"
+      window.localStorage.setItem("cleanflowai.currentRole", role)
       window.location.href = "/dashboard"
     } catch (err: any) {
       const message = err?.message || ""
       if (message.includes("Organization membership required")) {
+        // Manual signup already captured org details; auto-register before showing setup page.
+        const pendingOrgRaw = sessionStorage.getItem("pending_org_details")
+        if (pendingOrgRaw) {
+          try {
+            const pendingOrg = JSON.parse(pendingOrgRaw)
+            await orgAPI.registerOrg({
+              name: pendingOrg.name,
+              email: pendingOrg.email || email,
+              phone: pendingOrg.phone,
+              address: pendingOrg.address,
+              industry: pendingOrg.industry,
+              gst: pendingOrg.gst,
+              pan: pendingOrg.pan,
+              contact_person: pendingOrg.contact_person,
+              subscriptionPlan: "standard",
+            })
+            sessionStorage.removeItem("pending_org_details")
+            window.location.href = "/dashboard"
+            return
+          } catch {
+            // Fall back to setup page if auto-registration fails.
+          }
+        }
         toast({
           title: "Organization setup required",
           description: "Please create your organization to continue.",
         })
-        window.location.href = "/create-organization"
+        window.location.href = `/create-organization${window.location.search}`
         return
       }
       window.location.href = "/dashboard"
@@ -104,6 +145,13 @@ export function LoginForm() {
       if (result.mfaRequired) {
         // Existing user with MFA - show verification modal
         setShowMfaModal(true)
+        setIsLoading(false)
+        return
+      }
+
+      if (result.newPasswordRequired) {
+        // Invite flow: User must set a permanent password
+        setShowNewPasswordModal(true)
         setIsLoading(false)
         return
       }
@@ -138,21 +186,21 @@ export function LoginForm() {
 
       // Call Cognito to get the secret code
       const result = await setupMfaWithSession(sessionToUse, email)
-      
+
       // Generate QR code image from the TOTP URI
       const qrDataUrl = await QRCode.toDataURL(result.qrCodeUrl, {
         width: 200,
         margin: 2,
         color: { dark: '#000000', light: '#FFFFFF' }
       })
-      
+
       setQrCodeDataUrl(qrDataUrl)
       setSecretCode(result.secretCode)
       setMfaSetupSession(result.session) // Update with new session
       setShowMfaSetupModal(true)
       setMfaSetupStep('qr')
       setIsLoading(false)
-      
+
     } catch (err: any) {
       setError(err.message || 'Failed to start MFA setup')
       setIsLoading(false)
@@ -190,6 +238,17 @@ export function LoginForm() {
     setMfaCode('')
     setMfaError('')
     setIsVerifyingMfa(false)
+    cancelMfa()
+  }
+
+  const handleCloseNewPasswordModal = () => {
+    setShowNewPasswordModal(false)
+    setNewPassword('')
+    setConfirmNewPassword('')
+    setError('')
+    setIsSettingPassword(false)
+    // Cognito sessions for NEW_PASSWORD_REQUIRED are one-time use.
+    // If they fail, user must re-login to get a fresh session.
     cancelMfa()
   }
 
@@ -238,6 +297,60 @@ export function LoginForm() {
     } catch (err: any) {
       setMfaError(err.message || 'Verification failed')
       setIsVerifyingMfa(false)
+    }
+  }
+
+  const handleSetNewPassword = async () => {
+    setError('')
+
+    if (!newPassword || !confirmNewPassword) {
+      setError('Please fill in both password fields')
+      return
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+
+    setIsSettingPassword(true)
+
+    try {
+      const result = await completeNewPassword(newPassword)
+
+      if (result.mfaRequired) {
+        setShowNewPasswordModal(false)
+        setShowMfaModal(true)
+        setIsSettingPassword(false)
+        return
+      }
+
+      if (result.success) {
+        setSuccess('Password set successfully!')
+        setShowNewPasswordModal(false)
+        setIsVerifying(true)
+        setTimeout(() => {
+          redirectAfterLogin()
+        }, 1500)
+      }
+    } catch (err: any) {
+      const message = err.message || 'Failed to set password'
+      setError(message)
+      setIsSettingPassword(false)
+
+      if (message.includes('session can only be used once') || message.includes('Invalid session')) {
+        toast({
+          title: "Session Expired",
+          description: "Your secure session has expired. Please log in again to continue.",
+          variant: "destructive"
+        })
+        handleCloseNewPasswordModal()
+      }
     }
   }
 
@@ -434,7 +547,7 @@ export function LoginForm() {
           <p className="text-center text-sm text-muted-foreground">
             Don't have an account?{' '}
             <Link
-              href="/auth/signup"
+              href={`/auth/signup${window.location.search}`}
               className="text-accent hover:opacity-90 font-medium"
             >
               Sign up
@@ -442,6 +555,86 @@ export function LoginForm() {
           </p>
         </CardContent>
       </Card>
+
+      {/* New Password Modal (for invited users) */}
+      <Dialog open={showNewPasswordModal} onOpenChange={handleCloseNewPasswordModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="relative">
+            <button
+              onClick={handleCloseNewPasswordModal}
+              className="absolute right-0 top-0 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+            >
+              <Check className="h-4 w-4 sr-only" /> {/* Hidden accessibility check */}
+            </button>
+            <div className="flex items-center justify-center mb-4">
+              <div className="rounded-full bg-primary/10 p-3">
+                <Lock className="w-8 h-8 text-primary" />
+              </div>
+            </div>
+            <DialogTitle className="text-center text-2xl">Set Your Password</DialogTitle>
+            <DialogDescription className="text-center">
+              Welcome! Since this is your first time logging in, please set a permanent password for your account.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-6">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                placeholder="Enter new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoFocus
+                disabled={isSettingPassword}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirm-new-password">Confirm Password</Label>
+              <Input
+                id="confirm-new-password"
+                type="password"
+                placeholder="Confirm new password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                disabled={isSettingPassword}
+              />
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              onClick={handleSetNewPassword}
+              className="w-full h-12"
+              disabled={isSettingPassword || !newPassword || !confirmNewPassword}
+            >
+              {isSettingPassword ? (
+                <div className="flex items-center space-x-2">
+                  <LoadingSpinner size="sm" />
+                  <span>Setting password...</span>
+                </div>
+              ) : (
+                'Set Password & Login'
+              )}
+            </Button>
+
+            <Button
+              variant="ghost"
+              onClick={handleCloseNewPasswordModal}
+              className="w-full"
+              disabled={isSettingPassword}
+            >
+              Cancel & Back to Login
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* MFA Modal */}
       <Dialog open={showMfaModal} onOpenChange={handleCloseMfaModal}>

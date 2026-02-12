@@ -21,8 +21,12 @@ export function FileAnalytics() {
       try {
         const response = await fileManagementAPI.getUploads(idToken)
         setFiles(response.items || [])
-      } catch (error) {
-        console.error('Error loading files:', error)
+      } catch (error: any) {
+        const message = (error?.message || "").toLowerCase()
+        if (!message.includes("permission denied") && !message.includes("forbidden")) {
+          console.warn("Failed to load files for analytics.")
+        }
+        setFiles([])
       } finally {
         setLoading(false)
       }

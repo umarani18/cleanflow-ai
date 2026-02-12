@@ -125,8 +125,11 @@ function DqChartsComponent({ files }: DqChartsProps) {
       try {
         const report = await fileManagementAPI.downloadOverallDqReport(idToken);
         setOverallReport(report);
-      } catch (error) {
-        console.error("Error loading overall DQ report:", error);
+      } catch (error: any) {
+        const message = (error?.message || "").toLowerCase();
+        if (!message.includes("permission denied") && !message.includes("organization membership required")) {
+          console.error("Error loading overall DQ report:", error);
+        }
         // Use file data as fallback
       } finally {
         setLoading(false);
@@ -895,8 +898,11 @@ export function MonthlyTrendsCompact({ files }: DqChartsProps) {
       try {
         const report = await fileManagementAPI.downloadOverallDqReport(idToken);
         setOverallReport(report);
-      } catch (error) {
-        console.error("Error loading overall DQ report:", error);
+      } catch (error: any) {
+        const message = (error?.message || "").toLowerCase();
+        if (!message.includes("permission denied") && !message.includes("organization membership required")) {
+          console.error("Error loading overall DQ report:", error);
+        }
       } finally {
         setLoading(false);
       }

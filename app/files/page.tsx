@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/store";
 import {
   fetchFiles,
+  resetFiles,
   updateFile,
   removeFile,
   selectFiles,
@@ -12,7 +13,6 @@ import {
 import {
   Upload,
   FileText,
-  RefreshCw,
   Loader2,
   Trash2,
   Eye,
@@ -114,7 +114,6 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RULE_IDS, getRuleMeta } from "@/lib/rule-metadata";
-
 const STATUS_OPTIONS = [
   { label: "All", value: "all", type: "status" },
   { label: "Uploaded", value: "UPLOADED", type: "status" },
@@ -370,7 +369,43 @@ function FilesPageContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectionFileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { idToken } = useAuth();
+  const { idToken, hasPermission, permissionsLoaded } = useAuth();
+  const canUseFilesActions = hasPermission("files");
+
+  const showFilesPermissionDenied = useCallback(() => {
+    toast({
+      title: "Permission denied",
+      description:
+        "You do not have permission for this action. Contact your organization admin.",
+      variant: "destructive",
+    });
+  }, [toast]);
+
+  const ensureFilesPermission = useCallback(() => {
+    if (hasPermission("files")) return true;
+    showFilesPermissionDenied();
+    return false;
+  }, [hasPermission, showFilesPermissionDenied]);
+
+  const renderRestrictedFilesPanel = useCallback(
+    (content: React.ReactNode) => {
+      if (canUseFilesActions) return content;
+      return (
+        <div className="relative">
+          <div className="pointer-events-none select-none opacity-80 grayscale">
+            {content}
+          </div>
+          <button
+            type="button"
+            aria-label="Permission restricted"
+            className="absolute inset-0 z-10 cursor-not-allowed"
+            onClick={showFilesPermissionDenied}
+          />
+        </div>
+      );
+    },
+    [canUseFilesActions, showFilesPermissionDenied],
+  );
 
   const renderRuleOption = (
     ruleId: string,
@@ -408,14 +443,21 @@ function FilesPageContent() {
     );
   };
 
-  const loadFiles = useCallback(async () => {
+  const loadFiles = useCallback(async (userInitiated = false) => {
     if (!idToken) return;
+    if (permissionsLoaded && !hasPermission("files")) {
+      dispatch(resetFiles());
+      if (userInitiated) {
+        ensureFilesPermission();
+      }
+      return;
+    }
     // Dispatch global fetch action
-    dispatch(fetchFiles(idToken));
-  }, [idToken, dispatch]);
+    await dispatch(fetchFiles(idToken));
+  }, [idToken, permissionsLoaded, hasPermission, dispatch, ensureFilesPermission]);
 
   useEffect(() => {
-    loadFiles();
+    loadFiles(false);
   }, [loadFiles]);
 
 
@@ -512,6 +554,10 @@ function FilesPageContent() {
   };
 
   const handleFileUpload = async (file: File) => {
+    if (!ensureFilesPermission()) {
+      return;
+    }
+
     if (!idToken) {
       toast({
         title: "Error",
@@ -558,9 +604,15 @@ function FilesPageContent() {
       await loadFiles();
     } catch (error) {
       console.error("Upload failed:", error);
+      const message =
+        error instanceof Error ? error.message.toLowerCase() : "";
       toast({
-        title: "Upload failed",
-        description: "Please try again",
+        title: message.includes("permission denied")
+          ? "Permission denied"
+          : "Upload failed",
+        description: message.includes("permission denied")
+          ? "You do not have permission for this action. Contact your organization admin."
+          : "Please try again",
         variant: "destructive",
       });
     } finally {
@@ -599,6 +651,7 @@ function FilesPageContent() {
   };
 
   const handlePushToQuickBooks = (file: FileStatusResponse) => {
+    if (!ensureFilesPermission()) return;
     setFileToPush(file);
     setPushQBModalOpen(true);
   };
@@ -618,6 +671,7 @@ function FilesPageContent() {
     cols?: string[],
   ) => {
     if (!idToken) return;
+    if (!ensureFilesPermission()) return;
 
     try {
       await fileManagementAPI.startProcessing(file.upload_id, idToken, {
@@ -645,6 +699,7 @@ function FilesPageContent() {
 
   const handleStartProcessing = async (file: FileStatusResponse) => {
     if (!idToken) return;
+    if (!ensureFilesPermission()) return;
     setWizardFile(file);
     setWizardOpen(true);
   };
@@ -1094,6 +1149,7 @@ function FilesPageContent() {
 
   const handleDeleteConfirm = async () => {
     if (!fileToDelete || !idToken) return;
+    if (!ensureFilesPermission()) return;
 
     setDeleting(fileToDelete.upload_id);
     setShowDeleteModal(false);
@@ -1107,9 +1163,14 @@ function FilesPageContent() {
       await loadFiles();
     } catch (error) {
       console.error("Delete error:", error);
+      const message =
+        error instanceof Error &&
+        error.message.toLowerCase().includes("permission denied")
+          ? "You do not have permission for this action. Contact your organization admin."
+          : "Unable to delete file";
       toast({
         title: "Delete failed",
-        description: "Unable to delete file",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -1119,11 +1180,13 @@ function FilesPageContent() {
   };
 
   const handleDownloadClick = (file: FileStatusResponse) => {
+    if (!ensureFilesPermission()) return;
     setDownloadModalFile(file);
     setShowDownloadModal(true);
   };
 
   const openActionsDialog = (file: FileStatusResponse) => {
+    if (!ensureFilesPermission()) return;
     setActionsDialogFile(file);
     setColumnExportFile(file);
     setActionsDialogOpen(true);
@@ -1132,6 +1195,7 @@ function FilesPageContent() {
 
   const handleColumnExportClick = async (file: FileStatusResponse) => {
     if (!idToken) return;
+    if (!ensureFilesPermission()) return;
 
     setColumnExportFile(file);
     setColumnExportLoading(true);
@@ -1174,6 +1238,7 @@ function FilesPageContent() {
     columnMapping: Record<string, string>;
   }) => {
     if (!columnExportFile || !idToken) return;
+    if (!ensureFilesPermission()) return;
 
     setDownloading(columnExportFile.upload_id);
 
@@ -1237,6 +1302,7 @@ function FilesPageContent() {
     columnMapping: Record<string, string>;
   }) => {
     if (!columnExportFile || !idToken) return;
+    if (!ensureFilesPermission()) return;
 
     setDownloading(columnExportFile.upload_id);
 
@@ -1285,9 +1351,14 @@ function FilesPageContent() {
       setActionsDialogOpen(false);
     } catch (error) {
       console.error("ERP export error:", error);
+      const message =
+        error instanceof Error &&
+        error.message.toLowerCase().includes("permission denied")
+          ? "You do not have permission for this action. Contact your organization admin."
+          : "Unable to export ERP file";
       toast({
         title: "ERP Export Failed",
-        description: "Unable to export ERP file",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -1300,6 +1371,7 @@ function FilesPageContent() {
     dataType: "original" | "clean",
   ) => {
     if (!downloadModalFile) return;
+    if (!ensureFilesPermission()) return;
     setShowDownloadModal(false);
 
     if (dataType === "clean") {
@@ -1316,6 +1388,7 @@ function FilesPageContent() {
     dataType: "original" | "clean",
   ) => {
     if (!idToken) return;
+    if (!ensureFilesPermission()) return;
 
     setDownloadingFormat(`${file.upload_id}-${format}`);
     setDownloading(file.upload_id);
@@ -1400,6 +1473,7 @@ function FilesPageContent() {
     dataType: "clean" | "quarantine" | "all" = "all",
   ) => {
     if (!erpModalConfig || !idToken) return;
+    if (!ensureFilesPermission()) return;
 
     const { file, format } = erpModalConfig;
     setDownloadingFormat(`${file.upload_id}-${format}`);
@@ -1572,19 +1646,6 @@ function FilesPageContent() {
               )}
             </button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={loadFiles}
-            disabled={loading}
-            className="shrink-0"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-          </Button>
         </div>
 
         {/* File Upload Section */}
@@ -1688,7 +1749,11 @@ function FilesPageContent() {
                     onDragOver={handleDrag}
                     onDragLeave={handleDrag}
                     onDrop={handleDrop}
-                    onClick={() => !uploading && fileInputRef.current?.click()}
+                    onClick={() => {
+                      if (uploading) return;
+                      if (!ensureFilesPermission()) return;
+                      fileInputRef.current?.click();
+                    }}
                   >
                     {uploading ? (
                       <div className="flex flex-col items-center gap-4 sm:gap-6 lg:gap-8">
@@ -1730,47 +1795,56 @@ function FilesPageContent() {
                     />
                   </div>
                 ) : selectedSource === "unified-bridge" ? (
-                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
-                    <UnifiedBridgeImport
-                      mode="source"
-                      onImportComplete={handleQuickBooksImportComplete}
-                      onNotification={(message, type) => {
-                        toast({
-                          title: type === "success" ? "Success" : "Error",
-                          description: message,
-                          variant: type === "error" ? "destructive" : "default",
-                        });
-                      }}
-                    />
-                  </div>
+                  renderRestrictedFilesPanel(
+                    <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                      <UnifiedBridgeImport
+                        mode="source"
+                        onImportComplete={handleQuickBooksImportComplete}
+                        onPermissionDenied={showFilesPermissionDenied}
+                        onNotification={(message, type) => {
+                          toast({
+                            title: type === "success" ? "Success" : "Error",
+                            description: message,
+                            variant: type === "error" ? "destructive" : "default",
+                          });
+                        }}
+                      />
+                    </div>,
+                  )
                 ) : selectedSource === "erp" && selectedErp === "quickbooks" ? (
-                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
-                    <QuickBooksImport
-                      mode="source"
-                      onImportComplete={handleQuickBooksImportComplete}
-                      onNotification={(message, type) => {
-                        toast({
-                          title: type === "success" ? "Success" : "Error",
-                          description: message,
-                          variant: type === "error" ? "destructive" : "default",
-                        });
-                      }}
-                    />
-                  </div>
+                  renderRestrictedFilesPanel(
+                    <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                      <QuickBooksImport
+                        mode="source"
+                        onImportComplete={handleQuickBooksImportComplete}
+                        onPermissionDenied={showFilesPermissionDenied}
+                        onNotification={(message, type) => {
+                          toast({
+                            title: type === "success" ? "Success" : "Error",
+                            description: message,
+                            variant: type === "error" ? "destructive" : "default",
+                          });
+                        }}
+                      />
+                    </div>,
+                  )
                 ) : selectedSource === "erp" && selectedErp === "zoho-books" ? (
-                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
-                    <ZohoBooksImport
-                      mode="source"
-                      onImportComplete={handleQuickBooksImportComplete}
-                      onNotification={(message, type) => {
-                        toast({
-                          title: type === "success" ? "Success" : "Error",
-                          description: message,
-                          variant: type === "error" ? "destructive" : "default",
-                        });
-                      }}
-                    />
-                  </div>
+                  renderRestrictedFilesPanel(
+                    <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px]">
+                      <ZohoBooksImport
+                        mode="source"
+                        onImportComplete={handleQuickBooksImportComplete}
+                        onPermissionDenied={showFilesPermissionDenied}
+                        onNotification={(message, type) => {
+                          toast({
+                            title: type === "success" ? "Success" : "Error",
+                            description: message,
+                            variant: type === "error" ? "destructive" : "default",
+                          });
+                        }}
+                      />
+                    </div>,
+                  )
                 ) : selectedSource === "erp" ? (
                   <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
                     <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
@@ -1819,52 +1893,64 @@ function FilesPageContent() {
               // ========= DESTINATION/EXPORT SECTION =========
               <div className="space-y-4">
                 {selectedDestination === "local" ? (
-                  <CustomDestinationExport
-                    selectedFormat={selectedDestinationFormat}
-                    onFormatChange={setSelectedDestinationFormat}
-                  />
+                  renderRestrictedFilesPanel(
+                    <CustomDestinationExport
+                      selectedFormat={selectedDestinationFormat}
+                      onFormatChange={setSelectedDestinationFormat}
+                      onPermissionDenied={showFilesPermissionDenied}
+                    />,
+                  )
                 ) : selectedDestination === "unified-bridge" ? (
-                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
-                    <UnifiedBridgeImport
-                      mode="destination"
-                      onImportComplete={handleQuickBooksImportComplete}
-                      onNotification={(message, type) => {
-                        toast({
-                          title: type === "success" ? "Success" : "Error",
-                          description: message,
-                          variant: type === "error" ? "destructive" : "default",
-                        });
-                      }}
-                    />
-                  </div>
+                  renderRestrictedFilesPanel(
+                    <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                      <UnifiedBridgeImport
+                        mode="destination"
+                        onImportComplete={handleQuickBooksImportComplete}
+                        onPermissionDenied={showFilesPermissionDenied}
+                        onNotification={(message, type) => {
+                          toast({
+                            title: type === "success" ? "Success" : "Error",
+                            description: message,
+                            variant: type === "error" ? "destructive" : "default",
+                          });
+                        }}
+                      />
+                    </div>,
+                  )
                 ) : selectedDestination === "erp" &&
                   selectedDestinationErp === "quickbooks" ? (
-                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
-                    <QuickBooksImport
-                      mode="destination"
-                      onNotification={(message, type) => {
-                        toast({
-                          title: type === "success" ? "Success" : "Error",
-                          description: message,
-                          variant: type === "error" ? "destructive" : "default",
-                        });
-                      }}
-                    />
-                  </div>
+                  renderRestrictedFilesPanel(
+                    <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                      <QuickBooksImport
+                        mode="destination"
+                        onPermissionDenied={showFilesPermissionDenied}
+                        onNotification={(message, type) => {
+                          toast({
+                            title: type === "success" ? "Success" : "Error",
+                            description: message,
+                            variant: type === "error" ? "destructive" : "default",
+                          });
+                        }}
+                      />
+                    </div>,
+                  )
                 ) : selectedDestination === "erp" &&
                   selectedDestinationErp === "zoho-books" ? (
-                  <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
-                    <ZohoBooksImport
-                      mode="destination"
-                      onNotification={(message, type) => {
-                        toast({
-                          title: type === "success" ? "Success" : "Error",
-                          description: message,
-                          variant: type === "error" ? "destructive" : "default",
-                        });
-                      }}
-                    />
-                  </div>
+                  renderRestrictedFilesPanel(
+                    <div className="min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] rounded-xl border bg-card p-4">
+                      <ZohoBooksImport
+                        mode="destination"
+                        onPermissionDenied={showFilesPermissionDenied}
+                        onNotification={(message, type) => {
+                          toast({
+                            title: type === "success" ? "Success" : "Error",
+                            description: message,
+                            variant: type === "error" ? "destructive" : "default",
+                          });
+                        }}
+                      />
+                    </div>,
+                  )
                 ) : selectedDestination === "erp" ? (
                   <div className="flex flex-col items-center justify-center min-h-[300px] sm:min-h-[400px] lg:min-h-[500px] p-6 sm:p-12 lg:p-20 border-2 border-dashed rounded-xl bg-muted/5">
                     <div className="rounded-full bg-muted p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8">
@@ -3253,6 +3339,11 @@ function FilesPageContent() {
           onOpenChange={setWizardOpen}
           file={wizardFile}
           authToken={idToken || ""}
+          onStarted={() => {
+            setWizardOpen(false);
+            setWizardFile(null);
+            loadFiles(); // Refresh file list after processing starts
+          }}
           onComplete={() => {
             setWizardOpen(false);
             setWizardFile(null);
