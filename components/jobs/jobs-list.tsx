@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { Fragment, useState, useCallback, useEffect } from "react"
 import { format } from "date-fns"
 import {
     CalendarClock, ChevronDown, ChevronRight, Clock, Edit2, Loader2, MoreHorizontal,
@@ -267,7 +267,7 @@ export function JobsList() {
                             </TableHeader>
                             <TableBody>
                                 {filteredJobs.map((job) => (
-                                    <>
+                                    <Fragment key={`job-group-${job.job_id}`}>
                                         <TableRow
                                             key={job.job_id}
                                             className={cn(
@@ -369,7 +369,7 @@ export function JobsList() {
                                                 </TableCell>
                                             </TableRow>
                                         )}
-                                    </>
+                                    </Fragment>
                                 ))}
                             </TableBody>
                         </Table>
