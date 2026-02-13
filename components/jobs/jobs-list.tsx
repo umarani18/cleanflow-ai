@@ -32,6 +32,8 @@ import { JobRunsPanel } from "./job-runs"
 const ERP_LABELS: Record<string, string> = {
     quickbooks: "QuickBooks",
     zoho_books: "Zoho Books",
+    "zoho-books": "Zoho Books",
+    zohobooks: "Zoho Books",
 }
 
 const FREQ_LABELS: Record<string, string> = {
