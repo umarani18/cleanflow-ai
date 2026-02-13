@@ -164,7 +164,7 @@ class ERPTransformAPI {
     return response.json()
   }
 
-  // Core transformation endpoints (using pure LLM routes)
+  // Core transformation endpoints (using pure CleanAI routes)
   async transformFile(
     file: File,
     options: {
@@ -191,7 +191,7 @@ class ERPTransformAPI {
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.detail || "Failed to transform file (LLM)")
+      throw new Error(error.detail || "Failed to transform file (CleanAI)")
     }
 
     return response.json()
@@ -223,13 +223,13 @@ class ERPTransformAPI {
 
     if (!response.ok) {
       const error = await response.text()
-      throw new Error(error || "Failed to download transformed file (LLM)")
+      throw new Error(error || "Failed to download transformed file (CleanAI)")
     }
 
     return response.blob()
   }
 
-  // Transform JSON data directly (pure LLM)
+  // Transform JSON data directly (pure CleanAI)
   async transformJSON(data: {
     auto_select_erp?: boolean
     auto_select_entity?: boolean
@@ -247,7 +247,7 @@ class ERPTransformAPI {
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.detail || "Failed to transform data (LLM)")
+      throw new Error(error.detail || "Failed to transform data (CleanAI)")
     }
 
     return response.json()

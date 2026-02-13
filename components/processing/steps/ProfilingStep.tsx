@@ -58,7 +58,7 @@ export function ProfilingStep() {
       const summary = (response as any)?.summary || {}
       setBackendVersion(summary.backend_version)
 
-      // Store cross-field rules from LLM
+      // Store cross-field rules from CleanAI
       const cfr = (response as any)?.cross_field_rules || []
       setCrossFieldRules(cfr.map((r: any) => ({ ...r, enabled: true })))
 
@@ -246,11 +246,11 @@ export function ProfilingStep() {
             {hasProfiles && (
               <div className="mt-4 border border-muted rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <h3 className="font-medium text-sm">Cross-column Rules (LLM suggested)</h3>
+                  <h3 className="font-medium text-sm">Cross-column Rules (CleanAI suggested)</h3>
                   <Badge variant="outline" className="text-xs">{crossFieldRules.length}</Badge>
                 </div>
                 {crossFieldRules.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No cross-field rules returned by LLM</p>
+                  <p className="text-sm text-muted-foreground">No cross-field rules returned by CleanAI</p>
                 ) : (
                   <div className="space-y-2">
                     {crossFieldRules.map((rule, i) => (

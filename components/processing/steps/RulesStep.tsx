@@ -139,7 +139,7 @@ export function RulesStep() {
         setRawResponse(raw)
       }
       if (response?.error || !response?.suggestion) {
-        setError(response?.error || "LLM did not return a usable rule. Please adjust the prompt.")
+        setError(response?.error || "CleanAI did not return a usable rule. Please adjust the prompt.")
         setPendingSuggestion(null)
         return
       }
@@ -377,7 +377,7 @@ export function RulesStep() {
                         {error && <p className="text-sm text-destructive">{error}</p>}
                         {rawResponse && (
                           <div className="text-xs bg-muted/40 border rounded p-2 max-h-32 overflow-y-auto text-muted-foreground">
-                            <div className="font-medium text-foreground mb-1">LLM raw response</div>
+                            <div className="font-medium text-foreground mb-1">CleanAI raw response</div>
                             <pre className="whitespace-pre-wrap break-all">{rawResponse}</pre>
                           </div>
                         )}
