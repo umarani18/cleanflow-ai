@@ -3,6 +3,7 @@
 import { Microscope, Zap, GitBranch, Tag } from "lucide-react"
 
 import Image from "next/image"
+import React from "react"
 import { LoginForm } from "@/components/auth/login-form"
 
 export default function LoginPage() {
@@ -15,10 +16,10 @@ export default function LoginPage() {
           <div className="absolute top-20 left-10 w-72 h-72 bg-cyan-400 rounded-full blur-3xl" />
           <div className="absolute bottom-20 right-10 w-96 h-96 bg-teal-400 rounded-full blur-3xl" />
         </div>
-        
+
         {/* Grid Pattern Overlay */}
         <div className="absolute inset-0 opacity-[0.03] dark:opacity-5" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }} />
-        
+
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-between p-12 h-full">
           {/* Top - Logo */}
@@ -48,7 +49,7 @@ export default function LoginPage() {
                 Access your dashboard and continue transforming your data with our powerful platform.
               </p>
             </div>
-            
+
             {/* Features Grid */}
             <div className="grid grid-cols-2 gap-4 max-w-md">
               <div className="flex items-center space-x-3 p-3 rounded-xl bg-white/60 dark:bg-white/5 border border-slate-200 dark:border-white/10">
@@ -100,7 +101,9 @@ export default function LoginPage() {
       {/* Right Side - Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md">
-          <LoginForm />
+          <React.Suspense fallback={<div className="flex items-center justify-center min-h-[400px]">Loading...</div>}>
+            <LoginForm />
+          </React.Suspense>
         </div>
       </div>
     </div>
