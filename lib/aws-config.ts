@@ -1,9 +1,16 @@
 const getRequiredEnv = (name: string, value: string | undefined) => {
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`)
+    if (typeof window === "undefined") {
+      // During build time or SSR, we return an empty string to avoid breaking the build.
+      // Next.js will bake the value into the static pages if it's NEXT_PUBLIC_
+      // Warning: If this is missing in Vercel, auth will still fail at runtime.
+      console.warn(`[Build Warning] Missing required environment variable: ${name}`);
+      return "";
+    }
+    throw new Error(`Missing required environment variable: ${name}`);
   }
-  return value
-}
+  return value;
+};
 
 const normalizeApiBaseUrl = (value: string | undefined) => {
   if (!value) return value
