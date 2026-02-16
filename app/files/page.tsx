@@ -2406,7 +2406,23 @@ function FilesPageContent() {
                                     )}
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Download / Export</TooltipContent>
+                                <TooltipContent>Download</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 sm:h-8 sm:w-8"
+                                    onClick={() => {
+                                      setFileToPush(file);
+                                      setPushQBModalOpen(true);
+                                    }}
+                                  >
+                                    <CloudUpload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Export to ERP</TooltipContent>
                               </Tooltip>
 
                               <Tooltip>
@@ -3208,7 +3224,7 @@ function FilesPageContent() {
                 <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
                   <CloudUpload className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
-                Export & Push Data
+                Download Data
               </DialogTitle>
               <DialogDescription>
                 Configure your data and select a destination.
