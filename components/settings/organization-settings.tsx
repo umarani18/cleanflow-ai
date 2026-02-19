@@ -194,6 +194,9 @@ const INITIAL_SERVICES_SETTINGS = {
   preferredFormat: "csv",
 };
 
+// Keep presets logic and wiring in place, but hide this UI block for now.
+const SHOW_GLOBAL_SETTINGS_PRESETS = false;
+
 // Initial members data (loaded from backend)
 const INITIAL_MEMBERS: Array<{
   id: string;
@@ -1310,9 +1313,9 @@ export function OrganizationSettings() {
               <UserPlus className="w-8 h-8 text-primary" />
             </div>
             <DialogHeader className="space-y-2">
-              <DialogTitle className="text-2xl font-bold tracking-tight text-foreground">Invite Team Member</DialogTitle>
+              <DialogTitle className="text-2xl font-bold tracking-tight text-foreground">Add Team Member</DialogTitle>
               <DialogDescription className="text-muted-foreground text-sm leading-relaxed max-w-[320px]">
-                Enter the email address of the person you'd like to invite and select their role within the organization.
+                Enter the email address of the person you'd like to add and select their role within the organization.
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -1367,11 +1370,11 @@ export function OrganizationSettings() {
                 {isSendingInvite ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Sending Invite...
+                    Adding Member...
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-2">
-                    Send Invitation
+                    Add Member
                     <Plus className="w-4 h-4 transition-transform group-hover:rotate-90 text-primary-foreground/80" />
                   </div>
                 )}
@@ -1419,16 +1422,23 @@ export function OrganizationSettings() {
         </div>
         <div className="justify-self-end">
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
+            className="gap-2"
             onClick={handleRefreshAdminTab}
             disabled={isRefreshingOrg}
             aria-label="Refresh admin data"
           >
             {isRefreshingOrg ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Refreshing...
+              </>
             ) : (
-              <RefreshCw className="w-4 h-4" />
+              <>
+                <RefreshCw className="w-4 h-4" />
+                Refresh
+              </>
             )}
           </Button>
         </div>
@@ -1622,7 +1632,7 @@ export function OrganizationSettings() {
                   title={inviteHelpText}
                 >
                   <UserPlus className="w-4 h-4" />
-                  Invite Member
+                  Add Member
                 </Button>
             </CardHeader>
             <CardContent>
@@ -2163,8 +2173,7 @@ export function OrganizationSettings() {
                       </Badge>
                     </div>
                     <p className="text-xs sm:text-sm text-muted-foreground">
-                      Distributed Proxy & Privacy Layer — Work with AI without
-                      giving away your data
+                      Protects your data from external threats.
                     </p>
                   </div>
                 </div>
@@ -2190,6 +2199,8 @@ export function OrganizationSettings() {
             </CardContent>
           </Card>
 
+          {SHOW_GLOBAL_SETTINGS_PRESETS && (
+            <>
           {/* Global Settings Presets */}
           <Card>
             <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -2359,6 +2370,8 @@ export function OrganizationSettings() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+            </>
+          )}
         </PermissionWrapper>
       </TabsContent >
     </Tabs >

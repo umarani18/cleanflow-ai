@@ -343,13 +343,13 @@ function DqChartsComponent({ files }: DqChartsProps) {
     {
       name: "Validated",
       value: totalRowsOut - totalRowsFixed,
-      fill: CHART_COLORS.greenSoft,
+      fill: CHART_COLORS.green,
     },
-    { name: "Fixed", value: totalRowsFixed, fill: CHART_COLORS.yellowSoft },
+    { name: "Fixed", value: totalRowsFixed, fill: CHART_COLORS.yellow },
     {
       name: "Quarantined",
       value: totalRowsQuarantined,
-      fill: CHART_COLORS.redSoft,
+      fill: CHART_COLORS.red,
     },
   ].filter((d) => d.value > 0), [totalRowsOut, totalRowsFixed, totalRowsQuarantined]);
 
@@ -630,7 +630,7 @@ function DqChartsComponent({ files }: DqChartsProps) {
           </div>
         </CardHeader> */}
         <CardContent className="px-4 pb-4 pt-2">
-          <ProfessionalChartsCarousel />
+          <ProfessionalChartsCarousel files={files} />
         </CardContent>
       </Card>
     </div>
@@ -641,22 +641,151 @@ function DqChartsComponent({ files }: DqChartsProps) {
 export const DqCharts = memo(DqChartsComponent);
 
 // Professional Charts Carousel Component
-function ProfessionalChartsCarousel() {
+function ProfessionalChartsCarousel({ files }: DqChartsProps) {
   const [currentChart, setCurrentChart] = useState(0);
+  const [trendView, setTrendView] = useState<"day" | "week" | "month">("month");
+  const [selectedDay, setSelectedDay] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
 
-  const trendData = [
-    { month: 'Jan', quarantined: 5, clean: 80, fixed: 45 },
-    { month: 'Feb', quarantined: 12, clean: 80, fixed: 47 },
-    { month: 'Mar', quarantined: 25, clean: 79, fixed: 45 },
-    { month: 'Apr', quarantined: 35, clean: 80, fixed: 43 },
-    { month: 'May', quarantined: 48, clean: 80, fixed: 48 },
-    { month: 'Jun', quarantined: 55, clean: 78, fixed: 46 },
-    { month: 'Jul', quarantined: 62, clean: 77, fixed: 49 },
-    { month: 'Aug', quarantined: 70, clean: 78, fixed: 54 },
-    { month: 'Sep', quarantined: 78, clean: 79, fixed: 55 },
-    { month: 'Oct', quarantined: 82, clean: 77, fixed: 59 },
-    { month: 'Nov', quarantined: 90, clean: 76, fixed: 65 },
-  ];
+  const trendData = useMemo(() => {
+    const completedFiles = files.filter(
+      (f) =>
+        f.status === "DQ_FIXED" &&
+        Boolean(f.uploaded_at || f.created_at) &&
+        !Number.isNaN(new Date(f.uploaded_at || f.created_at || "").getTime()),
+    );
+
+    const aggregateRows = (file: FileStatusResponse) => {
+      const rowsIn = file.rows_in || 0;
+      const rowsQuarantined = file.rows_quarantined || 0;
+      const rowsFixed = file.rows_fixed || 0;
+      const rowsOut =
+        typeof file.rows_out === "number" ? file.rows_out : rowsIn - rowsQuarantined;
+      const cleanRows = Math.max(rowsOut - rowsFixed, 0);
+      return { cleanRows, rowsFixed, rowsQuarantined };
+    };
+
+    if (trendView === "day") {
+      const selected = new Date(`${selectedDay}T00:00:00`);
+      const buckets: Record<string, { clean: number; fixed: number; quarantined: number; hour: number }> = {};
+
+      for (let hour = 0; hour < 24; hour += 3) {
+        const label =
+          hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`;
+        buckets[label] = { clean: 0, fixed: 0, quarantined: 0, hour };
+      }
+
+      completedFiles.forEach((f) => {
+        const fileDate = new Date(f.uploaded_at || f.created_at || "");
+        const sameDay =
+          fileDate.getFullYear() === selected.getFullYear() &&
+          fileDate.getMonth() === selected.getMonth() &&
+          fileDate.getDate() === selected.getDate();
+        if (!sameDay) return;
+
+        const bucketHour = Math.floor(fileDate.getHours() / 3) * 3;
+        const label =
+          bucketHour === 0
+            ? "12 AM"
+            : bucketHour < 12
+              ? `${bucketHour} AM`
+              : bucketHour === 12
+                ? "12 PM"
+                : `${bucketHour - 12} PM`;
+
+        const rows = aggregateRows(f);
+        buckets[label].clean += rows.cleanRows;
+        buckets[label].fixed += rows.rowsFixed;
+        buckets[label].quarantined += rows.rowsQuarantined;
+      });
+
+      return Object.entries(buckets)
+        .sort(([, a], [, b]) => a.hour - b.hour)
+        .map(([period, stats]) => ({
+          period,
+          clean: stats.clean,
+          fixed: stats.fixed,
+          quarantined: stats.quarantined,
+        }));
+    }
+
+    if (trendView === "week") {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(now.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+
+      const buckets: Record<string, { clean: number; fixed: number; quarantined: number; ts: number }> = {};
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const key = d.toISOString().slice(0, 10);
+        const label = d.toLocaleDateString("en-US", { weekday: "short" });
+        buckets[key] = {
+          clean: 0,
+          fixed: 0,
+          quarantined: 0,
+          ts: d.getTime(),
+        };
+        (buckets[key] as any).label = label;
+      }
+
+      completedFiles.forEach((f) => {
+        const fileDate = new Date(f.uploaded_at || f.created_at || "");
+        if (fileDate < start || fileDate > now) return;
+        const key = `${fileDate.getFullYear()}-${String(fileDate.getMonth() + 1).padStart(2, "0")}-${String(fileDate.getDate()).padStart(2, "0")}`;
+        if (!buckets[key]) return;
+        const rows = aggregateRows(f);
+        buckets[key].clean += rows.cleanRows;
+        buckets[key].fixed += rows.rowsFixed;
+        buckets[key].quarantined += rows.rowsQuarantined;
+      });
+
+      return Object.entries(buckets)
+        .sort(([, a], [, b]) => a.ts - b.ts)
+        .map(([_, stats]) => ({
+          period: (stats as any).label,
+          clean: stats.clean,
+          fixed: stats.fixed,
+          quarantined: stats.quarantined,
+        }));
+    }
+
+    const now = new Date();
+    const buckets: Record<string, { clean: number; fixed: number; quarantined: number; ts: number }> = {};
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      buckets[key] = {
+        clean: 0,
+        fixed: 0,
+        quarantined: 0,
+        ts: d.getTime(),
+      };
+      (buckets[key] as any).label = d.toLocaleDateString("en-US", { month: "short" });
+    }
+
+    completedFiles.forEach((f) => {
+      const d = new Date(f.uploaded_at || f.created_at || "");
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!buckets[key]) return;
+      const rows = aggregateRows(f);
+      buckets[key].clean += rows.cleanRows;
+      buckets[key].fixed += rows.rowsFixed;
+      buckets[key].quarantined += rows.rowsQuarantined;
+    });
+
+    return Object.entries(buckets)
+      .sort(([, a], [, b]) => a.ts - b.ts)
+      .map(([_, stats]) => ({
+        period: (stats as any).label,
+        clean: stats.clean,
+        fixed: stats.fixed,
+        quarantined: stats.quarantined,
+      }));
+  }, [files, trendView, selectedDay]);
 
   const qualityMetricsData = [
     { month: 'Jan', score: 65, errors: 35, issues: 28 },
@@ -689,52 +818,58 @@ function ProfessionalChartsCarousel() {
   const charts = [
     {
       title: "Data Processing Trends",
-      subtitle: "Comparison of cleaned, fixed, and quarantined records",
+      subtitle: "Comparison of validated, fixed, and quarantined records",
       icon: LineChartIcon,
       render: () => (
         <div className="h-[360px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 12 }}
-                stroke="#6B7280"
-              />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                stroke="#6B7280"
-              />
-              <ChartTooltip
-                contentStyle={{ backgroundColor: "#fff", border: "1px solid #E5E7EB" }}
-                formatter={(value) => value.toLocaleString()}
-              />
-              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "20px" }} />
-              <Line
-                type="monotone"
-                dataKey="clean"
-                stroke="#10B981"
-                strokeWidth={3}
-                dot={{ r: 5, fill: "#10B981" }}
-                name="Cleaned"
-              />
-              <Line
-                type="monotone"
-                dataKey="fixed"
-                stroke="#3B82F6"
-                strokeWidth={3}
-                dot={{ r: 5, fill: "#3B82F6" }}
-                name="Fixed"
-              />
-              <Line
-                type="monotone"
-                dataKey="quarantined"
-                stroke="#F59E0B"
-                strokeWidth={3}
-                dot={{ r: 5, fill: "#F59E0B" }}
-                name="Quarantined"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {trendData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+              No processed trend data available.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData} margin={{ top: 15, right: 30, left: 0, bottom: 40 }}>
+                <XAxis
+                  dataKey="period"
+                  tick={{ fontSize: 12 }}
+                  stroke="#6B7280"
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke="#6B7280"
+                />
+                <ChartTooltip
+                  contentStyle={{ backgroundColor: "#fff", border: "1px solid #E5E7EB" }}
+                  formatter={(value) => value.toLocaleString()}
+                />
+                <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "20px" }} />
+                <Line
+                  type="monotone"
+                  dataKey="clean"
+                  stroke={CHART_COLORS.green}
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: CHART_COLORS.green }}
+                  name="Validated"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="fixed"
+                  stroke={CHART_COLORS.yellow}
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: CHART_COLORS.yellow }}
+                  name="Fixed"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="quarantined"
+                  stroke={CHART_COLORS.red}
+                  strokeWidth={3}
+                  dot={{ r: 4, fill: CHART_COLORS.red }}
+                  name="Quarantined"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       )
     },
@@ -850,6 +985,34 @@ function ProfessionalChartsCarousel() {
           <p className="text-sm text-muted-foreground">{currentChartData.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
+          {currentChart === 0 && (
+            <>
+              <Tabs
+                value={trendView}
+                onValueChange={(value) => setTrendView(value as "day" | "week" | "month")}
+              >
+                <TabsList className="h-8">
+                  <TabsTrigger value="day" className="text-xs px-2">
+                    Day
+                  </TabsTrigger>
+                  <TabsTrigger value="week" className="text-xs px-2">
+                    Week
+                  </TabsTrigger>
+                  <TabsTrigger value="month" className="text-xs px-2">
+                    Month
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {trendView === "day" && (
+                <input
+                  type="date"
+                  value={selectedDay}
+                  onChange={(e) => setSelectedDay(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                />
+              )}
+            </>
+          )}
           <span className="text-xs font-medium text-muted-foreground">
             {currentChart + 1} / {charts.length}
           </span>
@@ -1206,14 +1369,6 @@ export function ProcessingSummary({ files }: DqChartsProps) {
             <span className="text-sm text-muted-foreground">Records Quarantined</span>
             <span className="text-sm font-medium text-red-600 dark:text-red-400">
               {totalRowsQuarantined.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex justify-between items-center p-2 rounded-lg bg-muted/50">
-            <span className="text-sm text-muted-foreground">Success Rate</span>
-            <span className="text-sm font-medium">
-              {files.length > 0
-                ? `${Math.round((completedFiles.length / files.length) * 100)}%`
-                : "0%"}
             </span>
           </div>
         </div>

@@ -29,6 +29,7 @@ import {
   Sparkles,
   Menu,
   Columns,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -201,6 +202,7 @@ function FilesPageContent() {
   }, [files]);
 
   const [loading, setLoading] = useState(false);
+  const [isManualRefresh, setIsManualRefresh] = useState(false);
 
   // Sync local loading state with Redux status for compatibility
   useEffect(() => {
@@ -457,6 +459,23 @@ function FilesPageContent() {
 
   useEffect(() => {
     loadFiles(false);
+  }, [loadFiles]);
+
+  const handleManualRefresh = useCallback(async () => {
+    setIsManualRefresh(true);
+    const startedAt = Date.now();
+    try {
+      await loadFiles(true);
+      const elapsed = Date.now() - startedAt;
+      const minSpinDurationMs = 450;
+      if (elapsed < minSpinDurationMs) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, minSpinDurationMs - elapsed),
+        );
+      }
+    } finally {
+      setIsManualRefresh(false);
+    }
   }, [loadFiles]);
 
 
@@ -2061,6 +2080,21 @@ function FilesPageContent() {
                 )}
               </div>
               <div className="flex items-center gap-2 ml-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-3"
+                  onClick={handleManualRefresh}
+                  disabled={isManualRefresh}
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-4 w-4 mr-1.5",
+                      isManualRefresh && "animate-spin",
+                    )}
+                  />
+                  Refresh
+                </Button>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -2372,7 +2406,23 @@ function FilesPageContent() {
                                     )}
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Download / Export</TooltipContent>
+                                <TooltipContent>Download</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 sm:h-8 sm:w-8"
+                                    onClick={() => {
+                                      setFileToPush(file);
+                                      setPushQBModalOpen(true);
+                                    }}
+                                  >
+                                    <CloudUpload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Export to ERP</TooltipContent>
                               </Tooltip>
 
                               <Tooltip>
@@ -3174,7 +3224,7 @@ function FilesPageContent() {
                 <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
                   <CloudUpload className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
-                Export & Push Data
+                Download Data
               </DialogTitle>
               <DialogDescription>
                 Configure your data and select a destination.

@@ -3,6 +3,7 @@
 import { FileSpreadsheet, Layers, Upload } from "lucide-react"
 
 import Image from "next/image"
+import React from "react"
 import { SignUpForm } from "@/components/auth/signup-form"
 
 export default function SignUpPage() {
@@ -15,10 +16,10 @@ export default function SignUpPage() {
           <div className="absolute top-32 right-20 w-80 h-80 bg-violet-400 rounded-full blur-3xl" />
           <div className="absolute bottom-32 left-10 w-72 h-72 bg-cyan-400 rounded-full blur-3xl" />
         </div>
-        
+
         {/* Grid Pattern Overlay */}
         <div className="absolute inset-0 opacity-[0.03] dark:opacity-5" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }} />
-        
+
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-between p-12 h-full">
           {/* Top - Logo */}
@@ -48,7 +49,7 @@ export default function SignUpPage() {
                 Connect data from any source, apply powerful transformations, and export clean, structured datasets with ease
               </p>
             </div>
-            
+
             {/* How It Works */}
             <div className="space-y-4 max-w-md">
               <p className="text-sm font-medium text-slate-400 dark:text-white/50 uppercase tracking-wider">How it works</p>
@@ -92,7 +93,9 @@ export default function SignUpPage() {
       {/* Right Side - Signup Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md">
-          <SignUpForm />
+          <React.Suspense fallback={<div className="flex items-center justify-center min-h-[400px]">Loading...</div>}>
+            <SignUpForm />
+          </React.Suspense>
         </div>
       </div>
     </div>

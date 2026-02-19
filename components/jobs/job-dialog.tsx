@@ -20,7 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import {
-    jobsAPI, type Job, type ERPType, type JobFrequency, type CreateJobPayload, type UpdateJobPayload,
+    jobsAPI, type Job, type JobFrequency, type CreateJobPayload, type UpdateJobPayload,
     frequencyToBackend, frequencyFromBackend
 } from "@/lib/api/jobs-api"
 import { fileManagementAPI } from "@/lib/api/file-management-api"
@@ -59,10 +59,22 @@ const ERP_OPTIONS = [
     { label: "CUSTOM SOURCE", value: "custom-source" },
 ]
 
-const SOURCE_ERP_OPTIONS = [
-    { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
-    { label: "ZOHO BOOKS", value: "zohobooks" },
-]
+const SOURCE_ERP_OPTIONS = ERP_OPTIONS
+
+const normalizeErpForUi = (value?: string): string => {
+    if (!value) return "quickbooks"
+    if (value === "zoho_books" || value === "zohobooks" || value === "zoho-books") {
+        return "zoho-books"
+    }
+    return value
+}
+
+const normalizeErpForApi = (value: string): string => {
+    if (value === "zoho-books" || value === "zoho_books") {
+        return "zohobooks"
+    }
+    return value
+}
 
 // Default global rules (same as in processing wizard's RulesStep)
 const DEFAULT_GLOBAL_RULES = [
@@ -112,8 +124,8 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
 
     // Core fields
     const [name, setName] = useState("")
-    const [source, setSource] = useState<ERPType>("quickbooks")
-    const [destination, setDestination] = useState<ERPType>("quickbooks")
+    const [source, setSource] = useState<string>("quickbooks")
+    const [destination, setDestination] = useState<string>("quickbooks")
     const [frequency, setFrequency] = useState<JobFrequency>("1hr")
     const [cronExpression, setCronExpression] = useState("")
     const [entity, setEntity] = useState("invoices")
@@ -172,8 +184,8 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
         if (!open) return
         if (job) {
             setName(job.name)
-            setSource(job.source)
-            setDestination(job.destination)
+            setSource(normalizeErpForUi(job.source))
+            setDestination(normalizeErpForUi(job.destination))
             // Translate backend frequency format to frontend
             const freq = frequencyFromBackend(job.frequency_type, job.frequency_value)
             setFrequency(freq.frequency)
@@ -425,9 +437,9 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
             const normalizedEntity = normalizeEntityForSource(entity, source)
             const base = {
                 name: name.trim(),
-                source,
-                destination,
-                entities: [normalizedEntity],
+                source: normalizeErpForApi(source),
+                destination: normalizeErpForApi(destination),
+                entities: [entity],
                 ...freqBackend,
                 dq_config,
             }
@@ -482,7 +494,7 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label className="text-sm font-medium">Source ERP</Label>
-                            <Select value={source} onValueChange={(v) => setSource(v as ERPType)}>
+                            <Select value={source} onValueChange={setSource}>
                                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {SOURCE_ERP_OPTIONS.map((erp) => (
@@ -493,7 +505,7 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
                         </div>
                         <div className="space-y-2">
                             <Label className="text-sm font-medium">Destination ERP</Label>
-                            <Select value={destination} onValueChange={(v) => setDestination(v as ERPType)}>
+                            <Select value={destination} onValueChange={setDestination}>
                                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {ERP_OPTIONS.map((erp) => (
