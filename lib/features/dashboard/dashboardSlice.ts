@@ -1,22 +1,9 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit"
+import type { DashboardState } from '@/modules/dashboard/types/dashboard.types'
 
-interface DashboardState {
-  totalTransformations: number
-  successRate: number
-  activeConnections: number
-  recentActivity: Array<{
-    id: string
-    type: "transform" | "upload" | "download"
-    status: "success" | "error" | "pending"
-    timestamp: string
-    details: string
-  }>
-  systemHealth: {
-    api: "healthy" | "degraded" | "down"
-    database: "healthy" | "degraded" | "down"
-    storage: "healthy" | "degraded" | "down"
-  }
-}
+// Re-export for backwards compatibility
+export type { DashboardState } from '@/modules/dashboard/types/dashboard.types'
+
 
 const initialState: DashboardState = {
   totalTransformations: 0,

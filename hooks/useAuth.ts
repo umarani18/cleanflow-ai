@@ -2,36 +2,15 @@ import { AuthFlowType, CognitoIdentityProvider, AssociateSoftwareTokenCommand, V
 import { useEffect, useState } from 'react'
 
 import { AWS_CONFIG } from '@/lib/aws-config'
+import type { User, AuthState, MfaSetupData } from '@/modules/auth/types/auth.types'
+
+// Re-export types for backwards compatibility
+export type { User, AuthState, MfaSetupData } from '@/modules/auth/types/auth.types'
 
 const CONFIG = {
   userPoolId: AWS_CONFIG.COGNITO.USER_POOL_ID,
   clientId: AWS_CONFIG.COGNITO.CLIENT_ID,
   region: AWS_CONFIG.COGNITO.REGION
-}
-
-interface User {
-  email: string
-  sub: string
-  username: string
-  name: string
-}
-
-interface AuthState {
-  user: User | null
-  isLoading: boolean
-  isAuthenticated: boolean
-  idToken: string | null
-  accessToken: string | null
-  refreshToken: string | null
-  // MFA state
-  mfaRequired: boolean
-  mfaSession: string | null
-  mfaUsername: string | null
-}
-
-interface MfaSetupData {
-  secretCode: string
-  qrCodeUrl: string
 }
 
 export function useAuth() {

@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/components/providers/auth-provider'
+import type { FileItem, FileStats } from '@/modules/files/types'
+
+// Re-export types for backwards compatibility
+export type { FileItem, FileStats } from '@/modules/files/types'
 
 const CONFIG = {
   apiUrl: 'https://oq92wt6zd9.execute-api.ap-south-1.amazonaws.com/prod/'
@@ -17,41 +21,6 @@ const mapStatus = (apiStatus: string): FileItem['status'] => {
     'FAILED': 'failed'
   }
   return statusMap[apiStatus] || 'uploaded'
-}
-
-export interface FileItem {
-  id: string
-  name: string
-  key: string // S3 key
-  size: number
-  type: string
-  modified: Date
-  lastModified: string // API returns this
-  status: 'processed' | 'processing' | 'failed' | 'uploaded' | 'queued' | 'dq_running' | 'dq_fixed' | 'dq_failed'
-  url?: string
-  thumbnail?: string
-  // DQ processing fields
-  upload_id?: string
-  original_filename?: string
-  uploaded_at?: string
-  dq_score?: number
-  rows_in?: number
-  rows_out?: number
-  rows_quarantined?: number
-  dq_issues?: Array<{
-    rule: string
-    violations: number
-  }>
-  last_error?: string
-}
-
-export interface FileStats {
-  totalFiles: number
-  totalSize: number
-  storageUsed: number
-  storageLimit: number
-  uploadedToday: number
-  downloadedToday: number
 }
 
 export function useFileManager() {
@@ -429,15 +398,15 @@ export function useFileManager() {
       setFiles(prev => prev.map(file =>
         file.upload_id === uploadId
           ? {
-              ...file,
-              status: mapStatus(status.status),
-              dq_score: status.dq_score,
-              rows_in: status.rows_in,
-              rows_out: status.rows_out,
-              rows_quarantined: status.rows_quarantined,
-              dq_issues: status.dq_issues,
-              last_error: status.last_error
-            }
+            ...file,
+            status: mapStatus(status.status),
+            dq_score: status.dq_score,
+            rows_in: status.rows_in,
+            rows_out: status.rows_out,
+            rows_quarantined: status.rows_quarantined,
+            dq_issues: status.dq_issues,
+            last_error: status.last_error
+          }
           : file
       ))
 

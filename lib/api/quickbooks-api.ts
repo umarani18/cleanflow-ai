@@ -2,41 +2,22 @@ import { AWS_CONFIG } from '../aws-config'
 
 const API_BASE_URL = AWS_CONFIG.API_BASE_URL
 
-// QuickBooks API Response Types
-export interface QuickBooksConnectResponse {
-  auth_url: string
-  state: string
-}
+// ─── Types (imported from modules/quickbooks/types, re-exported for backwards compatibility) ───
+import type {
+  QuickBooksConnectResponse,
+  QuickBooksConnectionStatus,
+  QuickBooksImportResponse,
+  QuickBooksExportResponse,
+  QuickBooksImportFilters,
+} from '@/modules/quickbooks/types/quickbooks.types'
 
-export interface QuickBooksConnectionStatus {
-  connected: boolean
-  realm_id?: string
-  company_name?: string
-  linked_at?: string
-  expires_at?: string
-}
-
-export interface QuickBooksImportResponse {
-  success: boolean
-  upload_id: string
-  filename: string
-  records_imported: number
-  entity: string
-  message: string
-}
-
-export interface QuickBooksExportResponse {
-  success: boolean
-  message: string
-  records_exported?: number
-  entity?: string
-}
-
-export interface QuickBooksImportFilters {
-  limit?: number
-  date_from?: string
-  date_to?: string
-}
+export type {
+  QuickBooksConnectResponse,
+  QuickBooksConnectionStatus,
+  QuickBooksImportResponse,
+  QuickBooksExportResponse,
+  QuickBooksImportFilters,
+} from '@/modules/quickbooks/types/quickbooks.types'
 
 /**
  * QuickBooks ERP Service
