@@ -39,3 +39,10 @@ export type {
 export type {
     SettingsPreset,
 } from './settings.types'
+
+export type {
+    FileDetailsTab,
+    FilePreviewData,
+    FileIssue,
+    MatrixTotals,
+} from './file-details.types'

@@ -1,0 +1,120 @@
+"use client"
+
+import { memo, useMemo } from "react"
+import { AlertTriangle, CheckCircle, FileText, TrendingUp } from "lucide-react"
+
+import { Card, CardContent } from "@/components/ui/card"
+import type { DqChartsProps } from "@/modules/dashboard/components/chart-constants"
+import { ChartsCarousel } from "@/modules/dashboard/components/charts/charts-carousel"
+import { DqScoreChart } from "@/modules/dashboard/components/charts/dq-score-chart"
+import { ProcessingVolumeChart } from "@/modules/dashboard/components/charts/processing-volume-chart"
+import { RowDistributionChart } from "@/modules/dashboard/components/charts/row-distribution-chart"
+
+export { MonthlyTrendsCompact } from "@/modules/dashboard/components/monthly-trends-compact"
+export { ProcessingSummary } from "@/modules/dashboard/components/processing-summary"
+export { ProfessionalChartsCarousel } from "@/modules/dashboard/components/professional-charts-carousel"
+export type { DqChartsProps } from "@/modules/dashboard/components/chart-constants"
+
+function DqChartsComponent({ files }: DqChartsProps) {
+  const { completedFiles, processingFiles, failedFiles } = useMemo(
+    () => ({
+      completedFiles: files.filter((f) => f.status === "DQ_FIXED"),
+      processingFiles: files.filter((f) => ["DQ_RUNNING", "NORMALIZING", "QUEUED", "UPLOADING"].includes(f.status)),
+      failedFiles: files.filter((f) => ["DQ_FAILED", "UPLOAD_FAILED"].includes(f.status)),
+    }),
+    [files]
+  )
+
+  const { totalRowsIn, totalRowsFixed, totalRowsQuarantined, totalRowsOut, avgDqScore } = useMemo(() => {
+    const rowsIn = completedFiles.reduce((sum, f) => sum + (f.rows_in || 0), 0)
+    const rowsFixed = completedFiles.reduce((sum, f) => sum + (f.rows_fixed || 0), 0)
+    const rowsQuarantined = completedFiles.reduce((sum, f) => sum + (f.rows_quarantined || 0), 0)
+    const avgScore =
+      completedFiles.length > 0
+        ? completedFiles.reduce((sum, f) => sum + (f.dq_score || 0), 0) / completedFiles.length
+        : 0
+
+    return {
+      totalRowsIn: rowsIn,
+      totalRowsFixed: rowsFixed,
+      totalRowsQuarantined: rowsQuarantined,
+      totalRowsOut: rowsIn - rowsQuarantined,
+      avgDqScore: avgScore,
+    }
+  }, [completedFiles])
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <FileText className="h-4 w-4 text-blue-500" />
+              <span className="text-sm text-muted-foreground">Total Files</span>
+            </div>
+            <div className="text-2xl font-bold">{files.length}</div>
+            <p className="text-xs text-muted-foreground">{completedFiles.length} files processed</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp className="h-4 w-4 text-green-500" />
+              <span className="text-sm text-muted-foreground">Avg DQ</span>
+            </div>
+            <div
+              className={`text-2xl font-bold ${
+                avgDqScore >= 90 ? "text-green-500" : avgDqScore >= 70 ? "text-yellow-500" : "text-red-500"
+              }`}
+            >
+              {avgDqScore.toFixed(1)}%
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <span className="text-sm text-muted-foreground">Rows Processed</span>
+            </div>
+            <div className="text-2xl font-bold">{totalRowsIn.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{totalRowsOut.toLocaleString()} valid output rows</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="h-4 w-4 text-yellow-500" />
+              <span className="text-sm text-muted-foreground">Issues Resolved</span>
+            </div>
+            <div className="text-2xl font-bold">{totalRowsFixed.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{totalRowsQuarantined.toLocaleString()} quarantined</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <RowDistributionChart
+          totalRowsOut={totalRowsOut}
+          totalRowsFixed={totalRowsFixed}
+          totalRowsQuarantined={totalRowsQuarantined}
+        />
+        <DqScoreChart completedFiles={completedFiles} />
+        <ProcessingVolumeChart
+          completedCount={completedFiles.length}
+          processingCount={processingFiles.length}
+          failedCount={failedFiles.length}
+        />
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardContent className="px-4 pb-4 pt-2">
+          <ChartsCarousel files={files} />
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export const DqCharts = memo(DqChartsComponent)
+

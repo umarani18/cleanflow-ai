@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit"
-import { fileManagementAPI, FileStatusResponse } from "@/lib/api/file-management-api"
+import { fileManagementAPI, FileStatusResponse } from "@/modules/files"
 import { RootState } from "@/lib/store"
 
 interface FilesState {
