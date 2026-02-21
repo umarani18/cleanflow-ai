@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/shared/hooks/use-toast"
 import { DqReportResponse, FileStatusResponse, fileManagementAPI } from "@/modules/files/api/file-management-api"
 import type { FileDetailsTab, FileIssue, FilePreviewData, MatrixTotals } from "@/modules/files/types"
 

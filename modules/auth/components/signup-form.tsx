@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useAuth } from "@/modules/auth/providers/auth-provider";
 import { orgAPI } from "@/modules/auth/api/org-api";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/shared/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 
 export function SignUpForm() {

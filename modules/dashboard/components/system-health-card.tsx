@@ -5,7 +5,7 @@ import { Database, HardDrive, Server } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { useAppSelector } from "@/lib/store"
+import { useAppSelector } from "@/shared/store/store"
 
 export function SystemHealthCard() {
   const { systemHealth } = useAppSelector((state) => state.dashboard)

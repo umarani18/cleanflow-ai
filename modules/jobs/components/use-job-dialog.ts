@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from '@/shared/hooks/use-toast'
 import {
     jobsAPI, type Job, type JobFrequency, type CreateJobPayload, type UpdateJobPayload,
     frequencyToBackend, frequencyFromBackend

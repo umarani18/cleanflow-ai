@@ -11,7 +11,7 @@ import {
   FolderDown,
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/lib/utils"
 import { useAuth } from "@/modules/auth"
 import FtpSourceForm from "./ftp-source-form"
 import TcpSourceForm from "./tcp-source-form"

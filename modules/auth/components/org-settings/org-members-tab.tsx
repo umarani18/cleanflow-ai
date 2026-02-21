@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { PermissionWrapper } from "@/modules/auth/components/permission-wrapper";
 import { getRoleBadgeVariant, getStatusBadgeVariant, VALID_ROLES, type AppRole } from "./use-org-settings";
 

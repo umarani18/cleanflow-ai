@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/modules/auth"
 import { fileManagementAPI } from "@/modules/files"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/shared/hooks/use-toast"
 
 interface DashboardHeaderProps {
   onRefresh?: () => Promise<void>

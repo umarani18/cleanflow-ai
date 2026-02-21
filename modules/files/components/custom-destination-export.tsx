@@ -21,7 +21,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import fileManagementAPI, { type FileStatusResponse } from '@/modules/files/api/file-management-api'
 import { DownloadFormatModal } from '@/modules/files/components/download-format-modal'
 import { useAuth } from '@/modules/auth'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from '@/shared/hooks/use-toast'
 
 interface CustomDestinationExportProps {
   selectedFormat: string | null

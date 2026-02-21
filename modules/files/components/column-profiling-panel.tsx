@@ -22,7 +22,7 @@ import {
   Search
 } from "lucide-react"
 import type { ProfilingResponse } from "@/modules/files/api/file-management-api"
-import { getRuleMeta } from "@/lib/rule-metadata"
+import { getRuleMeta } from "@/shared/lib/rule-metadata"
 
 const RULE_SEVERITY_STYLES: Record<string, string> = {
   critical: "bg-red-500/10 text-red-700 border-red-500/20",

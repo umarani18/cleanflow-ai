@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useState, useMemo, useEffect } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 interface ColumnExportDialogProps {
   open: boolean

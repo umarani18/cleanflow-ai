@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/shared/hooks/use-toast"
 import { useAuth } from "@/modules/auth"
 import type { FileItem, FileStats } from "@/modules/files/types"
 

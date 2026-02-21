@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import QRCode from 'qrcode'
 import { useAuth } from '@/modules/auth/providers/auth-provider'
 import { orgAPI } from '@/modules/auth/api/org-api'
-import { useToast } from '@/hooks/use-toast'
+import { useToast } from '@/shared/hooks/use-toast'
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 

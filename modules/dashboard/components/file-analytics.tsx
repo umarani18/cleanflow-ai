@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileText, CheckCircle, Activity, TrendingUp, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/modules/auth'
 import { fileManagementAPI, type FileStatusResponse } from '@/modules/files'
-import { calculateFileAnalytics } from '@/lib/utils/file-utils'
+import { calculateFileAnalytics } from '@/shared/lib/utils/file-utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 

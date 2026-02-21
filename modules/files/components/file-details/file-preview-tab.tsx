@@ -1,6 +1,6 @@
 import { AlertTriangle, Loader2, Table as TableIcon } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/lib/utils"
 import type { FilePreviewData } from "@/modules/files/types"
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useAppDispatch, useAppSelector } from "@/lib/store"
+import { useAppDispatch, useAppSelector } from "@/shared/store/store"
 import {
   setSelectedErp,
   setSelectedEntity,
@@ -9,8 +9,8 @@ import {
   setLoading,
   setTransformResult,
   setError,
-} from "@/lib/features/transform/transformSlice"
-import { addActivity } from "@/lib/features/dashboard/dashboardSlice"
+} from "@/modules/transform/store/transformSlice"
+import { addActivity } from "@/modules/dashboard/store/dashboardSlice"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"

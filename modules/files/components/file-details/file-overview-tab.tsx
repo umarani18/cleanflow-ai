@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { formatBytes, formatToIST } from "@/lib/utils"
+import { formatBytes, formatToIST } from "@/shared/lib/utils"
 import type { FileStatusResponse } from "@/modules/files"
 
 interface FileOverviewTabProps {

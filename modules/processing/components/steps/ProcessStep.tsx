@@ -4,8 +4,7 @@ import React, { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Loader2, CheckCircle, XCircle, Play, RotateCw } from "lucide-react"
 import { useProcessingWizard } from "../WizardContext"
-import { fileManagementAPI, type FileStatusResponse } from "@/modules/files"
-import { FileDetailsDialog } from "@/modules/files/components/file-details-dialog"
+import { fileManagementAPI, type FileStatusResponse, FileDetailsDialog } from "@/modules/files"
 
 export function ProcessStep({
   onComplete,

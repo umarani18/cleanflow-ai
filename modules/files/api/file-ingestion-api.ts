@@ -1,4 +1,4 @@
-import { AWS_CONFIG } from '@/lib/aws-config'
+import { AWS_CONFIG } from '@/shared/config/aws-config'
 
 const API_BASE_URL = AWS_CONFIG.API_BASE_URL
 

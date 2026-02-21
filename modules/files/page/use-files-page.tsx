@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useAppDispatch, useAppSelector } from "@/lib/store";
+import { useAppDispatch, useAppSelector } from "@/shared/store/store";
 import {
     fetchFiles,
     resetFiles,
@@ -9,8 +9,8 @@ import {
     removeFile,
     selectFiles,
     selectFilesStatus,
-} from "@/lib/features/files/filesSlice";
-import { useToast } from "@/hooks/use-toast";
+} from "@/modules/files/store/filesSlice";
+import { useToast } from "@/shared/hooks/use-toast";
 import { useAuth } from "@/modules/auth";
 import {
     fileManagementAPI,

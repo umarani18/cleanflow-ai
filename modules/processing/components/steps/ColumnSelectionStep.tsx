@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Search, Upload, CheckSquare, Square, ArrowRight } from "lucide-react"
 import { cn }
-  from "@/lib/utils"
+  from "@/shared/lib/utils"
 import { useProcessingWizard } from "../WizardContext"
 
 export function ColumnSelectionStep() {

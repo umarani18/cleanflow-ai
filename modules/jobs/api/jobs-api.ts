@@ -1,6 +1,6 @@
 "use client"
 
-import { AWS_CONFIG } from "@/lib/aws-config"
+import { AWS_CONFIG } from "@/shared/config/aws-config"
 
 import type {
     JobStatus, JobFrequency, ERPType, DQMode,

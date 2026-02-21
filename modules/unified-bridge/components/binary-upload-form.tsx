@@ -4,7 +4,7 @@ import { useState, useCallback } from "react"
 import { Upload, Loader2, FileUp, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { cn, formatBytes } from "@/lib/utils"
+import { cn, formatBytes } from "@/shared/lib/utils"
 import { fileManagementAPI } from "@/modules/files"
 
 interface BinaryUploadFormProps {

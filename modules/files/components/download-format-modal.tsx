@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { FileStatusResponse } from '@/modules/files/api/file-management-api'
 import { Label } from '@/components/ui/label'
 import { useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 interface DownloadFormatModalProps {
   open: boolean

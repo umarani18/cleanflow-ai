@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Loader2, CheckCircle2, XCircle, Clock, Activity } from "lucide-react"
 import { format } from "date-fns"
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/lib/utils"
 import { jobsAPI, type JobRun } from "@/modules/jobs/api/jobs-api"
 
 // ─── Component ────────────────────────────────────────────────────────────────

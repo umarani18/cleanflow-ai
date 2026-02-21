@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
 import { useAuth as useAuthHook } from "@/modules/auth/hooks/use-auth";
-import { FilePreloader } from "@/modules/files/components/file-preloader";
 import { orgAPI } from "@/modules/auth/api/org-api";
 import { usePathname } from "next/navigation";
 
@@ -171,7 +170,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }}
     >
       {children}
-      <FilePreloader />
     </AuthContext.Provider>
   );
 };
@@ -183,4 +181,3 @@ export function useAuth() {
   }
   return context;
 }
-

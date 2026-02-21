@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Database, TrendingDown, TrendingUp, Users } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import { useAppSelector } from "@/lib/store"
+import { useAppSelector } from "@/shared/store/store"
 
 export function MetricsGrid() {
   const { totalTransformations, successRate, activeConnections } = useAppSelector((state) => state.dashboard)

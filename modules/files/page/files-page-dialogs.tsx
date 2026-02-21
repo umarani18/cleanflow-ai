@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -45,7 +45,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { RULE_IDS, getRuleMeta } from "@/lib/rule-metadata";
+import { RULE_IDS, getRuleMeta } from "@/shared/lib/rule-metadata";
 import {
     RULE_SEVERITY_STYLES,
 } from "@/modules/files/page/constants";

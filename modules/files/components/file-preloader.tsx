@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect } from "react"
-import { useAuth } from "@/modules/auth/providers/auth-provider"
-import { useAppDispatch, useAppSelector } from "@/lib/store"
-import { fetchFiles, enrichFiles, selectFiles, selectFilesStatus } from "@/lib/features/files/filesSlice"
+import { useAuth } from "@/modules/auth"
+import { useAppDispatch, useAppSelector } from "@/shared/store/store"
+import { fetchFiles, enrichFiles, selectFiles, selectFilesStatus } from "@/modules/files/store/filesSlice"
 
 export function FilePreloader() {
   const { isAuthenticated, idToken, permissionsLoaded, hasPermission } = useAuth()

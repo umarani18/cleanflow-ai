@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode } from "react"
 import type { CustomRuleDefinition, ColumnProfile } from "@/modules/files"
-import { deriveRulesV2 } from "@/lib/type-catalog"
+import { deriveRulesV2 } from "@/shared/lib/type-catalog"
 
 // Wizard step type
 export type WizardStep = "columns" | "profiling" | "settings" | "rules" | "process"

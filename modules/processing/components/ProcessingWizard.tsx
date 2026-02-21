@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/lib/utils"
 import { Check, Circle, ChevronRight } from "lucide-react"
 import { useProcessingWizard, STEP_ORDER, type WizardStep } from "./WizardContext"
 import { ColumnSelectionStep } from "./steps/ColumnSelectionStep"

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { Download, Loader2, Database, CheckCircle, AlertTriangle, FileStack } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/shared/lib/utils'
 
 interface ERPTransformationModalProps {
   open: boolean

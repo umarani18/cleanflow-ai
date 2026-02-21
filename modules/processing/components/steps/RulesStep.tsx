@@ -11,9 +11,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ArrowLeft, Play, ChevronDown, ChevronRight, Plus, Trash2, Sparkles, Loader2, Code, ArrowRight } from "lucide-react"
 import { useProcessingWizard, type RuleWithState } from "../WizardContext"
 import { fileManagementAPI, type CustomRuleDefinition } from "@/modules/files"
-import { cn } from "@/lib/utils"
-import { getRuleLabel } from "@/lib/dq-rules"
-import { deriveRulesV2, CORE_TYPES, TYPE_ALIASES } from "@/lib/type-catalog"
+import { cn } from "@/shared/lib/utils"
+import { getRuleLabel } from "@/shared/lib/dq-rules"
+import { deriveRulesV2, CORE_TYPES, TYPE_ALIASES } from "@/shared/lib/type-catalog"
 
 export function RulesStep() {
   const {

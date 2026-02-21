@@ -4,7 +4,7 @@ import { Upload, FileText } from "lucide-react";
 import { AuthGuard } from "@/modules/auth";
 import { MainLayout } from "@/shared/layout/main-layout";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { useFilesPage } from "@/modules/files/page/use-files-page";
 import { UploadSection } from "@/modules/files/page/upload-section";
 import { FileExplorerTable } from "@/modules/files/page/file-explorer-table";

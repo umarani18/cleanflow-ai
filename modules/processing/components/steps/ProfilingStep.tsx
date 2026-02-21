@@ -4,10 +4,10 @@ import React, { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, ArrowLeft, ArrowRight, RefreshCw, Check, X } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/lib/utils"
 import { useProcessingWizard } from "../WizardContext"
 import { fileManagementAPI } from "@/modules/files"
-import { getRuleLabel } from "@/lib/dq-rules"
+import { getRuleLabel } from "@/shared/lib/dq-rules"
 
 export function ProfilingStep() {
   const {

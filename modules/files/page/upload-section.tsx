@@ -15,7 +15,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 import { QuickBooksImport } from "@/modules/quickbooks";
 import { ZohoBooksImport } from "@/modules/zoho";
 import { UnifiedBridgeImport } from "@/modules/unified-bridge";

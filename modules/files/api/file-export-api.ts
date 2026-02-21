@@ -1,4 +1,4 @@
-import { AWS_CONFIG } from '@/lib/aws-config'
+import { AWS_CONFIG } from '@/shared/config/aws-config'
 import { makeRequest } from './file-upload-api'
 import type {
     ExportDownloadResult,

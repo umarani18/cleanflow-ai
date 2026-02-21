@@ -2,7 +2,7 @@ import { FileText, PieChart as PieChartIcon, Server, Table as TableIcon } from "
 
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/lib/utils"
 import type { FileStatusResponse } from "@/modules/files/api/file-management-api"
 import { useFileDetails } from "@/modules/files/hooks/use-file-details"
 

@@ -21,8 +21,8 @@ import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog"
-import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
+import { useToast } from "@/shared/hooks/use-toast"
+import { cn } from "@/shared/lib/utils"
 import { jobsAPI, type Job, frequencyFromBackend } from "@/modules/jobs/api/jobs-api"
 import { JobDialog } from "./job-dialog"
 import { JobRunsPanel } from "./job-runs"

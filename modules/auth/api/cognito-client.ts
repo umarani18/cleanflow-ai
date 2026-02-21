@@ -7,7 +7,7 @@ import {
   VerifySoftwareTokenCommand,
 } from "@aws-sdk/client-cognito-identity-provider"
 
-import { AWS_CONFIG } from "@/lib/aws-config"
+import { AWS_CONFIG } from "@/shared/config/aws-config"
 
 export const COGNITO_CONFIG = {
   userPoolId: AWS_CONFIG.COGNITO.USER_POOL_ID,

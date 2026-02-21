@@ -2,14 +2,14 @@
 
 import { useCallback, useState } from "react"
 import { useDropzone } from "react-dropzone"
-import { useAppDispatch, useAppSelector } from "@/lib/store"
-import { setUploadedFile, setError } from "@/lib/features/transform/transformSlice"
+import { useAppDispatch, useAppSelector } from "@/shared/store/store"
+import { setUploadedFile, setError } from "@/modules/transform/store/transformSlice"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Upload, FileText, X, CheckCircle } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn } from "@/shared/lib/utils"
 
 export function FileUploadZone() {
   const dispatch = useAppDispatch()

@@ -4,7 +4,7 @@ import React from "react";
 import { useAuth } from "@/modules/auth/providers/auth-provider";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Lock } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/lib/utils";
 
 type AppRole = "Super Admin" | "Admin" | "Data Steward";
 

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { motion } from "framer-motion"
-import { useAppSelector } from "@/lib/store"
+import { useAppSelector } from "@/shared/store/store"
 
 export function TransformResults() {
   const { transformResult } = useAppSelector((state) => state.transform)
