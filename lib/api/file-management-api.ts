@@ -1112,17 +1112,20 @@ class FileManagementAPI {
       const fallbackMsg = typeof raw === "string" ? raw : (response.statusText || `HTTP ${response.status}`)
       const errorMessage = (errorData.error || errorData.message || fallbackMsg || "").toLowerCase()
 
-      // Expected in first-login/setup or restricted-role scenarios.
+      // Expected in first-login/setup or restricted-role scenarios, or when the
+      // backend is still starting up (5xx).  Treat all of these as "no report
+      // available" so the dashboard renders an empty state instead of crashing.
       if (
         response.status === 401 ||
         response.status === 403 ||
+        response.status >= 500 ||
         errorMessage.includes("permission denied") ||
         errorMessage.includes("organization membership required")
       ) {
         return null as unknown as OverallDqReportResponse
       }
 
-      throw new Error(`Overall DQ report download failed: ${response.statusText}`)
+      throw new Error(`Overall DQ report download failed: ${errorData.error || errorData.message || `HTTP ${response.status}`}`)
     }
 
     const text = await response.text()
