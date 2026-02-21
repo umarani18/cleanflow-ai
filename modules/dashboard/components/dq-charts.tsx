@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import type { DqChartsProps } from "@/modules/dashboard/components/chart-constants"
 import { ChartsCarousel } from "@/modules/dashboard/components/charts/charts-carousel"
 import { DqScoreChart } from "@/modules/dashboard/components/charts/dq-score-chart"
-import { ProcessingVolumeChart } from "@/modules/dashboard/components/charts/processing-volume-chart"
+
 import { RowDistributionChart } from "@/modules/dashboard/components/charts/row-distribution-chart"
 
 export { MonthlyTrendsCompact } from "@/modules/dashboard/components/monthly-trends-compact"
@@ -16,11 +16,9 @@ export { ProfessionalChartsCarousel } from "@/modules/dashboard/components/profe
 export type { DqChartsProps } from "@/modules/dashboard/components/chart-constants"
 
 function DqChartsComponent({ files }: DqChartsProps) {
-  const { completedFiles, processingFiles, failedFiles } = useMemo(
+  const { completedFiles } = useMemo(
     () => ({
       completedFiles: files.filter((f) => f.status === "DQ_FIXED"),
-      processingFiles: files.filter((f) => ["DQ_RUNNING", "NORMALIZING", "QUEUED", "UPLOADING"].includes(f.status)),
-      failedFiles: files.filter((f) => ["DQ_FAILED", "UPLOAD_FAILED"].includes(f.status)),
     }),
     [files]
   )
@@ -63,9 +61,8 @@ function DqChartsComponent({ files }: DqChartsProps) {
               <span className="text-sm text-muted-foreground">Avg DQ</span>
             </div>
             <div
-              className={`text-2xl font-bold ${
-                avgDqScore >= 90 ? "text-green-500" : avgDqScore >= 70 ? "text-yellow-500" : "text-red-500"
-              }`}
+              className={`text-2xl font-bold ${avgDqScore >= 90 ? "text-green-500" : avgDqScore >= 70 ? "text-yellow-500" : "text-red-500"
+                }`}
             >
               {avgDqScore.toFixed(1)}%
             </div>
@@ -93,18 +90,13 @@ function DqChartsComponent({ files }: DqChartsProps) {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <RowDistributionChart
           totalRowsOut={totalRowsOut}
           totalRowsFixed={totalRowsFixed}
           totalRowsQuarantined={totalRowsQuarantined}
         />
         <DqScoreChart completedFiles={completedFiles} />
-        <ProcessingVolumeChart
-          completedCount={completedFiles.length}
-          processingCount={processingFiles.length}
-          failedCount={failedFiles.length}
-        />
       </div>
 
       <Card className="border-0 shadow-sm">
