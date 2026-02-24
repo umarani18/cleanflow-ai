@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { QuickBooksImport } from '@/modules/quickbooks'
 import { ZohoBooksImport } from '@/modules/zoho'
+import { SnowflakeImport } from '@/modules/snowflake'
 
 interface ErpSourceFormProps {
   mode?: "source" | "destination"
@@ -27,6 +28,7 @@ interface ErpSourceFormProps {
 const ERP_OPTIONS = [
   { label: "QUICKBOOKS ONLINE", value: "quickbooks" },
   { label: "ZOHO BOOKS", value: "zoho-books" },
+  { label: "SNOWFLAKE", value: "snowflake" },
   { label: "ORACLE FUSION", value: "oracle" },
   { label: "SAP", value: "sap" },
   { label: "MICROSOFT DYNAMICS", value: "dynamics" },
@@ -101,6 +103,28 @@ export default function ErpSourceForm({
             onIngestionComplete({
               success: true,
               message: mode === "source" ? 'Successfully imported data from Zoho Books' : 'Successfully exported data to Zoho Books',
+              uploadId,
+            })
+          }}
+          onNotification={(message, type) => {
+            if (type === 'error') {
+              onError(message)
+            } else {
+              onIngestionComplete({
+                success: true,
+                message,
+              })
+            }
+          }}
+        />
+      ) : selectedErp === "snowflake" ? (
+        <SnowflakeImport
+          mode={mode}
+          uploadId={uploadId}
+          onImportComplete={(uploadId) => {
+            onIngestionComplete({
+              success: true,
+              message: mode === "source" ? 'Successfully imported data from Snowflake' : 'Successfully exported data to Snowflake',
               uploadId,
             })
           }}
