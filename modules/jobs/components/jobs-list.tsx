@@ -25,7 +25,7 @@ import { useToast } from "@/shared/hooks/use-toast"
 import { cn } from "@/shared/lib/utils"
 import { jobsAPI, type Job, frequencyFromBackend } from "@/modules/jobs/api/jobs-api"
 import { JobDialog } from "./job-dialog"
-import { JobRunsPanel } from "./job-runs"
+import { JobRunsExplorer } from "./job-runs-explorer"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -367,7 +367,7 @@ export function JobsList() {
                                         {expandedJobId === job.job_id && (
                                             <TableRow key={`${job.job_id}-runs`} className="bg-muted/10 hover:bg-muted/10">
                                                 <TableCell colSpan={7} className="p-0">
-                                                    <JobRunsPanel jobId={job.job_id} />
+                                                    <JobRunsExplorer jobId={job.job_id} />
                                                 </TableCell>
                                             </TableRow>
                                         )}

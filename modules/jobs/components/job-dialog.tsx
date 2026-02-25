@@ -1,6 +1,6 @@
 "use client"
 
-import { Loader2, ChevronDown, ChevronRight, Sparkles, Star } from "lucide-react"
+import { Loader2, ChevronDown, ChevronRight, Sparkles, Star, Plus, Upload, Settings, Edit, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -262,34 +262,172 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <Select value={d.selectedPresetId || "none"} onValueChange={d.handleSelectPreset}>
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue placeholder="Select a preset..." />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="none">
-                                                                <span className="text-muted-foreground">No preset (default rules)</span>
-                                                            </SelectItem>
-                                                            {d.presets.map(p => (
-                                                                <SelectItem key={p.preset_id} value={p.preset_id}>
-                                                                    <div className="flex items-center gap-2">
-                                                                        {p.is_default && <Star className="w-3 h-3 text-yellow-500" />}
-                                                                        {p.preset_name}
+                                                    {/* Preset selector with actions */}
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex-1">
+                                                            <Select value={d.selectedPresetId || "none"} onValueChange={d.handleSelectPreset}>
+                                                                <SelectTrigger className="h-10">
+                                                                    <SelectValue placeholder="Select a preset..." />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="none">
+                                                                        <span className="text-muted-foreground">No preset (default rules)</span>
+                                                                    </SelectItem>
+                                                                    {d.presets.map(p => (
+                                                                        <SelectItem key={p.preset_id} value={p.preset_id}>
+                                                                            <div className="flex items-center gap-2">
+                                                                                {p.is_default && <Star className="w-3 h-3 text-yellow-500" />}
+                                                                                {p.preset_name}
+                                                                        </div>
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        </div>
+                                                        <Button variant="outline" size="sm" onClick={d.handleNewPreset}>
+                                                            <Plus className="w-3 h-3 mr-1" />
+                                                            New
+                                                        </Button>
+                                                        <input
+                                                            ref={d.presetFileInputRef}
+                                                            type="file"
+                                                            accept=".json,.csv"
+                                                            className="hidden"
+                                                            onChange={d.handlePresetFileUpload}
+                                                        />
+                                                        <Button variant="outline" size="sm" onClick={() => d.presetFileInputRef.current?.click()}>
+                                                            <Upload className="w-3 h-3 mr-1" />
+                                                            Import
+                                                        </Button>
+                                                    </div>
+
+                                                    {/* Settings editor */}
+                                                    {(d.selectedPresetConfig || d.presetEditMode) && (
+                                                        <div className="border border-border rounded-lg p-3 space-y-3">
+                                                            <div className="flex items-center justify-between">
+                                                                <h4 className="text-sm font-medium flex items-center gap-2">
+                                                                    <Settings className="w-4 h-4" />
+                                                                    {d.selectedPresetId ? d.presets.find(p => p.preset_id === d.selectedPresetId)?.preset_name : "Default Settings"}
+                                                                </h4>
+                                                                <div className="flex items-center gap-2">
+                                                                    {d.presetEditMode ? (
+                                                                        <>
+                                                                            <Button variant="ghost" size="sm" onClick={d.handleCancelPresetEdit}>Cancel</Button>
+                                                                            <Button size="sm" onClick={d.handleSavePresetEdit}>Save</Button>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Button variant="ghost" size="sm" onClick={d.handleEditPreset}>
+                                                                                <Edit className="w-3 h-3 mr-1" />
+                                                                                Edit
+                                                                            </Button>
+                                                                            {d.selectedPresetConfig && (
+                                                                                <Button variant="ghost" size="sm" onClick={d.handleExportPreset}>
+                                                                                    <Download className="w-3 h-3 mr-1" />
+                                                                                    Export
+                                                                                </Button>
+                                                                            )}
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {d.presetEditMode ? (
+                                                                <div className="space-y-3">
+                                                                    <div>
+                                                                        <Label className="text-xs text-muted-foreground">Valid Currencies (comma-separated)</Label>
+                                                                        <Input
+                                                                            value={d.editCurrencyValues}
+                                                                            onChange={(e) => d.setEditCurrencyValues(e.target.value)}
+                                                                            placeholder="USD, EUR, GBP, INR..."
+                                                                            className="mt-1 h-9 text-sm"
+                                                                        />
                                                                     </div>
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    {d.selectedPresetConfig && (
-                                                        <div className="text-xs text-muted-foreground border border-border rounded-lg p-3 space-y-1">
-                                                            {d.selectedPresetConfig.currency_values && (
-                                                                <p><span className="font-medium">Currencies:</span> {d.selectedPresetConfig.currency_values.join(", ")}</p>
-                                                            )}
-                                                            {d.selectedPresetConfig.uom_values && (
-                                                                <p><span className="font-medium">UOM:</span> {d.selectedPresetConfig.uom_values.join(", ")}</p>
-                                                            )}
-                                                            {d.selectedPresetConfig.date_formats && (
-                                                                <p><span className="font-medium">Date Formats:</span> {d.selectedPresetConfig.date_formats.join(", ")}</p>
+                                                                    <div>
+                                                                        <Label className="text-xs text-muted-foreground">Valid UOM Values (comma-separated)</Label>
+                                                                        <Input
+                                                                            value={d.editUomValues}
+                                                                            onChange={(e) => d.setEditUomValues(e.target.value)}
+                                                                            placeholder="EA, PCS, KG, LBS..."
+                                                                            className="mt-1 h-9 text-sm"
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <Label className="text-xs text-muted-foreground">Date Formats (comma-separated)</Label>
+                                                                        <Input
+                                                                            value={d.editDateFormats}
+                                                                            onChange={(e) => d.setEditDateFormats(e.target.value)}
+                                                                            placeholder="YYYY-MM-DD, DD/MM/YYYY..."
+                                                                            className="mt-1 h-9 text-sm"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-xs space-y-3">
+                                                                    {/* Policies */}
+                                                                    {d.selectedPresetConfig?.policies && (
+                                                                        <div>
+                                                                            <h5 className="font-medium text-sm mb-1.5 flex items-center gap-1.5">
+                                                                                <Badge variant="outline" className="px-1.5 py-0.5 text-[10px]">Policies</Badge>
+                                                                            </h5>
+                                                                            <div className="space-y-1 text-muted-foreground">
+                                                                                {d.selectedPresetConfig.policies.strictness && (
+                                                                                    <p><span className="font-medium">Strictness:</span> {d.selectedPresetConfig.policies.strictness}</p>
+                                                                                )}
+                                                                                {d.selectedPresetConfig.policies.auto_fix !== undefined && (
+                                                                                    <p><span className="font-medium">Auto-fix:</span> {d.selectedPresetConfig.policies.auto_fix ? "On" : "Off"}</p>
+                                                                                )}
+                                                                                {d.selectedPresetConfig.policies.unknown && (
+                                                                                    <p><span className="font-medium">Unknown:</span> {d.selectedPresetConfig.policies.unknown}</p>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Lookups */}
+                                                                    {(d.selectedPresetConfig?.currency_values || d.selectedPresetConfig?.uom_values || d.selectedPresetConfig?.lookups) && (
+                                                                        <div>
+                                                                            <h5 className="font-medium text-sm mb-1.5 flex items-center gap-1.5">
+                                                                                <Badge variant="outline" className="px-1.5 py-0.5 text-[10px]">Lookups</Badge>
+                                                                            </h5>
+                                                                            <div className="space-y-1 text-muted-foreground">
+                                                                                {d.selectedPresetConfig.currency_values && d.selectedPresetConfig.currency_values.length > 0 && (
+                                                                                    <p><span className="font-medium">Currencies:</span> {d.selectedPresetConfig.currency_values.join(", ")}</p>
+                                                                                )}
+                                                                                {d.selectedPresetConfig.uom_values && d.selectedPresetConfig.uom_values.length > 0 && (
+                                                                                    <p><span className="font-medium">UOM:</span> {d.selectedPresetConfig.uom_values.join(", ")}</p>
+                                                                                )}
+                                                                                {d.selectedPresetConfig.lookups?.status_values && d.selectedPresetConfig.lookups.status_values.length > 0 && (
+                                                                                    <p><span className="font-medium">Status:</span> {d.selectedPresetConfig.lookups.status_values.join(", ")}</p>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Data Hygiene */}
+                                                                    {(d.selectedPresetConfig?.date_formats || d.selectedPresetConfig?.lookups?.placeholders || d.selectedPresetConfig?.hygiene) && (
+                                                                        <div>
+                                                                            <h5 className="font-medium text-sm mb-1.5 flex items-center gap-1.5">
+                                                                                <Badge variant="outline" className="px-1.5 py-0.5 text-[10px]">Data Hygiene</Badge>
+                                                                            </h5>
+                                                                            <div className="space-y-1 text-muted-foreground">
+                                                                                {d.selectedPresetConfig.lookups?.placeholders && d.selectedPresetConfig.lookups.placeholders.length > 0 && (
+                                                                                    <p><span className="font-medium">Placeholders:</span> {d.selectedPresetConfig.lookups.placeholders.join(", ")}</p>
+                                                                                )}
+                                                                                {d.selectedPresetConfig.date_formats && d.selectedPresetConfig.date_formats.length > 0 && (
+                                                                                    <p><span className="font-medium">Date formats:</span> {d.selectedPresetConfig.date_formats.join(", ")}</p>
+                                                                                )}
+                                                                                {d.selectedPresetConfig.hygiene?.max_text_length && (
+                                                                                    <p><span className="font-medium">Max text length:</span> {d.selectedPresetConfig.hygiene.max_text_length}</p>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {!d.selectedPresetConfig?.policies && !d.selectedPresetConfig?.currency_values && !d.selectedPresetConfig?.uom_values && !d.selectedPresetConfig?.date_formats && (
+                                                                        <p className="text-muted-foreground">Using default validation rules</p>
+                                                                    )}
+                                                                </div>
                                                             )}
                                                         </div>
                                                     )}
@@ -318,7 +456,16 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
                                         <CollapsibleContent className="mt-2 ml-2 space-y-2">
                                             <p className="text-xs text-muted-foreground mb-1">Toggle rules to apply during DQ processing</p>
                                             <div className="space-y-2 max-h-[25vh] overflow-y-auto">
-                                                {d.globalRules.map(rule => (
+                                                {d.rulesLoading ? (
+                                                    <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
+                                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                        Loading rules...
+                                                    </div>
+                                                ) : d.globalRules.length === 0 ? (
+                                                    <p className="text-xs text-muted-foreground p-3 border rounded-md">
+                                                        No rules available. Try again after profiling.
+                                                    </p>
+                                                ) : d.globalRules.map(rule => (
                                                     <div key={rule.rule_id} onClick={() => d.toggleRule(rule.rule_id)} className={cn(
                                                         "flex items-start gap-3 p-3 rounded-md border cursor-pointer transition-colors",
                                                         rule.selected ? "border-primary/50 bg-primary/5" : "border-border hover:bg-muted/30"

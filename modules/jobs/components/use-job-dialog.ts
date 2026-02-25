@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useToast } from '@/shared/hooks/use-toast'
+import { fileManagementAPI } from '@/modules/files'
 import {
     jobsAPI, type Job, type JobFrequency, type CreateJobPayload, type UpdateJobPayload,
     frequencyToBackend, frequencyFromBackend
 } from '@/modules/jobs/api/jobs-api'
-import { fileManagementAPI } from '@/modules/files'
 import {
     type AdvancedStep,
     type RuleState,
@@ -26,6 +26,89 @@ export interface UseJobDialogProps {
     open: boolean
     job?: Job | null
     onSuccess: () => void
+}
+
+const DEFAULT_SETTINGS_PRESET: SettingsPreset = {
+    preset_id: "default_dq_rules",
+    preset_name: "Default Data Quality Rules",
+    is_default: true,
+    config: {
+        policies: {
+            strictness: "balanced",
+            auto_fix: true,
+            unknown: "safe_cleanup_only",
+        },
+        lookups: {
+            placeholders: ["", "na", "n/a", "null", "none", "-", "--", "?"],
+            status_values: ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "PENDING", "PAID", "CANCELLED"],
+        },
+        currency_values: ["USD", "INR", "EUR", "GBP"],
+        uom_values: ["EA", "PCS", "KG", "LTR", "HR"],
+        date_formats: ["ISO", "DMY", "MDY"],
+        hygiene: {
+            max_text_length: 255,
+        },
+    },
+}
+
+const parseCsvRows = (content: string): Record<string, string>[] => {
+    const lines = content.trim().split('\n').filter(Boolean)
+    if (lines.length < 2) {
+        throw new Error("CSV must have header row and at least one data row")
+    }
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+    return lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
+        const row: Record<string, string> = {}
+        headers.forEach((header, idx) => {
+            row[header] = values[idx] || ''
+        })
+        return row
+    })
+}
+
+const normalizePresetConfig = (rawConfig: Record<string, any> | null | undefined): Record<string, any> => {
+    const config = rawConfig || {}
+
+    // Support both legacy explorer format (policy/enums/rules) and current settings format.
+    const isLegacyRulesFormat = Boolean(config.enums || config.rules || config.policy)
+    if (isLegacyRulesFormat) {
+        return {
+            policies: {
+                strictness: config.policies?.strictness || "balanced",
+                auto_fix: config.policies?.auto_fix ?? true,
+                unknown: config.policies?.unknown || "safe_cleanup_only",
+            },
+            lookups: {
+                placeholders: config.required_fields?.placeholders_treated_as_missing || [],
+                status_values: config.enums?.status?.allowed || [],
+            },
+            currency_values: config.enums?.currency?.allowed || [],
+            uom_values: config.uom_values || [],
+            date_formats: config.policy?.date_formats || config.date_formats || [],
+            hygiene: {
+                max_text_length: Number(config.policy?.max_free_text_length || 255),
+            },
+        }
+    }
+
+    return {
+        policies: {
+            strictness: config.policies?.strictness || "balanced",
+            auto_fix: config.policies?.auto_fix ?? true,
+            unknown: config.policies?.unknown || "safe_cleanup_only",
+        },
+        lookups: {
+            placeholders: config.lookups?.placeholders || [],
+            status_values: config.lookups?.status_values || [],
+        },
+        currency_values: config.currency_values || [],
+        uom_values: config.uom_values || [],
+        date_formats: config.date_formats || [],
+        hygiene: {
+            max_text_length: Number(config.hygiene?.max_text_length || 255),
+        },
+    }
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -53,9 +136,12 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
     const [presetsLoading, setPresetsLoading] = useState(false)
     const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
     const [selectedPresetConfig, setSelectedPresetConfig] = useState<Record<string, any> | null>(null)
+    const [pendingPresetName, setPendingPresetName] = useState("")
 
     // Advanced — Custom Rules
     const [globalRules, setGlobalRules] = useState<RuleState[]>(DEFAULT_GLOBAL_RULES.map(r => ({ ...r })))
+    const [rulesLoading, setRulesLoading] = useState(false)
+    const [rulesLoadedFromApi, setRulesLoadedFromApi] = useState(false)
 
     // Advanced Wizard Mode
     const [currentAdvancedStep, setCurrentAdvancedStep] = useState<AdvancedStep>("import")
@@ -106,13 +192,16 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
             setSelectedColumns([])
             setAllColumns([])
             setSelectedPresetId(null)
-            setSelectedPresetConfig(null)
+            setSelectedPresetConfig(normalizePresetConfig(DEFAULT_SETTINGS_PRESET.config))
+            setPendingPresetName("")
             setGlobalRules(DEFAULT_GLOBAL_RULES.map(r => ({ ...r })))
+            setRulesLoadedFromApi(false)
             setAdvancedOpen(false)
             setAdvancedMode(false)
             setDataImported(false)
             setCurrentAdvancedStep("import")
             setColumnProfiles({})
+            setPreviewUploadId("")
         }
     }, [job, open])
 
@@ -134,20 +223,37 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
 
     // ─── Import Data from Source (Advanced Mode) ──────────────────────────────
 
+    // Track the upload_id from import preview for profiling
+    const [previewUploadId, setPreviewUploadId] = useState("")
+
     const handleImportDataFromSource = async () => {
         setImportingData(true)
         try {
+            const apiSource = normalizeErpForApi(source)
+            const result = await jobsAPI.importPreview(apiSource, entity)
+            const cols = result.columns?.length > 0
+                ? result.columns
+                : (ENTITY_COLUMNS[entity] || ["Column1", "Column2", "Column3"])
+            setAllColumns(cols)
+            setSelectedColumns(cols)
+            setPreviewUploadId(result.upload_id || "")
+            setDataImported(true)
+            setCurrentAdvancedStep("columns")
+            toast({
+                title: "Data Imported",
+                description: `Imported ${result.records_imported || 0} sample records from ${SOURCE_ERP_OPTIONS.find(e => e.value === source)?.label}. ${cols.length} columns discovered.`
+            })
+        } catch (err: any) {
+            // Fallback to static columns if API not available
             const cols = ENTITY_COLUMNS[entity] || ["Column1", "Column2", "Column3"]
             setAllColumns(cols)
             setSelectedColumns(cols)
             setDataImported(true)
             setCurrentAdvancedStep("columns")
             toast({
-                title: "Data Imported",
-                description: `Successfully imported data from ${SOURCE_ERP_OPTIONS.find(e => e.value === source)?.label}. Configure columns.`
+                title: "Data Imported (Fallback)",
+                description: `Using default columns for ${entity}. ${err?.message || ""}`,
             })
-        } catch (err: any) {
-            toast({ title: "Import Failed", description: err?.message || "Failed to import data from source", variant: "destructive" })
         } finally {
             setImportingData(false)
         }
@@ -160,28 +266,65 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
             toast({ title: "Select columns first", description: "Please select at least one column", variant: "destructive" })
             return
         }
+        if (!previewUploadId) {
+            toast({
+                title: "No import data",
+                description: "Please import data from source first (step 1)",
+                variant: "destructive"
+            })
+            return
+        }
         setProfilingLoading(true)
         try {
-            const profiles: Record<string, ColumnProfile> = {}
-            selectedColumns.forEach((col, idx) => {
-                profiles[col] = {
-                    column_name: col,
-                    data_type: ["string", "number", "date", "boolean"][idx % 4],
-                    null_count: Math.floor(Math.random() * 100),
-                    unique_count: Math.floor(Math.random() * 1000),
-                    sample_values: [`Sample${idx}_1`, `Sample${idx}_2`, `Sample${idx}_3`],
-                    quality_score: 0.85 + Math.random() * 0.15,
-                    rules: [
-                        { rule_id: "R1", rule_name: "Not Null", severity: "critical" },
-                        { rule_id: "R2", rule_name: "Type Check", severity: "warning" }
-                    ]
-                }
-            })
-            setColumnProfiles(profiles)
-            setCurrentAdvancedStep("settings")
-            toast({ title: "Profiling Complete", description: `Analyzed ${selectedColumns.length} columns` })
+            console.log('[Profiling] Calling API with upload_id:', previewUploadId, 'columns:', selectedColumns.length)
+            const result = await jobsAPI.fetchProfiling(previewUploadId, selectedColumns)
+            console.log('[Profiling] API response:', result)
+
+            // Check for backend error response
+            const apiError =
+                (result as unknown as { error?: string; message?: string })?.error ||
+                (result as unknown as { error?: string; message?: string })?.message
+            if (apiError) {
+                console.error('[Profiling] Backend returned error:', apiError)
+                toast({
+                    title: "Profiling Failed",
+                    description: apiError,
+                    variant: "destructive"
+                })
+                return
+            }
+
+            const rawProfiles = (result.profiles || {}) as Record<string, Partial<ColumnProfile>>
+            const profiles: Record<string, ColumnProfile> = Object.fromEntries(
+                Object.entries(rawProfiles).map(([col, profile]) => [
+                    col,
+                    { column_name: col, ...(profile || {}) } as ColumnProfile,
+                ])
+            )
+
+            if (Object.keys(profiles).length === 0) {
+                console.warn('[Profiling] No profiles returned')
+                toast({
+                    title: "No profiling data",
+                    description: "Profiling returned no results. Check CloudWatch logs for details.",
+                    variant: "destructive"
+                })
+            } else {
+                console.log('[Profiling] Success:', Object.keys(profiles).length, 'column profiles')
+                setColumnProfiles(profiles)
+                // Don't auto-advance - let users review the profiling results
+                toast({
+                    title: "Profiling Complete",
+                    description: `Analyzed ${Object.keys(profiles).length} columns. Review results below.`
+                })
+            }
         } catch (err: any) {
-            toast({ title: "Profiling Failed", description: err?.message || "Failed to profile columns", variant: "destructive" })
+            console.error('[Profiling] Exception:', err)
+            toast({
+                title: "Profiling Failed",
+                description: err?.message || "Failed to profile columns. Check CloudWatch logs.",
+                variant: "destructive"
+            })
         } finally {
             setProfilingLoading(false)
         }
@@ -222,33 +365,276 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
 
     // ─── Load Presets ─────────────────────────────────────────────────────────
 
-    useEffect(() => {
-        if (currentAdvancedStep === "settings" && presets.length === 0 && dataImported) {
-            setPresetsLoading(true)
-            fileManagementAPI.getSettingsPresets()
-                .then((res: any) => {
-                    const list = Array.isArray(res) ? res : res?.presets || []
-                    setPresets(list)
-                })
-                .catch(() => setPresets([]))
-                .finally(() => setPresetsLoading(false))
-        }
-    }, [currentAdvancedStep, presets.length, dataImported])
+    const applyPresetConfigToEditor = (config: Record<string, any>) => {
+        const normalized = normalizePresetConfig(config)
+        setSelectedPresetConfig(normalized)
+        setEditCurrencyValues((normalized.currency_values || []).join(", "))
+        setEditUomValues((normalized.uom_values || []).join(", "))
+        setEditDateFormats((normalized.date_formats || []).join(", "))
+    }
 
-    const handleSelectPreset = async (presetId: string) => {
+    useEffect(() => {
+        if (currentAdvancedStep !== "settings" || !dataImported) return
+        let cancelled = false
+
+        const loadPresets = async () => {
+            setPresetsLoading(true)
+            try {
+                const res = await fileManagementAPI.getSettingsPresets()
+                const serverPresets = (res?.presets || []) as SettingsPreset[]
+                const hasDefault = serverPresets.some(p => p.is_default)
+                const finalPresets = serverPresets.length === 0
+                    ? [DEFAULT_SETTINGS_PRESET]
+                    : hasDefault
+                        ? serverPresets
+                        : [...serverPresets, DEFAULT_SETTINGS_PRESET]
+
+                if (cancelled) return
+                setPresets(finalPresets)
+
+                if (selectedPresetId) {
+                    await handleSelectPreset(selectedPresetId, finalPresets)
+                } else {
+                    applyPresetConfigToEditor(DEFAULT_SETTINGS_PRESET.config || {})
+                }
+            } catch (err) {
+                console.error('Failed to load presets:', err)
+                if (cancelled) return
+                setPresets([DEFAULT_SETTINGS_PRESET])
+                if (!selectedPresetId) {
+                    applyPresetConfigToEditor(DEFAULT_SETTINGS_PRESET.config || {})
+                }
+            } finally {
+                if (!cancelled) setPresetsLoading(false)
+            }
+        }
+
+        loadPresets()
+        return () => { cancelled = true }
+    }, [currentAdvancedStep, dataImported])
+
+    const handleSelectPreset = async (presetId: string, presetList?: SettingsPreset[]) => {
         if (presetId === "none") {
             setSelectedPresetId(null)
-            setSelectedPresetConfig(null)
+            applyPresetConfigToEditor(DEFAULT_SETTINGS_PRESET.config || {})
             return
         }
         setSelectedPresetId(presetId)
+        setPendingPresetName("")
+
+        const list = presetList || presets
+        const localPreset = list.find(p => p.preset_id === presetId)
+        if (localPreset?.config) {
+            applyPresetConfigToEditor(localPreset.config)
+            if (presetId === DEFAULT_SETTINGS_PRESET.preset_id) return
+        }
+
+        // Fetch full preset details using fileManagementAPI
         try {
-            const detail = await fileManagementAPI.getSettingsPreset(presetId)
-            setSelectedPresetConfig((detail as any)?.config || null)
-        } catch {
-            setSelectedPresetConfig(null)
+            const preset = await fileManagementAPI.getSettingsPreset(presetId)
+            if (preset?.config) applyPresetConfigToEditor(preset.config)
+        } catch (err) {
+            console.error('Failed to load preset details:', err)
+            // Keep local fallback already applied above.
         }
     }
+
+    // ─── Preset Editing ───────────────────────────────────────────────────────
+    const [presetEditMode, setPresetEditMode] = useState(false)
+    const [editCurrencyValues, setEditCurrencyValues] = useState("")
+    const [editUomValues, setEditUomValues] = useState("")
+    const [editDateFormats, setEditDateFormats] = useState("")
+    const presetFileInputRef = useRef<HTMLInputElement>(null)
+
+    const handleEditPreset = () => {
+        setPresetEditMode(true)
+        if (selectedPresetConfig) {
+            setEditCurrencyValues((selectedPresetConfig.currency_values || []).join(", "))
+            setEditUomValues((selectedPresetConfig.uom_values || []).join(", "))
+            setEditDateFormats((selectedPresetConfig.date_formats || []).join(", "))
+        }
+    }
+
+    const handleCancelPresetEdit = () => {
+        setPresetEditMode(false)
+    }
+
+    const handleSavePresetEdit = async () => {
+        const newConfig = normalizePresetConfig({
+            currency_values: editCurrencyValues.split(",").map(s => s.trim()).filter(Boolean),
+            uom_values: editUomValues.split(",").map(s => s.trim()).filter(Boolean),
+            date_formats: editDateFormats.split(",").map(s => s.trim()).filter(Boolean),
+        })
+        let nextPresetId = selectedPresetId
+        let createdPresetName = pendingPresetName
+        try {
+            if (selectedPresetId && selectedPresetId !== DEFAULT_SETTINGS_PRESET.preset_id) {
+                const presetName = presets.find(p => p.preset_id === selectedPresetId)?.preset_name || "Updated Preset"
+                await fileManagementAPI.updateSettingsPreset(selectedPresetId, {
+                    preset_name: presetName,
+                    config: newConfig,
+                })
+                toast({ title: "Preset updated", description: `${presetName} saved successfully.` })
+            } else {
+                const presetName = (pendingPresetName || window.prompt("Preset name") || "").trim()
+                if (!presetName) {
+                    toast({ title: "Preset name required", description: "Enter a preset name to create a new preset.", variant: "destructive" })
+                    return
+                }
+                const created = await fileManagementAPI.createSettingsPreset({
+                    preset_name: presetName,
+                    config: newConfig,
+                    is_default: false,
+                })
+                setPendingPresetName("")
+                nextPresetId = created?.preset_id || null
+                createdPresetName = presetName
+                toast({ title: "Preset created", description: `${presetName} created successfully.` })
+            }
+
+            const res = await fileManagementAPI.getSettingsPresets()
+            const list = (res?.presets || []) as SettingsPreset[]
+            const hasDefault = list.some(p => p.is_default)
+            const finalList = list.length === 0
+                ? [DEFAULT_SETTINGS_PRESET]
+                : hasDefault
+                    ? list
+                    : [...list, DEFAULT_SETTINGS_PRESET]
+            setPresets(finalList)
+
+            const activeId = nextPresetId && nextPresetId !== DEFAULT_SETTINGS_PRESET.preset_id
+                ? nextPresetId
+                : finalList.find(p => p.preset_name === createdPresetName)?.preset_id
+            if (activeId) {
+                setSelectedPresetId(activeId)
+                await handleSelectPreset(activeId, finalList)
+            } else {
+                applyPresetConfigToEditor(newConfig)
+            }
+            setPresetEditMode(false)
+        } catch (err: any) {
+            toast({ title: "Save failed", description: err?.message || "Could not save preset.", variant: "destructive" })
+        }
+    }
+
+    const handleNewPreset = () => {
+        setPresetEditMode(true)
+        setSelectedPresetId(null)
+        const name = (window.prompt("New preset name") || "").trim()
+        setPendingPresetName(name)
+        applyPresetConfigToEditor(DEFAULT_SETTINGS_PRESET.config || {})
+        toast({
+            title: "New Preset",
+            description: name
+                ? `Configure "${name}" and click Save.`
+                : "Configure preset and click Save to create it.",
+        })
+    }
+
+    const handleExportPreset = () => {
+        if (!selectedPresetConfig) return
+        const preset = presets.find(p => p.preset_id === selectedPresetId)
+        const exportData = {
+            preset_name: preset?.preset_name || "Custom Preset",
+            config: selectedPresetConfig,
+        }
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `${preset?.preset_name || "preset"}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+        toast({ title: "Preset exported", description: `Downloaded ${preset?.preset_name}.json` })
+    }
+
+    const handlePresetFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (!file) return
+
+        const reader = new FileReader()
+        reader.onload = async (e) => {
+            try {
+                const content = e.target?.result as string
+                let rawConfig: Record<string, any> = {}
+
+                if (file.name.toLowerCase().endsWith(".json")) {
+                    const parsed = JSON.parse(content)
+                    rawConfig = parsed?.config || parsed
+                } else if (file.name.endsWith(".csv")) {
+                    const rows = parseCsvRows(content)
+                    rawConfig = { imported_data: rows, source: "csv_upload" }
+                } else {
+                    throw new Error("Please upload a .json or .csv file")
+                }
+
+                const normalized = normalizePresetConfig(rawConfig)
+                const defaultName = file.name.replace(/\.(json|csv)$/i, "")
+                const presetName = (window.prompt("Imported preset name", defaultName) || "").trim()
+                if (!presetName) {
+                    throw new Error("Preset name is required")
+                }
+
+                const created = await fileManagementAPI.createSettingsPreset({
+                    preset_name: presetName,
+                    config: rawConfig,
+                    is_default: false,
+                })
+
+                const res = await fileManagementAPI.getSettingsPresets()
+                const list = (res?.presets || []) as SettingsPreset[]
+                const hasDefault = list.some(p => p.is_default)
+                const finalList = list.length === 0
+                    ? [DEFAULT_SETTINGS_PRESET]
+                    : hasDefault
+                        ? list
+                        : [...list, DEFAULT_SETTINGS_PRESET]
+
+                setPresets(finalList)
+                setPendingPresetName("")
+                setPresetEditMode(false)
+                applyPresetConfigToEditor(normalized)
+                if (created?.preset_id) {
+                    await handleSelectPreset(created.preset_id, finalList)
+                }
+                toast({ title: "Preset imported", description: `Imported ${presetName} from ${file.name}` })
+            } catch (err: any) {
+                toast({ title: "Import failed", description: err?.message || "Invalid file format", variant: "destructive" })
+            }
+        }
+        reader.readAsText(file)
+        event.target.value = ""
+    }
+
+    // ─── Load Rules from API ────────────────────────────────────────────────
+
+    useEffect(() => {
+        if (currentAdvancedStep !== "rules" || !dataImported || rulesLoadedFromApi) return
+        setRulesLoading(true)
+        jobsAPI.listRules()
+            .then((res) => {
+                if (res.rules?.length) {
+                    setGlobalRules(res.rules.map(r => ({
+                        rule_id: r.rule_id,
+                        rule_name: r.rule_name,
+                        description: r.description,
+                        selected: r.default_selected,
+                    })))
+                    setRulesLoadedFromApi(true)
+                    return
+                }
+                if (!globalRules.length) {
+                    setGlobalRules(DEFAULT_GLOBAL_RULES.map(r => ({ ...r })))
+                }
+            })
+            .catch((err: any) => {
+                console.error("Failed to load rules:", err)
+                if (!globalRules.length) {
+                    setGlobalRules(DEFAULT_GLOBAL_RULES.map(r => ({ ...r })))
+                }
+            })
+            .finally(() => setRulesLoading(false))
+    }, [currentAdvancedStep, dataImported, rulesLoadedFromApi, globalRules.length])
 
     // ─── Toggle Rules ─────────────────────────────────────────────────────────
 
@@ -349,8 +735,21 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
         selectedPresetId,
         selectedPresetConfig,
         handleSelectPreset,
+        // Preset editing
+        presetEditMode,
+        editCurrencyValues, setEditCurrencyValues,
+        editUomValues, setEditUomValues,
+        editDateFormats, setEditDateFormats,
+        presetFileInputRef,
+        handleEditPreset,
+        handleCancelPresetEdit,
+        handleSavePresetEdit,
+        handleNewPreset,
+        handleExportPreset,
+        handlePresetFileUpload,
         // Rules
         globalRules,
+        rulesLoading,
         toggleRule,
         // Advanced wizard
         advancedOpen, handleAdvancedOpenChange,

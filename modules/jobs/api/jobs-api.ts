@@ -5,11 +5,15 @@ import { AWS_CONFIG } from "@/shared/config/aws-config"
 import type {
     JobStatus, JobFrequency, ERPType, DQMode,
     DQConfig, Job, JobRun, CreateJobPayload, UpdateJobPayload,
+    EntityResult, ProcessingMetadata, ImportPreviewResult,
+    ProfilingResult, Preset, DQRule, ColumnProfile,
 } from "@/modules/jobs/types/jobs.types"
 
 export type {
     JobStatus, JobFrequency, ERPType, DQMode,
     DQConfig, Job, JobRun, CreateJobPayload, UpdateJobPayload,
+    EntityResult, ProcessingMetadata, ImportPreviewResult,
+    ProfilingResult, Preset, DQRule, ColumnProfile,
 } from "@/modules/jobs/types/jobs.types"
 
 const API_BASE_URL = AWS_CONFIG.API_BASE_URL || ""
@@ -40,7 +44,12 @@ const ENDPOINTS = {
     JOB_BY_ID: (id: string) => `/jobs/${id}`,
     JOB_PAUSE: (id: string) => `/jobs/${id}/pause`,
     JOB_RESUME: (id: string) => `/jobs/${id}/resume`,
+    JOB_TRIGGER: (id: string) => `/jobs/${id}/trigger`,
     JOB_RUNS: (id: string) => `/jobs/${id}/runs`,
+    IMPORT_PREVIEW: "/jobs/import-preview",
+    PROFILING: "/jobs/profiling",
+    PRESETS: "/jobs/presets",
+    RULES: "/jobs/rules",
 }
 
 class JobsAPI {
@@ -87,6 +96,8 @@ class JobsAPI {
         return ""
     }
 
+    // ─── Job CRUD ────────────────────────────────────────────────────────────
+
     async listJobs(): Promise<{ jobs: Job[] }> {
         const token = this.getAuth()
         try {
@@ -122,6 +133,8 @@ class JobsAPI {
         return this.makeRequest(ENDPOINTS.JOB_BY_ID(jobId), token, { method: "DELETE" })
     }
 
+    // ─── Job Actions ─────────────────────────────────────────────────────────
+
     async pauseJob(jobId: string): Promise<Job> {
         const token = this.getAuth()
         return this.makeRequest(ENDPOINTS.JOB_PAUSE(jobId), token, { method: "POST" })
@@ -132,6 +145,13 @@ class JobsAPI {
         return this.makeRequest(ENDPOINTS.JOB_RESUME(jobId), token, { method: "POST" })
     }
 
+    async triggerJob(jobId: string): Promise<{ message: string; job_id: string }> {
+        const token = this.getAuth()
+        return this.makeRequest(ENDPOINTS.JOB_TRIGGER(jobId), token, { method: "POST" })
+    }
+
+    // ─── Job Runs ────────────────────────────────────────────────────────────
+
     async getJobRuns(jobId: string, limit: number = 10): Promise<{ runs: JobRun[] }> {
         const token = this.getAuth()
         const qs = limit ? `?limit=${limit}` : ""
@@ -139,6 +159,42 @@ class JobsAPI {
             return await this.makeRequest(`${ENDPOINTS.JOB_RUNS(jobId)}${qs}`, token, { method: "GET" })
         } catch {
             return { runs: [] }
+        }
+    }
+
+    // ─── Advanced Options ────────────────────────────────────────────────────
+
+    async importPreview(source: string, entity: string): Promise<ImportPreviewResult> {
+        const token = this.getAuth()
+        return this.makeRequest(ENDPOINTS.IMPORT_PREVIEW, token, {
+            method: "POST",
+            body: JSON.stringify({ source, entity }),
+        })
+    }
+
+    async fetchProfiling(uploadId: string, columns: string[]): Promise<ProfilingResult> {
+        const token = this.getAuth()
+        return this.makeRequest(ENDPOINTS.PROFILING, token, {
+            method: "POST",
+            body: JSON.stringify({ upload_id: uploadId, columns }),
+        })
+    }
+
+    async listPresets(): Promise<{ presets: Preset[] }> {
+        const token = this.getAuth()
+        try {
+            return await this.makeRequest(ENDPOINTS.PRESETS, token, { method: "GET" })
+        } catch {
+            return { presets: [] }
+        }
+    }
+
+    async listRules(): Promise<{ rules: DQRule[] }> {
+        const token = this.getAuth()
+        try {
+            return await this.makeRequest(ENDPOINTS.RULES, token, { method: "GET" })
+        } catch {
+            return { rules: [] }
         }
     }
 }
