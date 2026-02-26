@@ -16,3 +16,6 @@ export { DqIssuesPanel } from "./file-details/dq-issues-panel"
 export { FilePreloader } from "./file-preloader"
 export { PushToERPModal } from "./push-to-erp-modal"
 export { RowWiseIssues } from "./row-wise-issues"
+
+// Quarantine editor
+export { QuarantineEditorDialog } from "./quarantine-editor"
