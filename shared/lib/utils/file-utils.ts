@@ -1,4 +1,4 @@
-import type { FileStatusResponse } from '../api/file-management-api'
+import type { FileStatusResponse } from '@/modules/files/types'
 
 /**
  * Format file size in human-readable format

@@ -116,7 +116,7 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
           isCellEdited={editor.isCellEdited}
           isRowEdited={editor.isRowEdited}
           onCellEdit={editor.handleCellEdit}
-          onActivateCell={editor.setActiveCell}
+          onActivateCell={(rowId, col) => editor.setActiveCell({ rowId, col })}
           onDeactivateCell={() => editor.setActiveCell(null)}
           parentRef={editor.virtualScroll.parentRef}
           totalHeight={editor.virtualScroll.totalHeight}

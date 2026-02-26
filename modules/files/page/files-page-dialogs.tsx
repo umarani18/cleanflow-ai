@@ -78,7 +78,7 @@ export function FilesPageDialogs({ state }: FilesPageDialogsProps) {
         pushQBModalOpen, setPushQBModalOpen, fileToPush, setFileToPush,
         // Wizard
         wizardOpen, wizardFile, handleWizardOpenChange, handleWizardComplete,
-        idToken, loadFiles, setWizardOpen, setWizardFile: _setWizardFile,
+        idToken, loadFiles, setWizardOpen,
         // Column export
         showColumnExportModal, setShowColumnExportModal,
         columnExportFile, setColumnExportFile,
@@ -123,7 +123,8 @@ export function FilesPageDialogs({ state }: FilesPageDialogsProps) {
         profilingFileId, setProfilingFileId, profilingData, loadingProfiling,
         // Quarantine editor
         quarantineEditorOpen, setQuarantineEditorOpen,
-        quarantineEditorFile, handleQuarantineEditorComplete,
+        quarantineEditorFile, setQuarantineEditorFile,
+        handleQuarantineEditorComplete,
     } = state;
 
     const renderRuleOption = (
@@ -692,6 +693,7 @@ export function FilesPageDialogs({ state }: FilesPageDialogsProps) {
                 onOpenChange={(open) => {
                     setQuarantineEditorOpen(open);
                     if (!open) {
+                        setQuarantineEditorFile(null);
                         handleQuarantineEditorComplete();
                     }
                 }}

@@ -30,7 +30,7 @@ interface QuarantineEditorTableProps {
   onDeactivateCell: () => void
 
   // Virtual scroll
-  parentRef: React.RefObject<HTMLDivElement>
+  parentRef: React.RefObject<HTMLDivElement | null>
   totalHeight: number
   rowHeight: number
   headerHeight: number

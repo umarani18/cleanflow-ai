@@ -90,10 +90,10 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
         const sessionResult = await session.initialize(file.upload_id, authToken)
 
         // Initialize rows
-        if (sessionResult.compatibilityMode && 'rows' in sessionResult) {
+        if ('compatibilityMode' in sessionResult && sessionResult.compatibilityMode && 'rows' in sessionResult) {
           // Compatibility mode: rows already loaded
           rows.setRows(sessionResult.rows as any)
-        } else if (sessionResult.session) {
+        } else if ('session' in sessionResult && sessionResult.session) {
           // Modern mode: fetch first page
           await rows.initialize(
             file.upload_id,

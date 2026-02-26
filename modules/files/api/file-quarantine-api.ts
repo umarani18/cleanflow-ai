@@ -217,7 +217,7 @@ export async function submitCompatibilityReprocessViaUpload(
 
     // Upload file
     if (initResp.presignedPost) {
-        await uploadToS3Post(initResp.presignedPost.url, initResp.presignedPost.fields, blob)
+        await uploadToS3Post(initResp.presignedPost.url, initResp.presignedPost.fields, blob as File)
     } else if (initResp.uploadUrl) {
         const { uploadToS3 } = await import('./file-upload-api')
         await uploadToS3(initResp.uploadUrl, blob as File)
