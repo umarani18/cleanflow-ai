@@ -63,8 +63,11 @@ export function QuarantineEditorTable({
 
   if (loading && virtualRows.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground min-h-0">
-        <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Loading quarantined rows...
+      <div className="flex-1 flex items-center justify-center text-muted-foreground min-h-0 bg-muted/5">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <p className="text-sm font-medium">Loading quarantined rows...</p>
+        </div>
       </div>
     )
   }
@@ -72,7 +75,7 @@ export function QuarantineEditorTable({
   return (
     <div
       ref={parentRef}
-      className="flex-1 overflow-x-scroll overflow-y-auto [scrollbar-gutter:stable] min-h-0"
+      className="flex-1 overflow-x-scroll overflow-y-auto [scrollbar-gutter:stable] min-h-0 bg-muted/5"
       onScroll={onScroll}
     >
       <div
@@ -84,13 +87,13 @@ export function QuarantineEditorTable({
       >
         {/* Header row */}
         <div
-          className="sticky top-0 z-20 bg-muted/80 border-b grid"
+          className="sticky top-0 z-20 bg-gradient-to-b from-muted/90 to-muted/70 backdrop-blur-sm border-b-2 border-border grid shadow-sm"
           style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(132px, 1fr))` }}
         >
           {columns.map((col) => (
             <div
               key={col}
-              className="px-2 py-2 text-xs font-semibold border-r truncate text-muted-foreground"
+              className="px-3 py-2.5 text-xs font-semibold border-r border-border/50 truncate text-foreground/80 uppercase tracking-wide"
             >
               {col}
             </div>
@@ -106,9 +109,9 @@ export function QuarantineEditorTable({
           return (
             <div
               key={`${rowId}-${rowIndex}`}
-              className={`absolute left-0 w-full grid border-b ${
-                rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/[0.16]'
-              } ${rowEdited ? 'bg-primary/5' : ''} hover:bg-muted/25`}
+              className={`absolute left-0 w-full grid border-b border-border/30 transition-colors duration-150 ${
+                rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/[0.12]'
+              } ${rowEdited ? 'bg-blue-50/50 dark:bg-blue-950/20 border-l-2 border-l-blue-500' : ''} hover:bg-accent/40`}
               style={{
                 transform: `translateY(${headerHeight + rowIndex * rowHeight}px)`,
                 gridTemplateColumns: `repeat(${columns.length}, minmax(132px, 1fr))`,
@@ -121,7 +124,7 @@ export function QuarantineEditorTable({
                 const isEdited = isCellEdited(rowId, col)
 
                 return (
-                  <div key={`${rowId}-${col}`} className="border-r">
+                  <div key={`${rowId}-${col}`} className="border-r border-border/30">
                     <QuarantineEditorCell
                       rowId={rowId}
                       column={col}

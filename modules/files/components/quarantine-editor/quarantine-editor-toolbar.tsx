@@ -37,46 +37,76 @@ export function QuarantineEditorToolbar({
   lastSaveSummary,
 }: QuarantineEditorToolbarProps) {
   return (
-    <div className="px-4 py-2 border-b bg-muted/10">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="px-6 py-3 border-b bg-muted/5 backdrop-blur-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Left: Action buttons */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button variant="outline" size="sm" onClick={onRefresh}>
-            <RefreshCw className="w-4 h-4 mr-1" /> Reload
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onRefresh} className="h-9 shadow-sm hover:shadow transition-shadow">
+            <RefreshCw className="w-4 h-4 mr-1.5" /> Reload
           </Button>
-          <Button size="sm" variant="outline" disabled={saving || pendingCount === 0} onClick={onSave}>
-            {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}{' '}
-            Save ({pendingCount})
+          <div className="h-5 w-px bg-border" />
+          <Button
+            size="sm"
+            variant={pendingCount > 0 ? "default" : "outline"}
+            disabled={saving || pendingCount === 0}
+            onClick={onSave}
+            className="h-9 shadow-sm hover:shadow transition-all"
+          >
+            {saving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5" />}
+            Save {pendingCount > 0 && `(${pendingCount})`}
           </Button>
-          <Button size="sm" disabled={submitting || !session} onClick={onReprocess}>
+          <Button
+            size="sm"
+            disabled={submitting || !session}
+            onClick={onReprocess}
+            className="h-9 shadow-sm hover:shadow transition-all"
+          >
             {submitting ? (
-              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
             ) : (
-              <Play className="w-4 h-4 mr-1" />
-            )}{' '}
+              <Play className="w-4 h-4 mr-1.5" />
+            )}
             Reprocess
           </Button>
         </div>
 
         {/* Right: Status badges and navigation */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {session && <Badge variant="outline">Session {session.session_id.slice(0, 8)}</Badge>}
-          {lastSaveSummary && (
-            <Badge variant="secondary">
-              Saved {lastSaveSummary.accepted}
-              {lastSaveSummary.rejected ? ` / rejected ${lastSaveSummary.rejected}` : ''}
+        <div className="flex flex-wrap items-center gap-2">
+          {session && (
+            <Badge variant="outline" className="px-2.5 py-1 text-xs font-mono shadow-sm">
+              Session {session.session_id.slice(0, 8)}
             </Badge>
           )}
-          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={onScrollLeft}>
-            ←
-          </Button>
-          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={onScrollRight}>
-            →
-          </Button>
+          {lastSaveSummary && (
+            <Badge variant="secondary" className="px-2.5 py-1 text-xs shadow-sm">
+              ✓ Saved {lastSaveSummary.accepted}
+              {lastSaveSummary.rejected ? ` / ✗ ${lastSaveSummary.rejected}` : ''}
+            </Badge>
+          )}
+          <div className="h-5 w-px bg-border ml-1" />
+          <div className="flex items-center gap-1 bg-muted/50 rounded-md p-0.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-8 px-0 hover:bg-background"
+              onClick={onScrollLeft}
+            >
+              ←
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-8 px-0 hover:bg-background"
+              onClick={onScrollRight}
+            >
+              →
+            </Button>
+          </div>
         </div>
       </div>
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        Excel-style editing: click a cell, edit, Enter/Escape to finish. Auto-save runs in background.
+      <p className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
+        <span className="inline-block w-1 h-1 rounded-full bg-blue-500" />
+        Excel-style editing: click a cell to edit, press Enter or Escape to finish. Changes auto-save in the background.
       </p>
     </div>
   )

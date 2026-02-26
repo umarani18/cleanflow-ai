@@ -69,7 +69,7 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[98vw] max-w-[1700px] h-[90vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-[98vw] max-w-[1700px] h-[90vh] p-0 gap-0 overflow-hidden bg-gradient-to-b from-background to-muted/5">
         {/* Header */}
         <QuarantineEditorHeader
           manifest={editor.manifest}
@@ -107,7 +107,7 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
           parentRef={editor.virtualScroll.parentRef}
           totalHeight={editor.virtualScroll.totalHeight}
           rowHeight={32}
-          headerHeight={34}
+          headerHeight={36}
           onScroll={editor.virtualScroll.handleScroll}
           loading={editor.loading}
         />

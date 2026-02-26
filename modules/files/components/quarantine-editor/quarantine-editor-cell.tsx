@@ -33,7 +33,7 @@ export function QuarantineEditorCell({
   if (!isEditable) {
     // Non-editable cell (e.g., row_id)
     return (
-      <div className="h-8 truncate px-2 py-[7px] text-xs" title={value}>
+      <div className="h-8 truncate px-3 py-[7px] text-xs font-mono text-muted-foreground/70 bg-muted/30" title={value}>
         {value}
       </div>
     )
@@ -52,7 +52,7 @@ export function QuarantineEditorCell({
             onDeactivate()
           }
         }}
-        className="h-8 w-full border-0 bg-background px-2 text-xs outline-none ring-1 ring-inset ring-primary"
+        className="h-8 w-full border-0 bg-background px-3 text-xs outline-none ring-2 ring-inset ring-primary shadow-sm"
       />
     )
   }
@@ -60,11 +60,15 @@ export function QuarantineEditorCell({
   // Display mode
   return (
     <div
-      className={`h-8 truncate px-2 py-[7px] text-xs cursor-text ${isEdited ? 'font-medium text-primary' : ''}`}
+      className={`h-8 truncate px-3 py-[7px] text-xs cursor-text transition-colors duration-150 ${
+        isEdited
+          ? 'font-semibold text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30'
+          : 'hover:bg-accent/30'
+      }`}
       title={value}
       onClick={() => onActivate(rowId, column)}
     >
-      {value || <span className="text-muted-foreground/50 italic">empty</span>}
+      {value || <span className="text-muted-foreground/40 italic text-[11px]">empty</span>}
     </div>
   )
 }
