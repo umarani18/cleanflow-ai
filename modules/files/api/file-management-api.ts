@@ -39,6 +39,14 @@ export type {
   DownloadUrlsResponse,
   ExportResponse,
   ExportDownloadResult,
+  QuarantineManifest,
+  QuarantineSession,
+  QuarantineRow,
+  QuarantineManifestResponse,
+  QuarantineSessionStartResponse,
+  QuarantineQueryResponse,
+  FileVersionSummary,
+  FileVersionsResponse,
 } from '@/modules/files/types'
 
 // ─── Re-export functions from focused modules ───
@@ -109,6 +117,21 @@ export type {
   UnifiedBridgeImportResponse,
 } from './file-ingestion-api'
 
+export {
+  getQuarantineManifest,
+  startQuarantineSession,
+  queryQuarantinedRows,
+  saveQuarantineEditsBatch,
+  submitQuarantineReprocess,
+  reprocessQuarantinedLegacy,
+  submitCompatibilityReprocessViaUpload,
+  backfillQuarantineReadModel,
+  getFileVersions,
+  downloadQuarantineFile,
+  isAuthorizerMismatchError,
+  shouldUseLegacyFallback,
+} from './file-quarantine-api'
+
 // ─── Backwards-compatible singleton object ───
 // Consumers that use `fileManagementAPI.someMethod()` can continue doing so.
 import * as uploadApi from './file-upload-api'
@@ -117,6 +140,7 @@ import * as exportApi from './file-export-api'
 import * as profilingApi from './file-profiling-api'
 import * as settingsApi from './file-settings-api'
 import * as ingestionApi from './file-ingestion-api'
+import * as quarantineApi from './file-quarantine-api'
 
 export const fileManagementAPI = {
   // Upload & file management
@@ -166,6 +190,20 @@ export const fileManagementAPI = {
   testFtpConnection: ingestionApi.testFtpConnection,
   testTcpConnection: ingestionApi.testTcpConnection,
   testHttpEndpoint: ingestionApi.testHttpEndpoint,
+
+  // Quarantine editor
+  getQuarantineManifest: quarantineApi.getQuarantineManifest,
+  startQuarantineSession: quarantineApi.startQuarantineSession,
+  queryQuarantinedRows: quarantineApi.queryQuarantinedRows,
+  saveQuarantineEditsBatch: quarantineApi.saveQuarantineEditsBatch,
+  submitQuarantineReprocess: quarantineApi.submitQuarantineReprocess,
+  reprocessQuarantinedLegacy: quarantineApi.reprocessQuarantinedLegacy,
+  submitCompatibilityReprocessViaUpload: quarantineApi.submitCompatibilityReprocessViaUpload,
+  backfillQuarantineReadModel: quarantineApi.backfillQuarantineReadModel,
+  getFileVersions: quarantineApi.getFileVersions,
+  downloadQuarantineFile: quarantineApi.downloadQuarantineFile,
+  isAuthorizerMismatchError: quarantineApi.isAuthorizerMismatchError,
+  shouldUseLegacyFallback: quarantineApi.shouldUseLegacyFallback,
 }
 
 export default fileManagementAPI
