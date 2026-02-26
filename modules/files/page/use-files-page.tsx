@@ -225,6 +225,7 @@ export function useFilesPage() {
 
     // ─── Filtering & sorting ─────────────────────────────────────────
     const filteredFiles = useMemo(() => files
+        .filter((file) => !file.parent_upload_id) // Hide versioned files - accessible via Versions tab
         .filter((file) => {
             const name = (file.original_filename || file.filename || "").toLowerCase();
             const matchesSearch = name.includes(searchQuery.toLowerCase());
@@ -347,6 +348,21 @@ export function useFilesPage() {
 
     const handleOpenQuarantineEditor = (file: FileStatusResponse) => {
         if (!ensureFilesPermission()) return;
+
+        // Validate quarantine editor availability
+        const quarantinedRows = Number(file.rows_quarantined || 0);
+        const status = file.status;
+        const canOpen = quarantinedRows > 0 && (status === "DQ_FIXED" || status === "COMPLETED");
+
+        if (!canOpen) {
+            toast({
+                title: "Quarantine editor unavailable",
+                description: "Run DQ and ensure quarantined rows are present before remediation.",
+                variant: "destructive",
+            });
+            return;
+        }
+
         setQuarantineEditorFile(file);
         setQuarantineEditorOpen(true);
     };

@@ -12,19 +12,17 @@ import { useAuth } from '@/modules/auth'
 import { useQuarantineEditor } from '@/modules/files/hooks'
 import { QuarantineEditorHeader } from './quarantine-editor-header'
 import { QuarantineEditorToolbar } from './quarantine-editor-toolbar'
-import { QuarantineVersionLineage } from './quarantine-version-lineage'
 import { QuarantineEditorTable } from './quarantine-editor-table'
 import type { QuarantineEditorDialogProps } from '@/modules/files/types'
 
 /**
  * Quarantine Editor Dialog
  *
- * Full-featured editor for quarantined rows with:
+ * Focused editor for quarantined rows with:
  * - Virtual scrolling for performance
  * - Inline cell editing
  * - Autosave
  * - Session management
- * - Version tracking
  * - Compatibility mode fallback
  *
  * @param props - File, open state, and callbacks
@@ -90,20 +88,8 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
           onRefresh={handleRefresh}
           onScrollLeft={handleScrollLeft}
           onScrollRight={handleScrollRight}
-          showLineage={editor.showLineage}
-          onToggleLineage={() => editor.setShowLineage(!editor.showLineage)}
-          latestVersion={editor.latestVersion}
           lastSaveSummary={editor.lastSaveSummary}
-          hasMultipleVersions={editor.lineage.length > 1}
         />
-
-        {/* Version lineage (collapsible) */}
-        {editor.showLineage && editor.lineage.length > 1 && (
-          <QuarantineVersionLineage
-            lineage={editor.lineage}
-            baseUploadId={editor.manifest?.upload_id}
-          />
-        )}
 
         {/* Table */}
         <QuarantineEditorTable

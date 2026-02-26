@@ -14,6 +14,7 @@ export { DqRowDistribution } from "./file-details/dq-row-distribution"
 export { DqTopViolations } from "./file-details/dq-top-violations"
 export { DqIssuesPanel } from "./file-details/dq-issues-panel"
 export { FilePreloader } from "./file-preloader"
+export { FileVersionHistory } from "./file-version-history"
 export { PushToERPModal } from "./push-to-erp-modal"
 export { RowWiseIssues } from "./row-wise-issues"
 

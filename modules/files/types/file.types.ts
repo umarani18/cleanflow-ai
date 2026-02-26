@@ -46,6 +46,11 @@ export interface FileStatusResponse {
   dq_report_s3?: string
   dq_rules_version?: string
   processing_time_seconds?: number
+  // Version management fields
+  version_number?: number
+  parent_upload_id?: string | null
+  root_upload_id?: string | null
+  patch_notes?: string | null
 }
 
 export interface FileListResponse {

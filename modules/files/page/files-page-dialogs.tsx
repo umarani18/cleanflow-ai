@@ -124,7 +124,7 @@ export function FilesPageDialogs({ state }: FilesPageDialogsProps) {
         // Quarantine editor
         quarantineEditorOpen, setQuarantineEditorOpen,
         quarantineEditorFile, setQuarantineEditorFile,
-        handleQuarantineEditorComplete,
+        handleOpenQuarantineEditor, handleQuarantineEditorComplete,
     } = state;
 
     const renderRuleOption = (
@@ -525,7 +525,12 @@ export function FilesPageDialogs({ state }: FilesPageDialogsProps) {
             </AlertDialog>
 
             {/* File Details */}
-            <FileDetailsDialog file={selectedFile} open={detailsOpen} onOpenChange={setDetailsOpen} />
+            <FileDetailsDialog
+                file={selectedFile}
+                open={detailsOpen}
+                onOpenChange={setDetailsOpen}
+                onRemediate={handleOpenQuarantineEditor}
+            />
 
             {/* Download Format */}
             <DownloadFormatModal

@@ -393,13 +393,18 @@ export function FileExplorerTable({ state }: FileExplorerTableProps) {
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
-                                                                className="h-7 w-7 sm:h-8 sm:w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                                                className="h-7 w-7 sm:h-8 sm:w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 onClick={() => handleOpenQuarantineEditor(file)}
+                                                                disabled={!(file.status === "DQ_FIXED" || file.status === "COMPLETED")}
                                                             >
                                                                 <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                                             </Button>
                                                         </TooltipTrigger>
-                                                        <TooltipContent>Edit Quarantined Rows ({file.rows_quarantined})</TooltipContent>
+                                                        <TooltipContent>
+                                                            {file.status === "DQ_FIXED" || file.status === "COMPLETED"
+                                                                ? `Edit Quarantined Rows (${file.rows_quarantined})`
+                                                                : "Run DQ first to edit quarantined rows"}
+                                                        </TooltipContent>
                                                     </Tooltip>
                                                 )}
                                                 <Tooltip>

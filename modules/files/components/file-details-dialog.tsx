@@ -1,8 +1,10 @@
-import { FileText, PieChart as PieChartIcon, Server, Table as TableIcon } from "lucide-react"
+import { FileText, GitBranch, Pencil, PieChart as PieChartIcon, Server, Table as TableIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/shared/lib/utils"
+import { useAuth } from "@/modules/auth"
 import type { FileStatusResponse } from "@/modules/files/api/file-management-api"
 import { useFileDetails } from "@/modules/files/hooks/use-file-details"
 
@@ -10,6 +12,7 @@ import { DqMatrixDialog } from "./dq-matrix-dialog"
 import { FileDqReportTab } from "./file-details/file-dq-report-tab"
 import { FileOverviewTab } from "./file-details/file-overview-tab"
 import { FilePreviewTab } from "./file-details/file-preview-tab"
+import { FileVersionHistory } from "./file-version-history"
 import { RowWiseIssues } from "./row-wise-issues"
 
 export { DqMatrixDialog } from "./dq-matrix-dialog"
@@ -19,9 +22,11 @@ interface FileDetailsDialogProps {
   file: FileStatusResponse | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onRemediate?: (file: FileStatusResponse) => void
 }
 
-export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialogProps) {
+export function FileDetailsDialog({ file, open, onOpenChange, onRemediate }: FileDetailsDialogProps) {
+  const { idToken } = useAuth()
   const {
     activeTab,
     setActiveTab,
@@ -89,14 +94,27 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
         <DialogContent className="w-[98vw] h-[80vh] max-w-6xl max-h-none p-0 flex flex-col gap-0">
           <div className="flex h-full flex-col">
             <DialogHeader className="px-6 py-4 border-b shrink-0">
-              <div className="flex items-center justify-left gap-4">
-                <DialogTitle className="flex items-center gap-2 text-lg font-semibold truncate">
-                  <FileText className="w-5 h-5 text-primary shrink-0" />
-                  <span className="truncate">{currentFile.original_filename || currentFile.filename || "File"}</span>
-                </DialogTitle>
-                <Badge className={cn("shrink-0", getStatusColor(currentFile.status))} variant="outline">
-                  {currentFile.status}
-                </Badge>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4 min-w-0">
+                  <DialogTitle className="flex items-center gap-2 text-lg font-semibold truncate">
+                    <FileText className="w-5 h-5 text-primary shrink-0" />
+                    <span className="truncate">{currentFile.original_filename || currentFile.filename || "File"}</span>
+                  </DialogTitle>
+                  <Badge className={cn("shrink-0", getStatusColor(currentFile.status))} variant="outline">
+                    {currentFile.status}
+                  </Badge>
+                </div>
+                {onRemediate && (currentFile.rows_quarantined ?? 0) > 0 && (currentFile.status === "DQ_FIXED" || currentFile.status === "COMPLETED") && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 gap-1.5"
+                    onClick={() => onRemediate(currentFile)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Remediate
+                  </Button>
+                )}
               </div>
             </DialogHeader>
 
@@ -140,6 +158,18 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                     DQ Report
                   </button>
                 )}
+                <button
+                  onClick={() => setActiveTab("versions")}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
+                    activeTab === "versions"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <GitBranch className="h-3.5 w-3.5" />
+                  Versions
+                </button>
               </div>
             </div>
 
@@ -172,6 +202,14 @@ export function FileDetailsDialog({ file, open, onOpenChange }: FileDetailsDialo
                   handleDownloadDqReport={handleDownloadDqReport}
                   fetchIssues={fetchIssues}
                 />
+              )}
+              {activeTab === "versions" && idToken && (
+                <div className="px-6 py-4 overflow-auto">
+                  <FileVersionHistory
+                    rootUploadId={currentFile.root_upload_id || currentFile.upload_id}
+                    authToken={idToken}
+                  />
+                </div>
               )}
             </div>
           </div>
