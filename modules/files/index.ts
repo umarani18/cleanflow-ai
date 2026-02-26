@@ -19,6 +19,7 @@ export { PushToERPModal } from "./components/push-to-erp-modal"
 export { ColumnProfilingPanel } from "./components/column-profiling-panel"
 export { ColumnExportDialog, ColumnExportContent } from "./components/column-export-dialog"
 export { default as CustomDestinationExport } from "./components/custom-destination-export"
+export { QuarantineEditorDialog } from "./components/quarantine-editor"
 
 export type * from "./types"
 export { useFileManager } from "./hooks/use-file-manager"
