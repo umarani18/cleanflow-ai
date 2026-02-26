@@ -22,7 +22,7 @@ export default function FilesPage() {
 
 function FilesPageContent() {
   const state = useFilesPage();
-  const { activeSection, setActiveSection, files } = state;
+  const { activeSection, setActiveSection, files, filteredFiles } = state;
 
   return (
     <TooltipProvider>
@@ -53,9 +53,9 @@ function FilesPageContent() {
             >
               <FileText className="h-4 w-4" />
               <span className="hidden xs:inline">File</span> Explorer
-              {files.length > 0 && (
+              {filteredFiles.length > 0 && (
                 <span className="ml-1 rounded-full bg-muted-foreground/20 px-1.5 sm:px-2 py-0.5 text-xs">
-                  {files.length}
+                  {filteredFiles.length}
                 </span>
               )}
             </button>

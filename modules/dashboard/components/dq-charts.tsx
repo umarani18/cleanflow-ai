@@ -16,10 +16,15 @@ export { ProfessionalChartsCarousel } from "@/modules/dashboard/components/profe
 export type { DqChartsProps } from "@/modules/dashboard/components/chart-constants"
 
 function DqChartsComponent({ files }: DqChartsProps) {
-  const { completedFiles } = useMemo(
-    () => ({
-      completedFiles: files.filter((f) => f.status === "DQ_FIXED"),
-    }),
+  const { visibleFiles, completedFiles } = useMemo(
+    () => {
+      // Exclude versioned files (those with parent_upload_id)
+      const visible = files.filter((f) => !f.parent_upload_id)
+      return {
+        visibleFiles: visible,
+        completedFiles: visible.filter((f) => f.status === "DQ_FIXED"),
+      }
+    },
     [files]
   )
 
@@ -50,7 +55,7 @@ function DqChartsComponent({ files }: DqChartsProps) {
               <FileText className="h-4 w-4 text-blue-500" />
               <span className="text-sm text-muted-foreground">Total Files</span>
             </div>
-            <div className="text-2xl font-bold">{files.length}</div>
+            <div className="text-2xl font-bold">{visibleFiles.length}</div>
             <p className="text-xs text-muted-foreground">{completedFiles.length} files processed</p>
           </CardContent>
         </Card>

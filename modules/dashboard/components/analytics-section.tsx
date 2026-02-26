@@ -10,9 +10,11 @@ interface AnalyticsSectionProps {
 }
 
 export function AnalyticsSection({ files }: AnalyticsSectionProps) {
-  const completedFiles = files.filter(f => f.status === 'DQ_FIXED')
-  const processingFiles = files.filter(f => ['DQ_RUNNING', 'NORMALIZING', 'QUEUED', 'UPLOADING'].includes(f.status))
-  const failedFiles = files.filter(f => ['DQ_FAILED', 'UPLOAD_FAILED'].includes(f.status))
+  // Exclude versioned files (those with parent_upload_id)
+  const visibleFiles = files.filter(f => !f.parent_upload_id)
+  const completedFiles = visibleFiles.filter(f => f.status === 'DQ_FIXED')
+  const processingFiles = visibleFiles.filter(f => ['DQ_RUNNING', 'NORMALIZING', 'QUEUED', 'UPLOADING'].includes(f.status))
+  const failedFiles = visibleFiles.filter(f => ['DQ_FAILED', 'UPLOAD_FAILED'].includes(f.status))
 
   const avgDqScore = completedFiles.length > 0
     ? completedFiles.reduce((sum, f) => sum + (f.dq_score || 0), 0) / completedFiles.length
@@ -45,8 +47,8 @@ export function AnalyticsSection({ files }: AnalyticsSectionProps) {
         {[
           {
             title: 'Total Files',
-            value: files.length.toString(),
-            change: files.length > 0 ? '+100%' : '0%',
+            value: visibleFiles.length.toString(),
+            change: visibleFiles.length > 0 ? '+100%' : '0%',
             icon: FileText,
             color: 'text-blue-400'
           },
@@ -67,7 +69,7 @@ export function AnalyticsSection({ files }: AnalyticsSectionProps) {
           },
           {
             title: 'Success Rate',
-            value: files.length > 0 ? `${Math.round((completedFiles.length / files.length) * 100)}%` : '0%',
+            value: visibleFiles.length > 0 ? `${Math.round((completedFiles.length / visibleFiles.length) * 100)}%` : '0%',
             change: completedFiles.length > 0 ? '+100%' : '0%',
             icon: Target,
             color: 'text-orange-400'
