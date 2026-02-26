@@ -57,6 +57,7 @@ import {
     FileDetailsDialog,
     PushToERPModal,
     ColumnProfilingPanel,
+    QuarantineEditorDialog,
 } from "@/modules/files";
 import { WizardDialog } from "@/modules/processing";
 import type { FilesPageState } from "./use-files-page";
@@ -120,6 +121,9 @@ export function FilesPageDialogs({ state }: FilesPageDialogsProps) {
         handleGenerateCustomRule, handleApproveCustomRule, handleRemoveCustomRule,
         // Profiling
         profilingFileId, setProfilingFileId, profilingData, loadingProfiling,
+        // Quarantine editor
+        quarantineEditorOpen, setQuarantineEditorOpen,
+        quarantineEditorFile, handleQuarantineEditorComplete,
     } = state;
 
     const renderRuleOption = (
@@ -679,6 +683,18 @@ export function FilesPageDialogs({ state }: FilesPageDialogsProps) {
                 authToken={idToken || ""}
                 onStarted={() => { setWizardOpen(false); loadFiles(); }}
                 onComplete={() => { setWizardOpen(false); loadFiles(); }}
+            />
+
+            {/* Quarantine Editor Dialog */}
+            <QuarantineEditorDialog
+                file={quarantineEditorFile}
+                open={quarantineEditorOpen}
+                onOpenChange={(open) => {
+                    setQuarantineEditorOpen(open);
+                    if (!open) {
+                        handleQuarantineEditorComplete();
+                    }
+                }}
             />
         </>
     );

@@ -10,6 +10,7 @@ import {
     Download,
     CloudUpload,
     Play,
+    Pencil,
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
@@ -68,6 +69,7 @@ export function FileExplorerTable({ state }: FileExplorerTableProps) {
         openActionsDialog, handleDeleteClick,
         downloading, deleting,
         setFileToPush, setPushQBModalOpen,
+        handleOpenQuarantineEditor,
     } = state;
 
     const SortIcon = ({
@@ -385,6 +387,21 @@ export function FileExplorerTable({ state }: FileExplorerTableProps) {
                                                     </TooltipTrigger>
                                                     <TooltipContent>Details</TooltipContent>
                                                 </Tooltip>
+                                                {(file.rows_quarantined ?? 0) > 0 && (
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-7 w-7 sm:h-8 sm:w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                                                onClick={() => handleOpenQuarantineEditor(file)}
+                                                            >
+                                                                <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>Edit Quarantined Rows ({file.rows_quarantined})</TooltipContent>
+                                                    </Tooltip>
+                                                )}
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
                                                         <Button

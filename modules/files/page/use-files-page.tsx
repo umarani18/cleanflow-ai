@@ -81,6 +81,10 @@ export function useFilesPage() {
     const [lastActiveSelector, setLastActiveSelector] = useState<'source' | 'destination'>('source');
     const [selectedErp, setSelectedErp] = useState("quickbooks");
 
+    // Quarantine editor state
+    const [quarantineEditorOpen, setQuarantineEditorOpen] = useState(false);
+    const [quarantineEditorFile, setQuarantineEditorFile] = useState<FileStatusResponse | null>(null);
+
     const updateUploadProgress = useCallback((value: number) => {
         const clamped = Math.min(100, Math.max(0, value));
         setUploadProgress(Number(clamped.toFixed(2)));
@@ -339,6 +343,17 @@ export function useFilesPage() {
     const handleViewDetails = (file: FileStatusResponse) => {
         setSelectedFile(file);
         setDetailsOpen(true);
+    };
+
+    const handleOpenQuarantineEditor = (file: FileStatusResponse) => {
+        if (!ensureFilesPermission()) return;
+        setQuarantineEditorFile(file);
+        setQuarantineEditorOpen(true);
+    };
+
+    const handleQuarantineEditorComplete = () => {
+        // Reload files to reflect new version
+        loadFiles();
     };
 
     const handlePushToQuickBooks = (file: FileStatusResponse) => {
@@ -978,6 +993,10 @@ export function useFilesPage() {
         detailsOpen, setDetailsOpen, selectedFile, setSelectedFile,
         handleViewDetails, handleStartProcessing,
         wizardOpen, setWizardOpen, wizardFile, handleWizardOpenChange, handleWizardComplete,
+        // Quarantine editor
+        quarantineEditorOpen, setQuarantineEditorOpen,
+        quarantineEditorFile, setQuarantineEditorFile,
+        handleOpenQuarantineEditor, handleQuarantineEditorComplete,
         // Push to ERP
         pushQBModalOpen, setPushQBModalOpen, fileToPush, setFileToPush,
         handlePushToQuickBooks, handleQuickBooksImportComplete,
