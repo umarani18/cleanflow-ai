@@ -118,6 +118,7 @@ export type {
 } from './file-ingestion-api'
 
 export {
+  getQuarantinedExportUrl,
   getQuarantineManifest,
   startQuarantineSession,
   queryQuarantinedRows,
@@ -192,6 +193,7 @@ export const fileManagementAPI = {
   testHttpEndpoint: ingestionApi.testHttpEndpoint,
 
   // Quarantine editor
+  getQuarantinedExportUrl: quarantineApi.getQuarantinedExportUrl,
   getQuarantineManifest: quarantineApi.getQuarantineManifest,
   startQuarantineSession: quarantineApi.startQuarantineSession,
   queryQuarantinedRows: quarantineApi.queryQuarantinedRows,

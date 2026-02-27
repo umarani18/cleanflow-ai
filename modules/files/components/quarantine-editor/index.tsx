@@ -91,6 +91,8 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
           onCellEdit={editor.handleCellEdit}
           loading={editor.loading || editor.rowsLoading}
           onBodyScrollEnd={editor.handleBodyScrollEnd}
+          uploadId={file?.upload_id ?? ''}
+          authToken={idToken}
         />
       </DialogContent>
     </Dialog>

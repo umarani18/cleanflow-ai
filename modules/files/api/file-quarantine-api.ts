@@ -46,6 +46,23 @@ const ENDPOINTS = {
     DOWNLOAD: (id: string) => `/files/${id}/download`,
 }
 
+// ========== Quarantine Export ==========
+
+/**
+ * Get a presigned download URL for the quarantined rows of a file version.
+ * Calls GET /files/{id}/quarantined → { url, filename, row_count }
+ */
+export async function getQuarantinedExportUrl(
+    uploadId: string,
+    authToken: string
+): Promise<{ url: string | null; filename: string | null; row_count: number }> {
+    return makeRequest(
+        `/files/${uploadId}/quarantined`,
+        authToken,
+        { method: 'GET' }
+    )
+}
+
 // ========== Session & Manifest Operations ==========
 
 /**
@@ -235,6 +252,47 @@ export async function submitCompatibilityReprocessViaUpload(
         execution_arn: processResult.dispatch_id,
         status: processResult.status || 'QUEUED',
     }
+}
+
+// ========== AI Suggest Fix ==========
+
+export interface AiSuggestFixParams {
+    column: string
+    value: string
+    rule_id?: string
+    column_type?: string
+    issue_message?: string
+}
+
+export interface AiSuggestFixResponse {
+    suggestion: string
+    confidence: 'high' | 'medium' | 'low'
+    reasoning: string
+    _cache_hit?: boolean
+}
+
+/**
+ * Request an AI-generated fix suggestion for a quarantined cell value.
+ * Calls GET /files/{id}/quarantined/suggest-fix with cell context.
+ * Returns a suggested corrected value with confidence and reasoning.
+ */
+export async function suggestQuarantineFix(
+    uploadId: string,
+    authToken: string,
+    params: AiSuggestFixParams
+): Promise<AiSuggestFixResponse> {
+    const query = new URLSearchParams({
+        column: params.column,
+        value: String(params.value ?? ''),
+        rule_id: params.rule_id ?? 'unknown',
+        column_type: params.column_type ?? 'text',
+        issue_message: params.issue_message ?? '',
+    })
+    return makeRequest(
+        `/files/${uploadId}/quarantined/suggest-fix?${query.toString()}`,
+        authToken,
+        { method: 'GET' }
+    )
 }
 
 // ========== Maintenance Operations ==========

@@ -10,12 +10,13 @@
  * - GRID-02: Resizable columns via drag
  * - GRID-03: Frozen/pinned headers during vertical scroll (AG Grid default)
  * - GRID-04: Arrow key navigation and Enter-to-edit on cells
+ * - AI fix suggestion button (✨) per quarantined cell via AiSuggestCellRenderer
  *
  * Designed to be wired into the quarantine editor dialog in Plan 02.
  * AG Grid handles row virtualization internally — no external virtual scroll needed.
  */
 
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useRef, useLayoutEffect } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import {
   AllCommunityModule,
@@ -24,8 +25,10 @@ import {
   type GetRowIdParams,
   type CellValueChangedEvent,
   type BodyScrollEndEvent,
+  type GridApi,
 } from 'ag-grid-community'
 import type { QuarantineRow } from '@/modules/files/types/quarantine.types'
+import { AiSuggestCellRenderer } from './quarantine-ai-suggest-cell'
 import './quarantine-ag-grid-theme.css'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -54,7 +57,7 @@ interface QuarantineAgGridTableProps {
    */
   isCellSaved?: (rowId: string, column: string) => boolean
   /**
-   * Fires when a user commits an edit to a cell.
+   * Fires when a user commits an edit to a cell (including AI suggestion accepts).
    * Delegates to the quarantine edits hook which tracks and autosaves changes.
    */
   onCellEdit: (rowId: string, column: string, value: string) => void
@@ -67,6 +70,18 @@ interface QuarantineAgGridTableProps {
    * Use this to trigger fetching the next page of quarantined rows (cursor pagination).
    */
   onBodyScrollEnd?: () => void
+
+  /**
+   * Upload ID of the file being edited.
+   * Passed through to AiSuggestCellRenderer for the suggest-fix API call.
+   */
+  uploadId: string
+
+  /**
+   * JWT auth token.
+   * Passed through to AiSuggestCellRenderer for the suggest-fix API call.
+   */
+  authToken: string | null
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -88,7 +103,32 @@ export function QuarantineAgGridTable({
   onCellEdit,
   loading,
   onBodyScrollEnd,
+  uploadId,
+  authToken,
 }: QuarantineAgGridTableProps) {
+  // ─── AG Grid API ref ───────────────────────────────────────────────────────
+  const gridApiRef = useRef<GridApi<QuarantineRow> | null>(null)
+
+  // ─── Stable onCellEdit ref ─────────────────────────────────────────────────
+  // Use a ref so that AiSuggestCellRenderer always calls the latest onCellEdit
+  // without needing to be remounted when the callback identity changes.
+
+  const onCellEditRef = useRef(onCellEdit)
+  useLayoutEffect(() => {
+    onCellEditRef.current = onCellEdit
+  }, [onCellEdit])
+
+  const stableOnAccept = useCallback(
+    (rowId: string, col: string, val: string) => {
+      onCellEditRef.current(rowId, col, val)
+      // Force AG Grid to re-evaluate all valueGetters so the accepted value
+      // is immediately visible — without this, cells only refresh on the next
+      // rowData reconciliation cycle.
+      gridApiRef.current?.refreshCells({ force: true })
+    },
+    [] // intentionally empty — uses refs
+  )
+
   // ─── Column Definitions ────────────────────────────────────────────────────
 
   const columnDefs = useMemo<ColDef<QuarantineRow>[]>(() => {
@@ -123,6 +163,15 @@ export function QuarantineAgGridTable({
           if (!params.data) return ''
           return getCellValue(String(params.data.row_id), col, params.data)
         },
+        // AI suggest button on editable quarantined cells
+        ...(isEditable && {
+          cellRenderer: AiSuggestCellRenderer,
+          cellRendererParams: {
+            uploadId,
+            authToken,
+            onAccept: stableOnAccept,
+          },
+        }),
         cellClassRules: {
           ...(isEditable
             ? {
@@ -146,7 +195,7 @@ export function QuarantineAgGridTable({
         },
       } satisfies ColDef<QuarantineRow>
     })
-  }, [columns, editableColumns, getCellValue, isCellEdited])
+  }, [columns, editableColumns, getCellValue, isCellEdited, uploadId, authToken, stableOnAccept])
 
   // ─── Default Column Definition ─────────────────────────────────────────────
 
@@ -206,6 +255,8 @@ export function QuarantineAgGridTable({
         modules={[AllCommunityModule]}
         // Modern themeQuartz — no legacy CSS imports needed
         theme={themeQuartz}
+        // Capture the grid API so stableOnAccept can call refreshCells()
+        onGridReady={(params) => { gridApiRef.current = params.api }}
         // Data
         rowData={rows}
         columnDefs={columnDefs}

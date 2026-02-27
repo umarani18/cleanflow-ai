@@ -38,7 +38,7 @@ export function FileOverviewTab({ file }: FileOverviewTabProps) {
           <div className="bg-muted/50 p-4 rounded-lg">
             <div className="flex items-center gap-2 text-green-600 mb-2">
               <CheckCircle2 className="w-4 h-4" />
-              <span className="text-sm font-medium">Validated</span>
+              <span className="text-sm font-medium">No Issues</span>
             </div>
             <div className="text-2xl font-bold">{file.rows_clean || 0}</div>
           </div>

@@ -104,17 +104,6 @@ export function FileDetailsDialog({ file, open, onOpenChange, onRemediate }: Fil
                     {currentFile.status}
                   </Badge>
                 </div>
-                {onRemediate && (currentFile.rows_quarantined ?? 0) > 0 && (currentFile.status === "DQ_FIXED" || currentFile.status === "COMPLETED") && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 gap-1.5"
-                    onClick={() => onRemediate(currentFile)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Remediate
-                  </Button>
-                )}
               </div>
             </DialogHeader>
 
