@@ -1,16 +1,10 @@
 // ─── Job dialog constants & types ─────────────────────────────────────────────
 
 export const ENTITY_OPTIONS = [
-    { label: "Invoices", value: "invoices" },
     { label: "Customers", value: "customers" },
     { label: "Vendors", value: "vendors" },
+    { label: "Invoices", value: "invoices" },
     { label: "Items", value: "items" },
-    { label: "Payments", value: "payments" },
-    { label: "Bills", value: "bills" },
-    { label: "Journal Entries", value: "journal_entries" },
-    { label: "Estimates", value: "estimates" },
-    { label: "Credit Memos", value: "credit_memos" },
-    { label: "Purchase Orders", value: "purchase_orders" },
 ]
 
 export const ERP_OPTIONS = [
@@ -39,16 +33,10 @@ export const DEFAULT_GLOBAL_RULES = [
 ]
 
 export const ENTITY_COLUMNS: Record<string, string[]> = {
-    invoices: ["InvoiceNumber", "CustomerName", "Date", "DueDate", "Amount", "Currency", "Status", "LineItems", "TaxAmount", "Balance"],
     customers: ["DisplayName", "CompanyName", "Email", "Phone", "Address", "City", "State", "Country", "PostalCode", "Status"],
     vendors: ["DisplayName", "CompanyName", "Email", "Phone", "Address", "City", "State", "Country", "AccountNumber", "Status"],
+    invoices: ["InvoiceNumber", "CustomerName", "Date", "DueDate", "Amount", "Currency", "Status", "LineItems", "TaxAmount", "Balance"],
     items: ["Name", "Description", "Type", "UnitPrice", "PurchaseCost", "QtyOnHand", "SKU", "Category", "Taxable", "Status"],
-    payments: ["PaymentNumber", "CustomerName", "Date", "Amount", "Currency", "Method", "ReferenceNumber", "Status", "AppliedTo", "UnappliedAmount"],
-    bills: ["BillNumber", "VendorName", "Date", "DueDate", "Amount", "Currency", "Status", "LineItems", "TaxAmount", "Balance"],
-    journal_entries: ["EntryNumber", "Date", "Account", "Debit", "Credit", "Description", "Currency", "Status"],
-    estimates: ["EstimateNumber", "CustomerName", "Date", "ExpirationDate", "Amount", "Currency", "Status", "LineItems"],
-    credit_memos: ["CreditMemoNumber", "CustomerName", "Date", "Amount", "Currency", "Status", "LineItems", "Balance"],
-    purchase_orders: ["PONumber", "VendorName", "Date", "ShipDate", "Amount", "Currency", "Status", "LineItems"],
 }
 
 export function normalizeErpForUi(value?: string): string {
@@ -69,9 +57,6 @@ export function normalizeErpForApi(value: string): string {
 const ZOHO_ENTITY_ALIASES: Record<string, string> = {
     customers: "contacts",
     vendors: "contacts",
-    sales_orders: "salesorders",
-    purchase_orders: "purchaseorders",
-    inventory_items: "items",
 }
 
 export function normalizeEntityForApi(entity: string, erp: string): string {
