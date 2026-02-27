@@ -204,8 +204,6 @@ export function QuarantineAgGridTable({
         enterNavigatesVerticallyAfterEdit={true}
         // Suppress the default context menu (prevent browser conflict)
         suppressContextMenu={true}
-        // Ensure grid fills its container
-        style={{ width: '100%', height: '100%' }}
       />
     </div>
   )

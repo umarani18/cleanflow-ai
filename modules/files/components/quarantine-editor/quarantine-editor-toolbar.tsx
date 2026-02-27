@@ -19,8 +19,6 @@ interface QuarantineEditorToolbarProps {
   onSave: () => void
   onReprocess: () => void
   onRefresh: () => void
-  onScrollLeft: () => void
-  onScrollRight: () => void
   lastSaveSummary: SaveSummary | null
 }
 
@@ -32,8 +30,6 @@ export function QuarantineEditorToolbar({
   onSave,
   onReprocess,
   onRefresh,
-  onScrollLeft,
-  onScrollRight,
   lastSaveSummary,
 }: QuarantineEditorToolbarProps) {
   return (
@@ -67,12 +63,6 @@ export function QuarantineEditorToolbar({
               {lastSaveSummary.rejected ? ` / rejected ${lastSaveSummary.rejected}` : ''}
             </Badge>
           )}
-          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={onScrollLeft}>
-            ←
-          </Button>
-          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={onScrollRight}>
-            →
-          </Button>
         </div>
       </div>
       <p className="mt-1 text-[11px] text-muted-foreground">

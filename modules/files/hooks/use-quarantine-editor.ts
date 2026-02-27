@@ -18,7 +18,6 @@ import { useQuarantineSession } from './use-quarantine-session'
 import { useQuarantineRows } from './use-quarantine-rows'
 import { useQuarantineEdits } from './use-quarantine-edits'
 import { useQuarantineAutosave } from './use-quarantine-autosave'
-import { useQuarantineVirtualScroll } from './use-quarantine-virtual-scroll'
 import type { SaveSummary, FileStatusResponse } from '@/modules/files/types'
 
 interface UseQuarantineEditorParams {
@@ -49,9 +48,6 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
   const [lastSaveSummary, setLastSaveSummary] = useState<SaveSummary | null>(null)
   const [showLineage, setShowLineage] = useState(false)
 
-  // Virtual scrolling
-  const virtualScroll = useQuarantineVirtualScroll(rows.rows, config)
-
   // Derived state
   const columns = useMemo(() => {
     if (!session.manifest) return []
@@ -81,7 +77,6 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
       session.reset()
       rows.reset()
       edits.reset()
-      virtualScroll.resetScroll()
       setLastSaveSummary(null)
       setShowLineage(false)
 
@@ -265,34 +260,18 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
     [file, authToken, session, edits, rows, saveEdits, toast]
   )
 
-  // Fetch more rows on scroll
-  useEffect(() => {
+  // AG Grid scroll-end callback — fires when user scrolls near the bottom
+  const handleBodyScrollEnd = useCallback(() => {
     if (!open || rows.loading || !rows.hasMore || session.compatibilityMode) return
-    if (!virtualScroll.shouldFetchMore()) return
+    if (!file || !authToken || !session.session || !session.manifest) return
 
-    const fetchMore = async () => {
-      if (!file || !authToken || !session.session || !session.manifest) return
-
-      await rows.fetchNext(
-        file.upload_id,
-        authToken,
-        session.session.session_id,
-        session.manifest.upload_id
-      )
-    }
-
-    void fetchMore()
-  }, [
-    open,
-    virtualScroll.scrollTop,
-    rows.loading,
-    rows.hasMore,
-    session.compatibilityMode,
-    file,
-    authToken,
-    session.session,
-    session.manifest,
-  ])
+    void rows.fetchNext(
+      file.upload_id,
+      authToken,
+      session.session.session_id,
+      session.manifest.upload_id
+    )
+  }, [open, rows, session, file, authToken])
 
   // Cell edit handler
   const handleCellEdit = useCallback(
@@ -341,7 +320,7 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
     lineage,
     latestVersion,
 
-    // Virtual scroll
-    virtualScroll,
+    // AG Grid infinite scroll callback
+    handleBodyScrollEnd,
   }
 }

@@ -12,14 +12,14 @@ import { useAuth } from '@/modules/auth'
 import { useQuarantineEditor } from '@/modules/files/hooks'
 import { QuarantineEditorHeader } from './quarantine-editor-header'
 import { QuarantineEditorToolbar } from './quarantine-editor-toolbar'
-import { QuarantineEditorTable } from './quarantine-editor-table'
+import { QuarantineAgGridTable } from './quarantine-ag-grid-table'
 import type { QuarantineEditorDialogProps } from '@/modules/files/types'
 
 /**
  * Quarantine Editor Dialog
  *
  * Focused editor for quarantined rows with:
- * - Virtual scrolling for performance
+ * - AG Grid for virtualized rendering and native resize/keyboard nav
  * - Inline cell editing
  * - Autosave
  * - Session management
@@ -58,15 +58,6 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
     void editor.refreshSession()
   }
 
-  // Scroll handlers
-  const handleScrollLeft = () => {
-    editor.virtualScroll.scrollHorizontally(-420)
-  }
-
-  const handleScrollRight = () => {
-    editor.virtualScroll.scrollHorizontally(420)
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[98vw] max-w-[1700px] h-[90vh] p-0 gap-0 overflow-hidden">
@@ -86,30 +77,19 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
           onSave={editor.saveEdits}
           onReprocess={handleReprocess}
           onRefresh={handleRefresh}
-          onScrollLeft={handleScrollLeft}
-          onScrollRight={handleScrollRight}
           lastSaveSummary={editor.lastSaveSummary}
         />
 
-        {/* Table */}
-        <QuarantineEditorTable
+        {/* Table — AG Grid replaces the old virtual-scroll table */}
+        <QuarantineAgGridTable
+          rows={editor.rows}
           columns={editor.columns}
-          virtualRows={editor.virtualScroll.virtualRows}
-          visibleStart={editor.virtualScroll.visibleStart}
           editableColumns={editor.manifest?.editable_columns || []}
-          activeCell={editor.activeCell}
           getCellValue={editor.getCellValue}
           isCellEdited={editor.isCellEdited}
-          isRowEdited={editor.isRowEdited}
           onCellEdit={editor.handleCellEdit}
-          onActivateCell={(rowId, col) => editor.setActiveCell({ rowId, col })}
-          onDeactivateCell={() => editor.setActiveCell(null)}
-          parentRef={editor.virtualScroll.parentRef}
-          totalHeight={editor.virtualScroll.totalHeight}
-          rowHeight={32}
-          headerHeight={34}
-          onScroll={editor.virtualScroll.handleScroll}
-          loading={editor.loading}
+          loading={editor.loading || editor.rowsLoading}
+          onBodyScrollEnd={editor.handleBodyScrollEnd}
         />
       </DialogContent>
     </Dialog>
