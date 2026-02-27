@@ -66,6 +66,21 @@ export function normalizeErpForApi(value: string): string {
     return value
 }
 
+const ZOHO_ENTITY_ALIASES: Record<string, string> = {
+    customers: "contacts",
+    vendors: "contacts",
+    sales_orders: "salesorders",
+    purchase_orders: "purchaseorders",
+    inventory_items: "items",
+}
+
+export function normalizeEntityForApi(entity: string, erp: string): string {
+    if (erp === "zohobooks") {
+        return ZOHO_ENTITY_ALIASES[entity] || entity
+    }
+    return entity
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface SettingsPreset {

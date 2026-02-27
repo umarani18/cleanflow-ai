@@ -20,6 +20,7 @@ import {
     SOURCE_ERP_OPTIONS,
     normalizeErpForUi,
     normalizeErpForApi,
+    normalizeEntityForApi,
 } from './job-dialog-constants'
 import { deriveRulesV2, CORE_TYPES, TYPE_ALIASES } from '@/shared/lib/type-catalog'
 import { getRuleLabel } from '@/shared/lib/dq-rules'
@@ -821,11 +822,12 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
 
             const freqBackend = frequencyToBackend(frequency, cronExpression.trim())
 
+            const normalizedSource = normalizeErpForApi(source)
             const base = {
                 name: name.trim(),
-                source: normalizeErpForApi(source),
+                source: normalizedSource,
                 destination: normalizeErpForApi(destination),
-                entities: [entity],
+                entities: [normalizeEntityForApi(entity, normalizedSource)],
                 ...freqBackend,
                 dq_config,
             }
