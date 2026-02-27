@@ -8,7 +8,6 @@ import {
     Search,
     Filter,
     Download,
-    CloudUpload,
     Play,
     Pencil,
     ArrowUpDown,
@@ -68,7 +67,6 @@ export function FileExplorerTable({ state }: FileExplorerTableProps) {
         handleViewDetails, handleStartProcessing,
         openActionsDialog, handleDeleteClick,
         downloading, deleting,
-        setFileToPush, setPushQBModalOpen,
         handleOpenQuarantineEditor,
     } = state;
 
@@ -424,22 +422,6 @@ export function FileExplorerTable({ state }: FileExplorerTableProps) {
                                                         </Button>
                                                     </TooltipTrigger>
                                                     <TooltipContent>Download</TooltipContent>
-                                                </Tooltip>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-7 w-7 sm:h-8 sm:w-8"
-                                                            onClick={() => {
-                                                                setFileToPush(file);
-                                                                setPushQBModalOpen(true);
-                                                            }}
-                                                        >
-                                                            <CloudUpload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>Export to ERP</TooltipContent>
                                                 </Tooltip>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>

@@ -82,14 +82,49 @@ export interface RuleState {
     description?: string
 }
 
+export interface ColumnRuleState {
+    rule_id: string
+    rule_name: string
+    category: "auto" | "human" | "custom"
+    selected: boolean
+    column?: string
+    source?: string
+    description?: string
+}
+
+export interface CrossFieldRuleState {
+    rule_id: string
+    cols: string[]
+    relationship?: string
+    condition?: string
+    confidence?: number
+    reasoning?: string
+    enabled: boolean
+}
+
 export interface ColumnProfile {
-    column_name: string
-    data_type?: string
-    null_count?: number
-    unique_count?: number
-    sample_values?: string[]
-    quality_score?: number
-    rules?: Array<{ rule_id: string; rule_name: string; severity?: string }>
+    type_guess?: string
+    type_confidence?: number
+    null_rate?: number
+    unique_ratio?: number
+    key_type?: 'none' | 'primary_key' | 'unique'
+    nullable_suggested?: boolean
+    rules?: Array<{
+        rule_id: string
+        rule_name?: string
+        confidence?: number
+        decision?: 'auto' | 'human'
+        reasoning?: string
+    }>
+    numeric_parse_rate?: number
+    date_parse_rate?: number
+    len_min?: number
+    len_max?: number
+    len_mean?: number
+    profile_time_sec?: number
+    llm_time_sec?: number
+    llm_reasoning?: string
+    column_name?: string
 }
 
 export type AdvancedStep = "import" | "columns" | "profiling" | "settings" | "rules" | "process"

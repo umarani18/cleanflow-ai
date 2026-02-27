@@ -12,6 +12,8 @@ import {
     type RuleState,
     type SettingsPreset,
     type ColumnProfile,
+    type ColumnRuleState,
+    type CrossFieldRuleState,
     ADVANCED_STEPS,
     DEFAULT_GLOBAL_RULES,
     ENTITY_COLUMNS,
@@ -19,6 +21,8 @@ import {
     normalizeErpForUi,
     normalizeErpForApi,
 } from './job-dialog-constants'
+import { deriveRulesV2, CORE_TYPES, TYPE_ALIASES } from '@/shared/lib/type-catalog'
+import { getRuleLabel } from '@/shared/lib/dq-rules'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -33,17 +37,37 @@ const DEFAULT_SETTINGS_PRESET: SettingsPreset = {
     preset_name: "Default Data Quality Rules",
     is_default: true,
     config: {
+        ruleset_version: "dq34_v1",
         policies: {
             strictness: "balanced",
             auto_fix: true,
             unknown: "safe_cleanup_only",
         },
-        lookups: {
-            placeholders: ["", "na", "n/a", "null", "none", "-", "--", "?"],
-            status_values: ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "PENDING", "PAID", "CANCELLED"],
+        rules_enabled: {
+            R1: true, R2: true, R3: true, R4: true, R5: true, R6: true, R7: true, R8: true, R9: true,
+            R10: true, R11: true, R12: true, R13: true, R14: true, R15: true, R16: true, R17: true,
+            R18: true, R19: true, R20: false, R21: true, R22: true, R23: true, R24: true, R25: true,
+            R26: true, R27: true, R28: true, R29: true, R30: true, R31: true, R32: true, R33: true, R34: true,
         },
-        currency_values: ["USD", "INR", "EUR", "GBP"],
-        uom_values: ["EA", "PCS", "KG", "LTR", "HR"],
+        required_columns: [],
+        lookups: {
+            placeholders: ["", "na", "n/a", "null", "none", "-", "--", "?", "NA", "N/A", "NULL", "NONE"],
+            status_values: [
+                "DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "PENDING", "PAID", "CANCELLED",
+                "CLOSED", "OPEN", "POSTED", "REVERSED", "ACTIVE", "INACTIVE", "COMPLETED",
+                "YES", "NO", "Y", "N", "TRUE", "FALSE", "1", "0",
+            ],
+        },
+        currency_values: [
+            "USD", "INR", "EUR", "GBP", "SGD", "AED", "AUD", "CAD",
+            "CHF", "CNY", "JPY", "KWD", "SAR", "QAR", "BHD", "OMR",
+        ],
+        uom_values: [
+            "EA", "PCS", "PC", "KG", "G", "LTR", "ML", "M", "CM", "MM",
+            "FT", "IN", "YD", "SQM", "SQFT", "CBM", "CFT", "HR", "MIN", "SEC",
+            "DAY", "WK", "MON", "YR", "BOX", "CTN", "PAL", "SET", "KIT", "PR",
+            "DOZ", "GR", "UNIT", "TON", "MT",
+        ],
         date_formats: ["ISO", "DMY", "MDY"],
         hygiene: {
             max_text_length: 255,
@@ -138,10 +162,16 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
     const [selectedPresetConfig, setSelectedPresetConfig] = useState<Record<string, any> | null>(null)
     const [pendingPresetName, setPendingPresetName] = useState("")
 
-    // Advanced — Custom Rules
+    // Advanced — Custom Rules (legacy flat list)
     const [globalRules, setGlobalRules] = useState<RuleState[]>(DEFAULT_GLOBAL_RULES.map(r => ({ ...r })))
     const [rulesLoading, setRulesLoading] = useState(false)
     const [rulesLoadedFromApi, setRulesLoadedFromApi] = useState(false)
+
+    // Advanced — Per-column Rules (derived from profiling)
+    const [columnRules, setColumnRules] = useState<Record<string, ColumnRuleState[]>>({})
+    const [crossFieldRules, setCrossFieldRules] = useState<CrossFieldRuleState[]>([])
+    const [expandedRuleColumns, setExpandedRuleColumns] = useState<string[]>([])
+    const [columnRulesSeeded, setColumnRulesSeeded] = useState(false)
 
     // Advanced Wizard Mode
     const [currentAdvancedStep, setCurrentAdvancedStep] = useState<AdvancedStep>("import")
@@ -202,6 +232,10 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
             setCurrentAdvancedStep("import")
             setColumnProfiles({})
             setPreviewUploadId("")
+            setColumnRules({})
+            setCrossFieldRules([])
+            setExpandedRuleColumns([])
+            setColumnRulesSeeded(false)
         }
     }, [job, open])
 
@@ -312,6 +346,12 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
             } else {
                 console.log('[Profiling] Success:', Object.keys(profiles).length, 'column profiles')
                 setColumnProfiles(profiles)
+                // Seed cross-field rules if returned
+                if ((result as any).cross_field_rules?.length) {
+                    seedCrossFieldRules((result as any).cross_field_rules)
+                }
+                // Reset column rules seeded flag so they get re-derived with new profiling data
+                setColumnRulesSeeded(false)
                 // Don't auto-advance - let users review the profiling results
                 toast({
                     title: "Profiling Complete",
@@ -371,6 +411,12 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
         setEditCurrencyValues((normalized.currency_values || []).join(", "))
         setEditUomValues((normalized.uom_values || []).join(", "))
         setEditDateFormats((normalized.date_formats || []).join(", "))
+        setEditStrictness(normalized.policies?.strictness || "balanced")
+        setEditAutoFix(normalized.policies?.auto_fix ?? true)
+        setEditUnknownBehavior(normalized.policies?.unknown || "safe_cleanup_only")
+        setEditPlaceholders((normalized.lookups?.placeholders || []).join(", "))
+        setEditStatusEnums((normalized.lookups?.status_values || []).join(", "))
+        setEditMaxTextLen(normalized.hygiene?.max_text_length ?? 255)
     }
 
     useEffect(() => {
@@ -444,14 +490,33 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
     const [editCurrencyValues, setEditCurrencyValues] = useState("")
     const [editUomValues, setEditUomValues] = useState("")
     const [editDateFormats, setEditDateFormats] = useState("")
+    const [editStrictness, setEditStrictness] = useState("balanced")
+    const [editAutoFix, setEditAutoFix] = useState(true)
+    const [editUnknownBehavior, setEditUnknownBehavior] = useState("safe_cleanup_only")
+    const [editPlaceholders, setEditPlaceholders] = useState("")
+    const [editStatusEnums, setEditStatusEnums] = useState("")
+    const [editMaxTextLen, setEditMaxTextLen] = useState<number | string>(255)
+    const [activePresetTab, setActivePresetTab] = useState("policies")
     const presetFileInputRef = useRef<HTMLInputElement>(null)
+
+    // ─── New Preset Dialog ───────────────────────────────────────────────────
+    const [showNewPresetDialog, setShowNewPresetDialog] = useState(false)
+    const [newPresetName, setNewPresetName] = useState("")
+    const [uploadedConfig, setUploadedConfig] = useState<any>(null)
 
     const handleEditPreset = () => {
         setPresetEditMode(true)
+        setActivePresetTab("policies")
         if (selectedPresetConfig) {
             setEditCurrencyValues((selectedPresetConfig.currency_values || []).join(", "))
             setEditUomValues((selectedPresetConfig.uom_values || []).join(", "))
             setEditDateFormats((selectedPresetConfig.date_formats || []).join(", "))
+            setEditStrictness(selectedPresetConfig.policies?.strictness || "balanced")
+            setEditAutoFix(selectedPresetConfig.policies?.auto_fix ?? true)
+            setEditUnknownBehavior(selectedPresetConfig.policies?.unknown || "safe_cleanup_only")
+            setEditPlaceholders((selectedPresetConfig.lookups?.placeholders || []).join(", "))
+            setEditStatusEnums((selectedPresetConfig.lookups?.status_values || []).join(", "))
+            setEditMaxTextLen(selectedPresetConfig.hygiene?.max_text_length ?? 255)
         }
     }
 
@@ -459,14 +524,26 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
         setPresetEditMode(false)
     }
 
+    const buildConfigFromState = (): Record<string, any> => ({
+        policies: {
+            strictness: editStrictness,
+            auto_fix: editAutoFix,
+            unknown: editUnknownBehavior,
+        },
+        lookups: {
+            placeholders: editPlaceholders.split(",").map(s => s.trim()).filter(Boolean),
+            status_values: editStatusEnums.split(",").map(s => s.trim()).filter(Boolean),
+        },
+        currency_values: editCurrencyValues.split(",").map(s => s.trim()).filter(Boolean),
+        uom_values: editUomValues.split(",").map(s => s.trim()).filter(Boolean),
+        date_formats: editDateFormats.split(",").map(s => s.trim()).filter(Boolean),
+        hygiene: {
+            max_text_length: Number(editMaxTextLen) || 255,
+        },
+    })
+
     const handleSavePresetEdit = async () => {
-        const newConfig = normalizePresetConfig({
-            currency_values: editCurrencyValues.split(",").map(s => s.trim()).filter(Boolean),
-            uom_values: editUomValues.split(",").map(s => s.trim()).filter(Boolean),
-            date_formats: editDateFormats.split(",").map(s => s.trim()).filter(Boolean),
-        })
-        let nextPresetId = selectedPresetId
-        let createdPresetName = pendingPresetName
+        const newConfig = buildConfigFromState()
         try {
             if (selectedPresetId && selectedPresetId !== DEFAULT_SETTINGS_PRESET.preset_id) {
                 const presetName = presets.find(p => p.preset_id === selectedPresetId)?.preset_name || "Updated Preset"
@@ -475,21 +552,6 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
                     config: newConfig,
                 })
                 toast({ title: "Preset updated", description: `${presetName} saved successfully.` })
-            } else {
-                const presetName = (pendingPresetName || window.prompt("Preset name") || "").trim()
-                if (!presetName) {
-                    toast({ title: "Preset name required", description: "Enter a preset name to create a new preset.", variant: "destructive" })
-                    return
-                }
-                const created = await fileManagementAPI.createSettingsPreset({
-                    preset_name: presetName,
-                    config: newConfig,
-                    is_default: false,
-                })
-                setPendingPresetName("")
-                nextPresetId = created?.preset_id || null
-                createdPresetName = presetName
-                toast({ title: "Preset created", description: `${presetName} created successfully.` })
             }
 
             const res = await fileManagementAPI.getSettingsPresets()
@@ -502,12 +564,8 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
                     : [...list, DEFAULT_SETTINGS_PRESET]
             setPresets(finalList)
 
-            const activeId = nextPresetId && nextPresetId !== DEFAULT_SETTINGS_PRESET.preset_id
-                ? nextPresetId
-                : finalList.find(p => p.preset_name === createdPresetName)?.preset_id
-            if (activeId) {
-                setSelectedPresetId(activeId)
-                await handleSelectPreset(activeId, finalList)
+            if (selectedPresetId) {
+                await handleSelectPreset(selectedPresetId, finalList)
             } else {
                 applyPresetConfigToEditor(newConfig)
             }
@@ -518,17 +576,63 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
     }
 
     const handleNewPreset = () => {
-        setPresetEditMode(true)
-        setSelectedPresetId(null)
-        const name = (window.prompt("New preset name") || "").trim()
-        setPendingPresetName(name)
-        applyPresetConfigToEditor(DEFAULT_SETTINGS_PRESET.config || {})
-        toast({
-            title: "New Preset",
-            description: name
-                ? `Configure "${name}" and click Save.`
-                : "Configure preset and click Save to create it.",
-        })
+        setNewPresetName("")
+        setUploadedConfig(null)
+        setShowNewPresetDialog(true)
+    }
+
+    const handleCreatePreset = async () => {
+        if (!newPresetName.trim()) {
+            toast({ title: "Name required", description: "Please enter a preset name.", variant: "destructive" })
+            return
+        }
+        try {
+            const config = uploadedConfig || buildConfigFromState()
+            const created = await fileManagementAPI.createSettingsPreset({
+                preset_name: newPresetName.trim(),
+                config,
+                is_default: false,
+            })
+            const res = await fileManagementAPI.getSettingsPresets()
+            const list = (res?.presets || []) as SettingsPreset[]
+            const hasDefault = list.some(p => p.is_default)
+            const finalList = list.length === 0
+                ? [DEFAULT_SETTINGS_PRESET]
+                : hasDefault
+                    ? list
+                    : [...list, DEFAULT_SETTINGS_PRESET]
+            setPresets(finalList)
+            if (created?.preset_id) {
+                await handleSelectPreset(created.preset_id, finalList)
+            }
+            setShowNewPresetDialog(false)
+            setNewPresetName("")
+            setUploadedConfig(null)
+            toast({ title: "Preset created", description: `${newPresetName.trim()} created successfully.` })
+        } catch (err: any) {
+            toast({ title: "Create failed", description: err?.message || "Could not create preset.", variant: "destructive" })
+        }
+    }
+
+    const handleDeletePreset = async () => {
+        if (!selectedPresetId || selectedPresetId === DEFAULT_SETTINGS_PRESET.preset_id) return
+        try {
+            await fileManagementAPI.deleteSettingsPreset(selectedPresetId)
+            const res = await fileManagementAPI.getSettingsPresets()
+            const list = (res?.presets || []) as SettingsPreset[]
+            const hasDefault = list.some(p => p.is_default)
+            const finalList = list.length === 0
+                ? [DEFAULT_SETTINGS_PRESET]
+                : hasDefault
+                    ? list
+                    : [...list, DEFAULT_SETTINGS_PRESET]
+            setPresets(finalList)
+            setSelectedPresetId(null)
+            applyPresetConfigToEditor(DEFAULT_SETTINGS_PRESET.config || {})
+            toast({ title: "Preset deleted" })
+        } catch (err: any) {
+            toast({ title: "Delete failed", description: err?.message || "Could not delete preset.", variant: "destructive" })
+        }
     }
 
     const handleExportPreset = () => {
@@ -553,7 +657,7 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
         if (!file) return
 
         const reader = new FileReader()
-        reader.onload = async (e) => {
+        reader.onload = (e) => {
             try {
                 const content = e.target?.result as string
                 let rawConfig: Record<string, any> = {}
@@ -563,41 +667,15 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
                     rawConfig = parsed?.config || parsed
                 } else if (file.name.endsWith(".csv")) {
                     const rows = parseCsvRows(content)
-                    rawConfig = { imported_data: rows, source: "csv_upload" }
+                    rawConfig = { imported_data: rows, source: "csv_upload", headers: Object.keys(rows[0] || {}) }
                 } else {
                     throw new Error("Please upload a .json or .csv file")
                 }
 
-                const normalized = normalizePresetConfig(rawConfig)
+                setUploadedConfig(rawConfig)
                 const defaultName = file.name.replace(/\.(json|csv)$/i, "")
-                const presetName = (window.prompt("Imported preset name", defaultName) || "").trim()
-                if (!presetName) {
-                    throw new Error("Preset name is required")
-                }
-
-                const created = await fileManagementAPI.createSettingsPreset({
-                    preset_name: presetName,
-                    config: rawConfig,
-                    is_default: false,
-                })
-
-                const res = await fileManagementAPI.getSettingsPresets()
-                const list = (res?.presets || []) as SettingsPreset[]
-                const hasDefault = list.some(p => p.is_default)
-                const finalList = list.length === 0
-                    ? [DEFAULT_SETTINGS_PRESET]
-                    : hasDefault
-                        ? list
-                        : [...list, DEFAULT_SETTINGS_PRESET]
-
-                setPresets(finalList)
-                setPendingPresetName("")
-                setPresetEditMode(false)
-                applyPresetConfigToEditor(normalized)
-                if (created?.preset_id) {
-                    await handleSelectPreset(created.preset_id, finalList)
-                }
-                toast({ title: "Preset imported", description: `Imported ${presetName} from ${file.name}` })
+                setNewPresetName(defaultName)
+                setShowNewPresetDialog(true)
             } catch (err: any) {
                 toast({ title: "Import failed", description: err?.message || "Invalid file format", variant: "destructive" })
             }
@@ -606,35 +684,66 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
         event.target.value = ""
     }
 
-    // ─── Load Rules from API ────────────────────────────────────────────────
+    // ─── Seed Column Rules from Profiling (like file explorer RulesStep) ────
 
     useEffect(() => {
-        if (currentAdvancedStep !== "rules" || !dataImported || rulesLoadedFromApi) return
+        if (currentAdvancedStep !== "rules" || !dataImported || columnRulesSeeded) return
+        if (selectedColumns.length === 0 || Object.keys(columnProfiles).length === 0) return
+
         setRulesLoading(true)
-        jobsAPI.listRules()
-            .then((res) => {
-                if (res.rules?.length) {
-                    setGlobalRules(res.rules.map(r => ({
-                        rule_id: r.rule_id,
-                        rule_name: r.rule_name,
-                        description: r.description,
-                        selected: r.default_selected,
-                    })))
-                    setRulesLoadedFromApi(true)
-                    return
-                }
-                if (!globalRules.length) {
-                    setGlobalRules(DEFAULT_GLOBAL_RULES.map(r => ({ ...r })))
-                }
-            })
-            .catch((err: any) => {
-                console.error("Failed to load rules:", err)
-                if (!globalRules.length) {
-                    setGlobalRules(DEFAULT_GLOBAL_RULES.map(r => ({ ...r })))
-                }
-            })
-            .finally(() => setRulesLoading(false))
-    }, [currentAdvancedStep, dataImported, rulesLoadedFromApi, globalRules.length])
+
+        // Derive per-column rules using the type catalog (same as file explorer)
+        const derived: Record<string, ColumnRuleState[]> = {}
+        selectedColumns.forEach(col => {
+            const profile = columnProfiles[col]
+            if (!profile) return
+
+            const coreType = profile.type_guess || "string"
+            const rawType = (CORE_TYPES as any)[coreType] || (TYPE_ALIASES as any)[coreType] ? coreType : "string"
+            const keyType = (profile.key_type as "none" | "primary_key" | "unique") || "none"
+            const nullable = profile.nullable_suggested !== undefined ? !!profile.nullable_suggested : true
+
+            const result = deriveRulesV2(rawType, keyType, nullable)
+            derived[col] = result.rules.map(id => ({
+                rule_id: id,
+                rule_name: getRuleLabel(id),
+                category: "auto" as const,
+                selected: true,
+                column: col,
+                source: result.ruleSources[id],
+            }))
+
+            // Also merge any rules that came from the profiling API (human-decision rules)
+            if (profile.rules?.length) {
+                profile.rules.forEach(r => {
+                    if (!derived[col].some(dr => dr.rule_id === r.rule_id)) {
+                        derived[col].push({
+                            rule_id: r.rule_id,
+                            rule_name: getRuleLabel(r.rule_id),
+                            category: (r.decision === "human" ? "human" : "auto") as "auto" | "human",
+                            selected: true,
+                            column: col,
+                            source: r.decision || "profiling",
+                        })
+                    }
+                })
+            }
+        })
+
+        setColumnRules(derived)
+        setGlobalRules([]) // Clear legacy flat rules — column rules replace them
+        setColumnRulesSeeded(true)
+        setRulesLoading(false)
+    }, [currentAdvancedStep, dataImported, columnRulesSeeded, selectedColumns, columnProfiles])
+
+    // ─── Seed cross-field rules from profiling result ────────────────────────
+
+    const seedCrossFieldRules = (crossRules: Array<{
+        rule_id: string; cols: string[]; relationship?: string;
+        condition?: string; confidence?: number; reasoning?: string;
+    }>) => {
+        setCrossFieldRules(crossRules.map(r => ({ ...r, enabled: true })))
+    }
 
     // ─── Toggle Rules ─────────────────────────────────────────────────────────
 
@@ -642,6 +751,43 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
         setGlobalRules(prev =>
             prev.map(r => r.rule_id === ruleId ? { ...r, selected: !r.selected } : r)
         )
+    }
+
+    const toggleColumnRule = (column: string, ruleId: string) => {
+        setColumnRules(prev => ({
+            ...prev,
+            [column]: (prev[column] || []).map(r =>
+                r.rule_id === ruleId ? { ...r, selected: !r.selected } : r
+            ),
+        }))
+    }
+
+    const toggleRuleColumnExpand = (col: string) => {
+        setExpandedRuleColumns(prev =>
+            prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]
+        )
+    }
+
+    const toggleCrossFieldRule = (ruleId: string, cols: string[]) => {
+        setCrossFieldRules(prev =>
+            prev.map(r =>
+                r.rule_id === ruleId && r.cols.join(".") === cols.join(".")
+                    ? { ...r, enabled: !r.enabled }
+                    : r
+            )
+        )
+    }
+
+    // ─── Rule Statistics ─────────────────────────────────────────────────────
+
+    const allColumnRulesFlat = Object.values(columnRules).flat()
+    const ruleStats = {
+        totalAuto: allColumnRulesFlat.filter(r => r.category === "auto").length,
+        totalHuman: allColumnRulesFlat.filter(r => r.category === "human").length,
+        totalCustom: allColumnRulesFlat.filter(r => r.category === "custom").length,
+        totalSelected: allColumnRulesFlat.filter(r => r.selected).length,
+        totalCross: crossFieldRules.length,
+        totalCrossEnabled: crossFieldRules.filter(r => r.enabled).length,
     }
 
     // ─── Submit ───────────────────────────────────────────────────────────────
@@ -740,17 +886,38 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
         editCurrencyValues, setEditCurrencyValues,
         editUomValues, setEditUomValues,
         editDateFormats, setEditDateFormats,
+        editStrictness, setEditStrictness,
+        editAutoFix, setEditAutoFix,
+        editUnknownBehavior, setEditUnknownBehavior,
+        editPlaceholders, setEditPlaceholders,
+        editStatusEnums, setEditStatusEnums,
+        editMaxTextLen, setEditMaxTextLen,
+        activePresetTab, setActivePresetTab,
         presetFileInputRef,
         handleEditPreset,
         handleCancelPresetEdit,
         handleSavePresetEdit,
         handleNewPreset,
+        handleCreatePreset,
+        handleDeletePreset,
         handleExportPreset,
         handlePresetFileUpload,
-        // Rules
+        // New Preset Dialog
+        showNewPresetDialog, setShowNewPresetDialog,
+        newPresetName, setNewPresetName,
+        uploadedConfig, setUploadedConfig,
+        // Rules (legacy)
         globalRules,
         rulesLoading,
         toggleRule,
+        // Per-column Rules
+        columnRules,
+        crossFieldRules,
+        expandedRuleColumns,
+        toggleColumnRule,
+        toggleRuleColumnExpand,
+        toggleCrossFieldRule,
+        ruleStats,
         // Advanced wizard
         advancedOpen, handleAdvancedOpenChange,
         advancedMode,

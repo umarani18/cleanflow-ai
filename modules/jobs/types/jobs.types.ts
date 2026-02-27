@@ -119,16 +119,47 @@ export interface ImportPreviewResult {
 }
 
 export interface ColumnProfile {
-    data_type?: string
-    null_count?: number
-    unique_count?: number
-    min?: string | number
-    max?: string | number
-    quality_score?: number
+    type_guess?: string
+    type_confidence?: number
+    null_rate?: number
+    unique_ratio?: number
+    key_type?: 'none' | 'primary_key' | 'unique'
+    nullable_suggested?: boolean
+    rules?: Array<{
+        rule_id: string
+        rule_name?: string
+        confidence?: number
+        decision?: 'auto' | 'human'
+        reasoning?: string
+    }>
+    numeric_parse_rate?: number
+    date_parse_rate?: number
+    len_min?: number
+    len_max?: number
+    len_mean?: number
+    profile_time_sec?: number
+    llm_time_sec?: number
+    llm_reasoning?: string
+    column_name?: string
 }
 
 export interface ProfilingResult {
+    summary?: {
+        total_columns: number
+        total_rules: number
+        processed_at: string
+        engine_version: string
+        backend_version?: string
+    }
     profiles: Record<string, ColumnProfile>
+    cross_field_rules?: Array<{
+        rule_id: string
+        cols: string[]
+        relationship?: string
+        condition?: string
+        confidence?: number
+        reasoning?: string
+    }>
 }
 
 export interface Preset {
