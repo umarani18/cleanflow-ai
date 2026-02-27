@@ -49,6 +49,11 @@ interface QuarantineAgGridTableProps {
    */
   isCellEdited: (rowId: string, column: string) => boolean
   /**
+   * Returns true if the given cell was edited and successfully saved this session.
+   * Used to apply the .ag-cell-saved CSS class for visual indicators.
+   */
+  isCellSaved?: (rowId: string, column: string) => boolean
+  /**
    * Fires when a user commits an edit to a cell.
    * Delegates to the quarantine edits hook which tracks and autosaves changes.
    */
@@ -79,6 +84,7 @@ export function QuarantineAgGridTable({
   editableColumns,
   getCellValue,
   isCellEdited,
+  isCellSaved,
   onCellEdit,
   loading,
   onBodyScrollEnd,
@@ -117,14 +123,27 @@ export function QuarantineAgGridTable({
           if (!params.data) return ''
           return getCellValue(String(params.data.row_id), col, params.data)
         },
-        cellClassRules: isEditable
-          ? {
-              'ag-cell-edited': (params) => {
-                if (!params.data) return false
-                return isCellEdited(String(params.data.row_id), col)
-              },
-            }
-          : undefined,
+        cellClassRules: {
+          ...(isEditable
+            ? {
+                'ag-cell-edited': (params) => {
+                  if (!params.data) return false
+                  return isCellEdited(String(params.data.row_id), col)
+                },
+                'ag-cell-saved': (params) => {
+                  if (!params.data || !isCellSaved) return false
+                  return isCellSaved(String(params.data.row_id), col)
+                },
+              }
+            : {}),
+          'ag-cell-quarantined': (params) => {
+            if (!params.data) return false
+            const statusValue = col.endsWith('_dq_status')
+              ? params.data[col]
+              : params.data[`${col}_dq_status`]
+            return String(statusValue ?? '').toLowerCase() === 'quarantined'
+          },
+        },
       } satisfies ColDef<QuarantineRow>
     })
   }, [columns, editableColumns, getCellValue, isCellEdited])

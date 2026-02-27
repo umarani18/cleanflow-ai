@@ -50,6 +50,25 @@
  *   className="... font-medium text-primary ..."
  */
 .quarantine-ag-grid .ag-cell-edited {
+  background-color: hsl(38 92% 95%);
+  color: hsl(32 95% 35%);
   font-weight: 500;
-  color: hsl(var(--primary));
+}
+
+/**
+ * Saved cell visual indicator.
+ * Applied when the cell was edited and successfully saved this session.
+ */
+.quarantine-ag-grid .ag-cell-saved {
+  background-color: hsl(142 72% 95%);
+  color: hsl(142 55% 30%);
+}
+
+/**
+ * Quarantined cell visual indicator.
+ * Applied when the corresponding {col}_dq_status value is "quarantined".
+ */
+.quarantine-ag-grid .ag-cell-quarantined {
+  background-color: hsl(0 84.2% 97%);
+  color: hsl(0 72.2% 40%);
 }

@@ -60,7 +60,7 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[98vw] max-w-[1700px] h-[90vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="w-[98vw] max-w-[1700px] h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
         {/* Header */}
         <QuarantineEditorHeader
           manifest={editor.manifest}
@@ -74,10 +74,10 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
           pendingCount={editor.pendingCount}
           saving={editor.saving}
           submitting={editor.submitting}
+          savedAt={editor.lastSavedAt}
           onSave={editor.saveEdits}
           onReprocess={handleReprocess}
           onRefresh={handleRefresh}
-          lastSaveSummary={editor.lastSaveSummary}
         />
 
         {/* Table — AG Grid replaces the old virtual-scroll table */}
@@ -87,6 +87,7 @@ export function QuarantineEditorDialog({ file, open, onOpenChange }: QuarantineE
           editableColumns={editor.manifest?.editable_columns || []}
           getCellValue={editor.getCellValue}
           isCellEdited={editor.isCellEdited}
+          isCellSaved={editor.isCellSaved}
           onCellEdit={editor.handleCellEdit}
           loading={editor.loading || editor.rowsLoading}
           onBodyScrollEnd={editor.handleBodyScrollEnd}

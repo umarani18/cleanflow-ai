@@ -6,20 +6,20 @@
 
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Loader2, Save, Play, RefreshCw } from 'lucide-react'
-import type { QuarantineSession, SaveSummary } from '@/modules/files/types'
+import { Loader2, Save, Play, RefreshCw, CloudUpload } from 'lucide-react'
+import type { QuarantineSession } from '@/modules/files/types'
 
 interface QuarantineEditorToolbarProps {
   session: QuarantineSession | null
   pendingCount: number
   saving: boolean
   submitting: boolean
+  savedAt?: Date | null
   onSave: () => void
   onReprocess: () => void
   onRefresh: () => void
-  lastSaveSummary: SaveSummary | null
 }
 
 export function QuarantineEditorToolbar({
@@ -27,11 +27,20 @@ export function QuarantineEditorToolbar({
   pendingCount,
   saving,
   submitting,
+  savedAt,
   onSave,
   onReprocess,
   onRefresh,
-  lastSaveSummary,
 }: QuarantineEditorToolbarProps) {
+  const [showSaved, setShowSaved] = useState(false)
+
+  useEffect(() => {
+    if (!savedAt) return
+    setShowSaved(true)
+    const timer = setTimeout(() => setShowSaved(false), 3000)
+    return () => clearTimeout(timer)
+  }, [savedAt])
+
   return (
     <div className="px-4 py-2 border-b bg-muted/10">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -54,15 +63,20 @@ export function QuarantineEditorToolbar({
           </Button>
         </div>
 
-        {/* Right: Status badges and navigation */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {session && <Badge variant="outline">Session {session.session_id.slice(0, 8)}</Badge>}
-          {lastSaveSummary && (
-            <Badge variant="secondary">
-              Saved {lastSaveSummary.accepted}
-              {lastSaveSummary.rejected ? ` / rejected ${lastSaveSummary.rejected}` : ''}
-            </Badge>
-          )}
+        {/* Right: Save status + session */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {saving ? (
+            <span className="flex items-center gap-1">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Saving…
+            </span>
+          ) : showSaved ? (
+            <span className="flex items-center gap-1 text-green-600 transition-opacity duration-500">
+              <CloudUpload className="w-3.5 h-3.5" />
+              Saved
+            </span>
+          ) : null}
+          {session && <span className="text-xs opacity-50">Session {session.session_id.slice(0, 8)}</span>}
         </div>
       </div>
       <p className="mt-1 text-[11px] text-muted-foreground">

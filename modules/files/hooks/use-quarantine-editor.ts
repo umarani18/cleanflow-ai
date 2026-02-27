@@ -46,6 +46,7 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [lastSaveSummary, setLastSaveSummary] = useState<SaveSummary | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [showLineage, setShowLineage] = useState(false)
 
   // Derived state
@@ -147,19 +148,12 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
       // Update etag
       session.updateEtag(nextEtag)
 
-      // Clear edits
-      edits.clearEdits()
+      // Mark pending edits as saved (clears pending map, populates savedEditsMap)
+      edits.markAsSaved()
 
-      // Update summary
+      // Update summary + timestamp
       setLastSaveSummary({ accepted: acceptedTotal, rejected: rejectedTotal })
-
-      toast({
-        title: 'Edits saved',
-        description:
-          rejectedTotal > 0
-            ? `Accepted ${acceptedTotal} (${rejectedTotal} rejected)`
-            : `Accepted ${acceptedTotal} updates`,
-      })
+      setLastSavedAt(new Date())
     } catch (error: any) {
       toast({
         title: 'Save failed',
@@ -302,6 +296,7 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
     pendingCount: edits.pendingCount,
     getCellValue: edits.getCellValue,
     isCellEdited: edits.isCellEdited,
+    isCellSaved: edits.isCellSaved,
     isRowEdited: edits.isRowEdited,
 
     // Actions
@@ -315,6 +310,7 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
     saving,
     submitting,
     lastSaveSummary,
+    lastSavedAt,
     showLineage,
     setShowLineage,
     lineage,

@@ -10,6 +10,7 @@ import type { ActiveCell } from '@/modules/files/types'
 
 interface EditsState {
   editsMap: Record<string, Record<string, any>>
+  savedEditsMap: Record<string, Record<string, true>>
   activeCell: ActiveCell | null
 }
 
@@ -22,6 +23,7 @@ interface EditsState {
 export function useQuarantineEdits() {
   const [state, setState] = useState<EditsState>({
     editsMap: {},
+    savedEditsMap: {},
     activeCell: null,
   })
 
@@ -58,6 +60,30 @@ export function useQuarantineEdits() {
   const clearEdits = useCallback(() => {
     setState((prev) => ({ ...prev, editsMap: {} }))
   }, [])
+
+  /**
+   * Mark all pending edits as saved, then clear pending map.
+   * Cells that were edited will retain a visual "saved" indicator.
+   */
+  const markAsSaved = useCallback(() => {
+    setState((prev) => {
+      const next: Record<string, Record<string, true>> = { ...prev.savedEditsMap }
+      for (const [rowId, cols] of Object.entries(prev.editsMap)) {
+        next[rowId] = { ...(next[rowId] || {}), ...Object.keys(cols).reduce<Record<string, true>>((acc, col) => { acc[col] = true; return acc }, {}) }
+      }
+      return { ...prev, editsMap: {}, savedEditsMap: next }
+    })
+  }, [])
+
+  /**
+   * Check if a cell has been saved this session (was edited then saved)
+   */
+  const isCellSaved = useCallback(
+    (rowId: string, column: string): boolean => {
+      return !!state.savedEditsMap[rowId]?.[column]
+    },
+    [state.savedEditsMap]
+  )
 
   /**
    * Get cell value (with edit overlay)
@@ -130,7 +156,7 @@ export function useQuarantineEdits() {
    * Reset edits state
    */
   const reset = useCallback(() => {
-    setState({ editsMap: {}, activeCell: null })
+    setState({ editsMap: {}, savedEditsMap: {}, activeCell: null })
   }, [])
 
   return {
@@ -140,8 +166,10 @@ export function useQuarantineEdits() {
     editCell,
     setActiveCell,
     clearEdits,
+    markAsSaved,
     getCellValue,
     isCellEdited,
+    isCellSaved,
     isRowEdited,
     getEditedRows,
     getEditsBatch,
