@@ -1,0 +1,55 @@
+/**
+ * quarantine-ag-grid-theme.css
+ *
+ * CSS variable overrides for the AG Grid Quartz theme to align with the
+ * shadcn/neutral design system used throughout CleanFlowAI.
+ *
+ * These values are derived from Tailwind's neutral palette — the same values
+ * used in the rest of the frontend. The --font-sans CSS variable is set by
+ * the Geist font in the root layout.
+ *
+ * Note: This file is scoped to .quarantine-ag-grid wrapper class.
+ * Do NOT import AG Grid's legacy CSS files — the modern themeQuartz API
+ * applies styling via the `theme` prop on AgGridReact.
+ */
+
+.quarantine-ag-grid {
+  /* Background and text */
+  --ag-background-color: hsl(0 0% 100%);
+  --ag-foreground-color: hsl(0 0% 3.9%);
+
+  /* Header */
+  --ag-header-background-color: hsl(0 0% 96.1%);
+  --ag-header-foreground-color: hsl(0 0% 45.1%);
+
+  /* Borders */
+  --ag-border-color: hsl(0 0% 89.8%);
+
+  /* Row states */
+  --ag-row-hover-color: hsl(0 0% 96.1% / 0.25);
+  --ag-selected-row-background-color: hsl(0 0% 96.1% / 0.5);
+
+  /* Selection / range */
+  --ag-range-selection-border-color: hsl(0 0% 9%);
+
+  /* Typography */
+  --ag-font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  --ag-font-size: 13px;
+  --ag-header-font-size: 12px;
+  --ag-header-font-weight: 600;
+
+  /* Sizing */
+  --ag-row-height: 32px;
+  --ag-header-height: 34px;
+  --ag-cell-horizontal-padding: 8px;
+}
+
+/**
+ * Edited cell visual indicator.
+ * Matches the isEdited styling in quarantine-editor-cell.tsx:
+ *   className="... font-medium text-primary ..."
+ */
+.quarantine-ag-grid .ag-cell-edited {
+  font-weight: 500;
+  color: hsl(var(--primary));
+}
