@@ -20,7 +20,6 @@ import {
     SOURCE_ERP_OPTIONS,
     normalizeErpForUi,
     normalizeErpForApi,
-    normalizeEntityForApi,
 } from './job-dialog-constants'
 import { deriveRulesV2, CORE_TYPES, TYPE_ALIASES } from '@/shared/lib/type-catalog'
 import { getRuleLabel } from '@/shared/lib/dq-rules'
@@ -827,7 +826,7 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
                 name: name.trim(),
                 source: normalizedSource,
                 destination: normalizeErpForApi(destination),
-                entities: [normalizeEntityForApi(entity, normalizedSource)],
+                entities: [entity],
                 ...freqBackend,
                 dq_config,
             }

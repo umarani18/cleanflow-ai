@@ -23,6 +23,10 @@ export interface JobRunsExplorerState {
     detailModalOpen: boolean
     setDetailModalOpen: (open: boolean) => void
     handleViewRunDetail: (run: JobRun) => void
+    fileViewerRun: JobRun | null
+    fileViewerOpen: boolean
+    setFileViewerOpen: (open: boolean) => void
+    handleViewRunFiles: (run: JobRun) => void
     handleRefresh: () => void
     isRefreshing: boolean
 }
@@ -37,6 +41,8 @@ export function useJobRunsExplorer(jobId: string): JobRunsExplorerState {
     const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
     const [selectedRun, setSelectedRun] = useState<JobRun | null>(null)
     const [detailModalOpen, setDetailModalOpen] = useState(false)
+    const [fileViewerRun, setFileViewerRun] = useState<JobRun | null>(null)
+    const [fileViewerOpen, setFileViewerOpen] = useState(false)
 
     const loadRuns = useCallback(async (isManual = false) => {
         if (isManual) setIsRefreshing(true)
@@ -68,6 +74,11 @@ export function useJobRunsExplorer(jobId: string): JobRunsExplorerState {
     const handleViewRunDetail = useCallback((run: JobRun) => {
         setSelectedRun(run)
         setDetailModalOpen(true)
+    }, [])
+
+    const handleViewRunFiles = useCallback((run: JobRun) => {
+        setFileViewerRun(run)
+        setFileViewerOpen(true)
     }, [])
 
     const handleRefresh = useCallback(() => loadRuns(true), [loadRuns])
@@ -133,6 +144,10 @@ export function useJobRunsExplorer(jobId: string): JobRunsExplorerState {
         detailModalOpen,
         setDetailModalOpen,
         handleViewRunDetail,
+        fileViewerRun,
+        fileViewerOpen,
+        setFileViewerOpen,
+        handleViewRunFiles,
         handleRefresh,
         isRefreshing,
     }

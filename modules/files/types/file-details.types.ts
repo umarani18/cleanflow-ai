@@ -1,4 +1,4 @@
-export type FileDetailsTab = "details" | "preview" | "dq-report"
+export type FileDetailsTab = "details" | "preview" | "dq-report" | "versions"
 
 export interface FilePreviewData {
   headers: string[]

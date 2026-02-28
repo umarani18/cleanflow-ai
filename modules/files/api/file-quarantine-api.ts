@@ -44,6 +44,7 @@ const ENDPOINTS = {
     LEGACY_REPROCESS: (id: string) => `/files/${id}/reprocess-quarantined`,
     VERSIONS: (id: string) => `/files/${id}/versions`,
     DOWNLOAD: (id: string) => `/files/${id}/download`,
+    QUARANTINED_EXPORT: (id: string) => `/files/${id}/quarantined`,
 }
 
 // ========== Session & Manifest Operations ==========
@@ -274,6 +275,19 @@ export async function getFileVersions(
     authToken: string
 ): Promise<FileVersionsResponse> {
     return makeRequest(ENDPOINTS.VERSIONS(uploadId), authToken, { method: 'GET' })
+}
+
+/**
+ * Get a presigned URL for downloading quarantined rows as CSV
+ * @param uploadId - File upload ID
+ * @param authToken - JWT authentication token
+ * @returns { url, filename, row_count }
+ */
+export async function getQuarantinedExportUrl(
+    uploadId: string,
+    authToken: string
+): Promise<{ url: string | null; filename: string | null; row_count: number }> {
+    return makeRequest(ENDPOINTS.QUARANTINED_EXPORT(uploadId), authToken, { method: 'GET' })
 }
 
 /**

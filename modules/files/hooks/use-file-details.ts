@@ -4,9 +4,9 @@ import { useToast } from "@/shared/hooks/use-toast"
 import { DqReportResponse, FileStatusResponse, fileManagementAPI } from "@/modules/files/api/file-management-api"
 import type { FileDetailsTab, FileIssue, FilePreviewData, MatrixTotals } from "@/modules/files/types"
 
-export function useFileDetails(file: FileStatusResponse | null, open: boolean) {
+export function useFileDetails(file: FileStatusResponse | null, open: boolean, defaultTab: FileDetailsTab = "details") {
   const ISSUES_PAGE_SIZE = 50
-  const [activeTab, setActiveTab] = useState<FileDetailsTab>("details")
+  const [activeTab, setActiveTab] = useState<FileDetailsTab>(defaultTab)
   const [previewData, setPreviewData] = useState<FilePreviewData | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -41,7 +41,7 @@ export function useFileDetails(file: FileStatusResponse | null, open: boolean) {
 
   useEffect(() => {
     if (!open) {
-      setActiveTab("details")
+      setActiveTab(defaultTab)
       setPreviewData(null)
       setPreviewError(null)
       setDqReport(null)

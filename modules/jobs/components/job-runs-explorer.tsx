@@ -4,7 +4,7 @@ import { format } from "date-fns"
 import {
     CheckCircle2, XCircle, Clock, Loader2, Activity,
     Search, Filter, RefreshCw, AlertTriangle, ArrowUpDown,
-    ArrowUp, ArrowDown, Eye, Zap
+    ArrowUp, ArrowDown, FolderOpen, Info, Zap
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +22,7 @@ import {
 import { cn } from "@/shared/lib/utils"
 import { useJobRunsExplorer, type SortField, type StatusFilter } from "./use-job-runs-explorer"
 import { JobRunDetailModal } from "./job-run-detail-modal"
+import { JobRunFileViewer } from "./job-run-file-viewer"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -255,19 +256,34 @@ export function JobRunsExplorer({ jobId }: JobRunsExplorerProps) {
                                             )}
                                         </TableCell>
                                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7"
-                                                        onClick={() => state.handleViewRunDetail(run)}
-                                                    >
-                                                        <Eye className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>View Details</TooltipContent>
-                                            </Tooltip>
+                                            <div className="flex items-center justify-end gap-0.5">
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7"
+                                                            onClick={() => state.handleViewRunFiles(run)}
+                                                        >
+                                                            <FolderOpen className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>View Files</TooltipContent>
+                                                </Tooltip>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7"
+                                                            onClick={() => state.handleViewRunDetail(run)}
+                                                        >
+                                                            <Info className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Run Details</TooltipContent>
+                                                </Tooltip>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 )
@@ -282,6 +298,13 @@ export function JobRunsExplorer({ jobId }: JobRunsExplorerProps) {
                 run={state.selectedRun}
                 open={state.detailModalOpen}
                 onOpenChange={state.setDetailModalOpen}
+            />
+
+            {/* File Viewer */}
+            <JobRunFileViewer
+                run={state.fileViewerRun}
+                open={state.fileViewerOpen}
+                onOpenChange={state.setFileViewerOpen}
             />
         </div>
     )

@@ -23,10 +23,13 @@ interface FileDetailsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onRemediate?: (file: FileStatusResponse) => void
+  /** Hide specific tabs (e.g. ["details", "versions"] for job file viewer) */
+  hideTabs?: string[]
 }
 
-export function FileDetailsDialog({ file, open, onOpenChange, onRemediate }: FileDetailsDialogProps) {
+export function FileDetailsDialog({ file, open, onOpenChange, onRemediate, hideTabs = [] }: FileDetailsDialogProps) {
   const { idToken } = useAuth()
+  const defaultTab = hideTabs.includes("details") ? "preview" as const : "details" as const
   const {
     activeTab,
     setActiveTab,
@@ -60,7 +63,7 @@ export function FileDetailsDialog({ file, open, onOpenChange, onRemediate }: Fil
     handleDownloadDqReport,
     openMatrixDialog,
     handleDownloadDqMatrix,
-  } = useFileDetails(file, open)
+  } = useFileDetails(file, open, defaultTab)
 
   if (!file) return null
 
@@ -120,18 +123,20 @@ export function FileDetailsDialog({ file, open, onOpenChange, onRemediate }: Fil
 
             <div className="px-6 py-2 border-b shrink-0 bg-muted/10">
               <div className="inline-flex rounded-lg border bg-muted p-1">
-                <button
-                  onClick={() => setActiveTab("details")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
-                    activeTab === "details"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Server className="h-3.5 w-3.5" />
-                  Details
-                </button>
+                {!hideTabs.includes("details") && (
+                  <button
+                    onClick={() => setActiveTab("details")}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
+                      activeTab === "details"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Server className="h-3.5 w-3.5" />
+                    Details
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveTab("preview")}
                   className={cn(
@@ -158,18 +163,20 @@ export function FileDetailsDialog({ file, open, onOpenChange, onRemediate }: Fil
                     DQ Report
                   </button>
                 )}
-                <button
-                  onClick={() => setActiveTab("versions")}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
-                    activeTab === "versions"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <GitBranch className="h-3.5 w-3.5" />
-                  Versions
-                </button>
+                {!hideTabs.includes("versions") && (
+                  <button
+                    onClick={() => setActiveTab("versions")}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
+                      activeTab === "versions"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <GitBranch className="h-3.5 w-3.5" />
+                    Versions
+                  </button>
+                )}
               </div>
             </div>
 

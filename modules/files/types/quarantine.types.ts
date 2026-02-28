@@ -56,6 +56,14 @@ export interface FileVersionSummary {
   patch_notes?: string | null
   reprocess_count?: number
   rows_quarantined?: number
+  status?: string
+  dq_score?: number | null
+  original_filename?: string
+  uploaded_at?: string
+  updated_at?: string
+  rows_in?: number
+  rows_clean?: number
+  rows_fixed?: number
 }
 
 // ========== API Request Types ==========
