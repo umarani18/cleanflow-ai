@@ -752,9 +752,28 @@ export function useFilesPage() {
     const openActionsDialog = (file: FileStatusResponse) => {
         if (!ensureFilesPermission()) return;
         setActionsDialogFile(file);
-        setColumnExportFile(file);
         setActionsDialogOpen(true);
-        void handleColumnExportClick(file);
+        void (async () => {
+            // Resolve latest version upload_id so export downloads the correct version
+            let exportFile = file;
+            if (idToken) {
+                try {
+                    const versionsResp = await fileManagementAPI.getFileVersions(file.upload_id, idToken);
+                    const versions = versionsResp.versions || [];
+                    if (versions.length > 0) {
+                        const latest = versions.find((v: any) => v.is_latest) ||
+                            versions.reduce((a: any, b: any) => ((a.version_number || 0) >= (b.version_number || 0) ? a : b));
+                        if (latest?.upload_id) {
+                            exportFile = { ...file, upload_id: latest.upload_id };
+                        }
+                    }
+                } catch {
+                    // fall back to root upload_id
+                }
+            }
+            setColumnExportFile(exportFile);
+            void handleColumnExportClick(exportFile);
+        })();
     };
 
     const handleColumnExportClick = async (file: FileStatusResponse) => {

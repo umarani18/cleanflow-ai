@@ -265,6 +265,28 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
     [file, authToken, session, edits, rows, saveEdits, toast]
   )
 
+  // Refresh session + rows after a server-side operation (e.g. AI Fix Apply to All)
+  const refreshSession = useCallback(async () => {
+    if (!file || !authToken) return
+    rows.reset()
+    edits.clearPending()
+    try {
+      const sessionResult = await session.initialize(file.upload_id, authToken)
+      if ('compatibilityMode' in sessionResult && sessionResult.compatibilityMode && 'rows' in sessionResult) {
+        rows.setRows(sessionResult.rows as any)
+      } else if ('session' in sessionResult && sessionResult.session) {
+        await rows.initialize(
+          file.upload_id,
+          authToken,
+          sessionResult.session.session_id,
+          (sessionResult as any).manifest?.upload_id || file.upload_id
+        )
+      }
+    } catch (error) {
+      console.error('Failed to refresh quarantine session:', error)
+    }
+  }, [file, authToken, session, rows, edits]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // AG Grid scroll-end callback — fires when user scrolls near the bottom
   const handleBodyScrollEnd = useCallback(() => {
     if (!open || rows.loading || !rows.hasMore || session.compatibilityMode) return
@@ -320,7 +342,7 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
     setActiveCell: edits.setActiveCell,
     saveEdits,
     submitReprocess,
-    refreshSession: () => session.initialize(file?.upload_id || '', authToken || ''),
+    refreshSession,
 
     // UI state
     saving,

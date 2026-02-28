@@ -56,6 +56,7 @@ export function FileDetailsDialog({ file, open, onOpenChange, onRemediate }: Fil
     selectedViolations,
     setSelectedViolations,
     latestFile,
+    versionInfo,
     fetchIssues,
     handleDownloadDqReport,
     openMatrixDialog,
@@ -163,7 +164,7 @@ export function FileDetailsDialog({ file, open, onOpenChange, onRemediate }: Fil
             </div>
 
             <div className="flex-1 overflow-hidden relative">
-              {activeTab === "details" && <FileOverviewTab file={currentFile} />}
+              {activeTab === "details" && <FileOverviewTab file={currentFile} versionInfo={versionInfo} />}
               {activeTab === "preview" && (
                 <FilePreviewTab
                   previewLoading={previewLoading}

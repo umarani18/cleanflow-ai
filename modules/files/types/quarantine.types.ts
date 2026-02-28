@@ -64,6 +64,7 @@ export interface FileVersionSummary {
   rows_clean?: number | null
   rows_fixed?: number | null
   rows_quarantined?: number | null
+  processing_time_seconds?: number | null
 }
 
 // ========== API Request Types ==========
@@ -262,6 +263,57 @@ export interface CompatibilityReprocessPayload {
   rows: Record<string, any>[]
   originalFilename?: string
   processingOptions?: any
+}
+
+// ========== AI Column Rule Types ==========
+
+/** A single row value to be transformed by the AI column rule */
+export interface ColumnRuleApplyRow {
+  row_id: string
+  value: string
+}
+
+/** Request payload for AI column rule generation and application */
+export interface ColumnRuleApplyRequest {
+  column: string
+  description: string
+  rows: ColumnRuleApplyRow[]
+}
+
+/** A single cell fix produced by the AI column rule */
+export interface ColumnRuleFix {
+  row_id: string
+  original: string
+  fixed: string
+}
+
+/** Response from the AI column rule apply endpoint */
+export interface ColumnRuleApplyResponse {
+  fixes: ColumnRuleFix[]
+  rule_code: string
+  rows_affected: number
+}
+
+/** Request payload for apply-all (one chunk; chain with cursor for large datasets) */
+export interface ColumnRuleApplyAllRequest {
+  column: string
+  description: string
+  session_id: string
+  /** Cursor from the previous chunk response; omit on the first call */
+  cursor?: string | null
+  /** Etag returned by the previous chunk; omit on the first call */
+  if_match_etag?: string
+}
+
+/** Response from one apply-all chunk */
+export interface ColumnRuleApplyAllResponse {
+  /** Rows fixed in this chunk */
+  rows_affected: number
+  /** Pass as if_match_etag in the next call */
+  new_etag: string
+  rule_code: string
+  /** Null when all rows have been processed */
+  next_cursor: string | null
 }
 
 // ========== Error Types ==========

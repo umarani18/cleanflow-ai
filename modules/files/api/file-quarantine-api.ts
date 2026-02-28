@@ -28,6 +28,10 @@ import type {
     QuarantineReadModelBackfillResponse,
     FileVersionsResponse,
     CompatibilityReprocessPayload,
+    ColumnRuleApplyRequest,
+    ColumnRuleApplyResponse,
+    ColumnRuleApplyAllRequest,
+    ColumnRuleApplyAllResponse,
 } from '@/modules/files/types'
 
 // AWS Configuration
@@ -292,6 +296,50 @@ export async function suggestQuarantineFix(
         `/files/${uploadId}/quarantined/suggest-fix?${query.toString()}`,
         authToken,
         { method: 'GET' }
+    )
+}
+
+// ========== AI Column Rule ==========
+
+/**
+ * Generate an AI Python transform rule from a natural-language description
+ * and apply it to all provided quarantined row values for a column.
+ *
+ * The backend generates a `fix_value(value: str) -> str` Python function,
+ * executes it safely in a sandbox, and returns the proposed fixes.
+ */
+export async function applyColumnRule(
+    uploadId: string,
+    authToken: string,
+    payload: ColumnRuleApplyRequest
+): Promise<ColumnRuleApplyResponse> {
+    return makeRequest(
+        `/files/${uploadId}/quarantined/column-rule/apply`,
+        authToken,
+        {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }
+    )
+}
+
+/**
+ * Apply an AI column rule to ALL quarantined rows for a column server-side.
+ * The backend paginates the full read model, applies the cached/generated rule,
+ * saves edits in etag-chained batches, and returns the total rows affected.
+ */
+export async function applyColumnRuleAll(
+    uploadId: string,
+    authToken: string,
+    payload: ColumnRuleApplyAllRequest
+): Promise<ColumnRuleApplyAllResponse> {
+    return makeRequest(
+        `/files/${uploadId}/quarantined/column-rule/apply-all`,
+        authToken,
+        {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }
     )
 }
 
