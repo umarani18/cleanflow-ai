@@ -23,6 +23,7 @@ import {
 } from './job-dialog-constants'
 import { deriveRulesV2, CORE_TYPES, TYPE_ALIASES } from '@/shared/lib/type-catalog'
 import { getRuleLabel } from '@/shared/lib/dq-rules'
+import { orgAPI, type OrgMembership } from '@/modules/auth/api/org-api'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -183,6 +184,11 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
     const [profilingLoading, setProfilingLoading] = useState(false)
     const [columnProfiles, setColumnProfiles] = useState<Record<string, ColumnProfile>>({})
 
+    // Responsible user
+    const [responsibleUserId, setResponsibleUserId] = useState("")
+    const [orgMembers, setOrgMembers] = useState<OrgMembership[]>([])
+    const [membersLoading, setMembersLoading] = useState(false)
+
     // UI state
     const [saving, setSaving] = useState(false)
     const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -197,6 +203,13 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
 
     useEffect(() => {
         if (!open) return
+
+        // Fetch org members for responsible user selector
+        setMembersLoading(true)
+        orgAPI.listMembers().then(res => {
+            setOrgMembers(res.members || [])
+        }).catch(() => {}).finally(() => setMembersLoading(false))
+
         if (job) {
             setName(job.name)
             setSource(normalizeErpForUi(job.source))
@@ -212,6 +225,7 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
                 : DEFAULT_GLOBAL_RULES.map(r => ({ ...r }))
             )
             setAdvancedOpen(job.dq_config?.mode === "custom")
+            setResponsibleUserId(job.responsible_user_id || "")
         } else {
             setName("")
             setSource("quickbooks")
@@ -236,6 +250,7 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
             setCrossFieldRules([])
             setExpandedRuleColumns([])
             setColumnRulesSeeded(false)
+            setResponsibleUserId("")
         }
     }, [job, open])
 
@@ -829,6 +844,7 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
                 entities: [entity],
                 ...freqBackend,
                 dq_config,
+                ...(responsibleUserId && { responsible_user_id: responsibleUserId }),
             }
 
             if (isEdit && job) {
@@ -933,6 +949,9 @@ export function useJobDialog({ open, job, onSuccess }: UseJobDialogProps) {
         profilingLoading,
         columnProfiles,
         handleFetchProfiling,
+        // Responsible user
+        responsibleUserId, setResponsibleUserId,
+        orgMembers, membersLoading,
         // Submit / UI
         saving,
         handleSubmit,

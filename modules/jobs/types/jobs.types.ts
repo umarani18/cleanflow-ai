@@ -34,6 +34,7 @@ export interface Job {
     last_run_status?: string
     total_runs?: number
     consecutive_failures?: number
+    responsible_user_id?: string
 }
 
 export interface EntityResult {
@@ -96,6 +97,7 @@ export interface CreateJobPayload {
     frequency_value: string
     dq_config?: Partial<DQConfig>
     max_records?: number
+    responsible_user_id?: string
 }
 
 export interface UpdateJobPayload {
@@ -107,6 +109,7 @@ export interface UpdateJobPayload {
     frequency_value?: string
     dq_config?: Partial<DQConfig>
     max_records?: number
+    responsible_user_id?: string
 }
 
 // ─── Advanced Options types ──────────────────────────────────────────────────

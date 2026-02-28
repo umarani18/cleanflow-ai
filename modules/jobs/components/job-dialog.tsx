@@ -125,6 +125,32 @@ export function JobDialog({ open, onOpenChange, job, onSuccess, onCancel }: JobD
                         />
                     )}
 
+                    {/* Responsible User */}
+                    <div className="space-y-2">
+                        <Label className="text-sm font-medium">Responsible User</Label>
+                        <p className="text-xs text-muted-foreground">
+                            Receives notifications for quarantined data, failures, and auto-pause events.
+                        </p>
+                        <Select value={d.responsibleUserId || "none"} onValueChange={(v) => d.setResponsibleUserId(v === "none" ? "" : v)}>
+                            <SelectTrigger className="h-10">
+                                <SelectValue placeholder="Select a team member..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">
+                                    <span className="text-muted-foreground">None (no notifications)</span>
+                                </SelectItem>
+                                {d.orgMembers.map((m) => (
+                                    <SelectItem key={m.user_id} value={m.user_id}>
+                                        <div className="flex items-center gap-2">
+                                            <span>{m.email}</span>
+                                            <Badge variant="outline" className="text-[10px]">{m.role}</Badge>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     {/* ─── Advanced (Optional) ─────────────────────────────── */}
                     <Collapsible open={d.advancedOpen} onOpenChange={d.handleAdvancedOpenChange}>
                         <CollapsibleTrigger className="flex items-center gap-2 w-full text-left py-2 border-t border-border/50">
