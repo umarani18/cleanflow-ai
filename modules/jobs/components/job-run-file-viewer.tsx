@@ -1,11 +1,16 @@
 "use client"
 
 import {
-    Loader2, Eye, Download, Trash2, FileText, AlertCircle
+    Loader2, Eye, Download, Trash2, FileText, AlertCircle, CloudUpload
 } from "lucide-react"
 import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select"
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog"
@@ -23,7 +28,7 @@ import {
 import { cn } from "@/shared/lib/utils"
 import type { JobRun } from "@/modules/jobs/types/jobs.types"
 import { FileDetailsDialog } from "@/modules/files/components/file-details-dialog"
-import { DownloadFormatModal } from "@/modules/files/components/download-format-modal"
+import { ColumnExportContent } from "@/modules/files/components/column-export-dialog"
 import { useJobRunFiles } from "./use-job-run-files"
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -211,14 +216,78 @@ export function JobRunFileViewer({ run, open, onOpenChange }: JobRunFileViewerPr
                 hideTabs={["details", "versions"]}
             />
 
-            {/* Download Format Picker */}
-            <DownloadFormatModal
-                open={state.downloadOpen}
-                onOpenChange={state.setDownloadOpen}
-                file={state.downloadFile}
-                onDownload={state.handleDownload}
-                downloading={state.downloading}
-            />
+            {/* Download Data (Column Export + ERP Transform) */}
+            <Dialog open={state.downloadOpen} onOpenChange={state.setDownloadOpen}>
+                <DialogContent className="max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+                    <DialogHeader className="border-b pb-4">
+                        <DialogTitle className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
+                                <CloudUpload className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            Download Data
+                        </DialogTitle>
+                        <DialogDescription>Configure your data and select a destination.</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+                        <div className="rounded-lg border p-4 bg-muted/30">
+                            <div className="text-sm font-medium">
+                                {state.downloadFile?.original_filename || state.downloadFile?.filename || "Selected file"}
+                            </div>
+                            {state.downloadFile && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                    {state.downloadFile.rows_clean || state.downloadFile.rows_out || 0} clean rows ready to export
+                                </div>
+                            )}
+                        </div>
+                        <div className="space-y-3">
+                            <Label className="text-sm font-semibold flex items-center gap-2">
+                                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs font-bold">1</span>
+                                ERP Transformation (Optional)
+                            </Label>
+                            <RadioGroup value={state.erpMode} onValueChange={(value) => state.setErpMode(value as "original" | "transform")} className="space-y-2">
+                                <div className="flex items-center space-x-2 rounded-lg border p-3">
+                                    <RadioGroupItem value="original" id="run-erp-original" />
+                                    <Label htmlFor="run-erp-original" className="cursor-pointer">Original Format (CSV)</Label>
+                                </div>
+                                <div className="flex items-center space-x-2 rounded-lg border p-3">
+                                    <RadioGroupItem value="transform" id="run-erp-transform" />
+                                    <Label htmlFor="run-erp-transform" className="cursor-pointer">Transform for ERP System</Label>
+                                </div>
+                            </RadioGroup>
+                            {state.erpMode === "transform" && (
+                                <div className="grid gap-2">
+                                    <Label className="text-sm font-medium">ERP System</Label>
+                                    <Select value={state.erpTarget} onValueChange={state.setErpTarget}>
+                                        <SelectTrigger><SelectValue placeholder="Select ERP" /></SelectTrigger>
+                                        <SelectContent>
+                                            {["Oracle Fusion", "SAP ERP", "Microsoft Dynamics", "NetSuite", "Workday", "QuickBooks Online", "Zoho Books", "Custom ERP"].map((erp) => (
+                                                <SelectItem key={erp} value={erp}>{erp}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                        </div>
+                        {state.columnExportLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Loading columns...
+                            </div>
+                        ) : (
+                            <ColumnExportContent
+                                fileName={state.downloadFile?.original_filename || state.downloadFile?.filename || "Selected file"}
+                                columns={state.columnExportColumns}
+                                onExport={state.handleColumnExport}
+                                primaryActionLabel="Download"
+                                exporting={state.downloading}
+                                onCancel={() => state.setDownloadOpen(false)}
+                                showTitle={false}
+                                className="min-h-[360px]"
+                            />
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Delete Confirmation */}
             <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>

@@ -23,11 +23,22 @@ export interface JobRunFilesState {
     downloadFile: FileStatusResponse | null
     downloadOpen: boolean
     setDownloadOpen: (open: boolean) => void
+    columnExportColumns: string[]
+    columnExportLoading: boolean
     handleViewDetail: (file: FileStatusResponse) => void
     handleDownloadPrompt: (file: FileStatusResponse) => void
-    handleDownload: (format: "csv" | "excel" | "json", dataType: "original" | "clean") => Promise<void>
+    handleColumnExport: (options: {
+        format: "csv" | "excel" | "json"
+        dataType: "all" | "clean" | "quarantine"
+        columns: string[]
+        columnMapping: Record<string, string>
+    }) => Promise<void>
     handleDelete: (uploadId: string) => Promise<void>
     downloading: boolean
+    erpMode: "original" | "transform"
+    setErpMode: (mode: "original" | "transform") => void
+    erpTarget: string
+    setErpTarget: (target: string) => void
 }
 
 export function useJobRunFiles(run: JobRun | null, open: boolean): JobRunFilesState {
@@ -39,6 +50,10 @@ export function useJobRunFiles(run: JobRun | null, open: boolean): JobRunFilesSt
     const [downloadFile, setDownloadFile] = useState<FileStatusResponse | null>(null)
     const [downloadOpen, setDownloadOpen] = useState(false)
     const [downloading, setDownloading] = useState(false)
+    const [columnExportColumns, setColumnExportColumns] = useState<string[]>([])
+    const [columnExportLoading, setColumnExportLoading] = useState(false)
+    const [erpMode, setErpMode] = useState<"original" | "transform">("original")
+    const [erpTarget, setErpTarget] = useState("")
 
     useEffect(() => {
         if (!open || !run || !idToken) {
@@ -89,23 +104,49 @@ export function useJobRunFiles(run: JobRun | null, open: boolean): JobRunFilesSt
         setDetailOpen(true)
     }, [])
 
-    const handleDownloadPrompt = useCallback((file: FileStatusResponse) => {
+    const handleDownloadPrompt = useCallback(async (file: FileStatusResponse) => {
         setDownloadFile(file)
         setDownloadOpen(true)
-    }, [])
+        setColumnExportColumns([])
+        setColumnExportLoading(true)
+        if (!idToken) { setColumnExportLoading(false); return }
+        try {
+            const resp = await fileManagementAPI.getFileColumns(file.upload_id, idToken)
+            setColumnExportColumns(resp.columns || [])
+        } catch {
+            try {
+                const preview = await fileManagementAPI.getFilePreview(file.upload_id, idToken)
+                setColumnExportColumns(preview.headers || [])
+            } catch {
+                setColumnExportColumns([])
+            }
+        } finally {
+            setColumnExportLoading(false)
+        }
+    }, [idToken])
 
-    const handleDownload = useCallback(async (format: "csv" | "excel" | "json", dataType: "original" | "clean") => {
+    const handleColumnExport = useCallback(async (options: {
+        format: "csv" | "excel" | "json"
+        dataType: "all" | "clean" | "quarantine"
+        columns: string[]
+        columnMapping: Record<string, string>
+    }) => {
         if (!downloadFile || !idToken) return
         setDownloading(true)
         try {
             const exportResult = await fileManagementAPI.exportWithColumns(
                 downloadFile.upload_id, idToken,
-                { format, data: dataType === "original" ? "raw" : "clean" },
+                {
+                    format: options.format,
+                    data: options.dataType,
+                    columns: options.columns,
+                    columnMapping: options.columnMapping,
+                    erp: erpMode === "transform" ? erpTarget : undefined,
+                },
             )
             const baseFilename = (downloadFile.original_filename || downloadFile.filename || "file").replace(/\.[^/.]+$/, "")
-            const extension = format === "excel" ? ".xlsx" : format === "json" ? ".json" : ".csv"
-            const dataSuffix = dataType === "original" ? "_original" : "_clean"
-            const filename = `${baseFilename}${dataSuffix}${extension}`
+            const extension = options.format === "excel" ? ".xlsx" : options.format === "json" ? ".json" : ".csv"
+            const filename = `${baseFilename}_export${extension}`
             const link = document.createElement("a")
             if (exportResult.blob) {
                 const url = URL.createObjectURL(exportResult.blob)
@@ -130,7 +171,7 @@ export function useJobRunFiles(run: JobRun | null, open: boolean): JobRunFilesSt
         } finally {
             setDownloading(false)
         }
-    }, [downloadFile, idToken])
+    }, [downloadFile, idToken, erpMode, erpTarget])
 
     const handleDelete = useCallback(async (uploadId: string) => {
         if (!idToken) return
@@ -155,10 +196,16 @@ export function useJobRunFiles(run: JobRun | null, open: boolean): JobRunFilesSt
         downloadFile,
         downloadOpen,
         setDownloadOpen,
+        columnExportColumns,
+        columnExportLoading,
         handleViewDetail,
         handleDownloadPrompt,
-        handleDownload,
+        handleColumnExport,
         handleDelete,
         downloading,
+        erpMode,
+        setErpMode,
+        erpTarget,
+        setErpTarget,
     }
 }
