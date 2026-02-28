@@ -45,30 +45,50 @@
 }
 
 /**
- * Edited cell visual indicator.
- * Matches the isEdited styling in quarantine-editor-cell.tsx:
- *   className="... font-medium text-primary ..."
+ * Edited cell — amber left border + warm tint.
+ * Visible pending-edit indicator, similar to a "dirty" line gutter.
  */
 .quarantine-ag-grid .ag-cell-edited {
-  background-color: hsl(38 92% 95%);
-  color: hsl(32 95% 35%);
-  font-weight: 500;
+  background-color: hsl(45 96% 92%);
+  color: hsl(30 90% 28%);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 hsl(38 92% 50%);
 }
 
 /**
- * Saved cell visual indicator.
- * Applied when the cell was edited and successfully saved this session.
+ * Saved cell — green left border + mint tint.
+ * Shows the edit was persisted to the backend this session.
  */
 .quarantine-ag-grid .ag-cell-saved {
-  background-color: hsl(142 72% 95%);
-  color: hsl(142 55% 30%);
+  background-color: hsl(142 60% 92%);
+  color: hsl(142 50% 25%);
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 hsl(142 60% 40%);
 }
 
 /**
- * Quarantined cell visual indicator.
+ * Quarantined cell — red tint.
  * Applied when the corresponding {col}_dq_status value is "quarantined".
  */
 .quarantine-ag-grid .ag-cell-quarantined {
-  background-color: hsl(0 84.2% 97%);
-  color: hsl(0 72.2% 40%);
+  background-color: hsl(0 84% 96%);
+  color: hsl(0 70% 38%);
+}
+
+/**
+ * Edited takes precedence over quarantined when both apply.
+ */
+.quarantine-ag-grid .ag-cell-quarantined.ag-cell-edited {
+  background-color: hsl(45 96% 92%);
+  color: hsl(30 90% 28%);
+  box-shadow: inset 3px 0 0 hsl(38 92% 50%);
+}
+
+/**
+ * Saved takes precedence over quarantined when both apply.
+ */
+.quarantine-ag-grid .ag-cell-quarantined.ag-cell-saved {
+  background-color: hsl(142 60% 92%);
+  color: hsl(142 50% 25%);
+  box-shadow: inset 3px 0 0 hsl(142 60% 40%);
 }

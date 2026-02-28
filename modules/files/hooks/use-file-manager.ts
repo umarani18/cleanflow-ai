@@ -94,8 +94,19 @@ export function useFileManager() {
         last_error: item.last_error,
       }))
 
-      setFiles(apiFiles)
-      updateStats(apiFiles)
+      // Deduplicate: for each original_filename keep only the most recent upload
+      const byName = new Map<string, FileItem>()
+      for (const file of apiFiles) {
+        const key = (file.original_filename || file.name).toLowerCase()
+        const existing = byName.get(key)
+        if (!existing || new Date(file.uploaded_at || 0) > new Date(existing.uploaded_at || 0)) {
+          byName.set(key, file)
+        }
+      }
+      const dedupedFiles = Array.from(byName.values())
+
+      setFiles(dedupedFiles)
+      updateStats(dedupedFiles)
 
       toast({
         title: "Files loaded",

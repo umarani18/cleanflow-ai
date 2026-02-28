@@ -11,7 +11,7 @@
  * Non-quarantined cells render as plain text — no overhead.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Wand2, Loader2, Check, X } from 'lucide-react'
@@ -56,6 +56,42 @@ export function AiSuggestCellRenderer({
   const [loading, setLoading] = useState(false)
   const [suggestion, setSuggestion] = useState<AiSuggestFixResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Local accepted value — shows the accepted suggestion immediately without
+  // waiting for AG Grid's prop update cycle to propagate the new value.
+  const [acceptedValue, setAcceptedValue] = useState<string | null>(null)
+  // Tracks what we last accepted so we can distinguish "AG Grid caught up" from
+  // "an unrelated value change arrived before AG Grid caught up".
+  const pendingAcceptRef = useRef<string | null>(null)
+
+  // Render the Popover portal INSIDE the Dialog's DOM node rather than
+  // document.body. Without this, Radix Dialog's DismissableLayer intercepts
+  // all pointerdown events on portal children outside its subtree — which
+  // prevents the Accept button from receiving click events.
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
+  useEffect(() => {
+    const dialog = wrapperRef.current?.closest('[role="dialog"]') as HTMLElement | null
+    setPortalContainer(dialog)
+  }, [])
+
+  // Sync acceptedValue back to null only when AG Grid has actually caught up
+  // with the value we accepted, OR when there is no pending accept at all.
+  // Without this guard the old useEffect would reset acceptedValue on ANY value
+  // change — including intermediate stale AG Grid updates — which wiped out the
+  // accepted value before the cell ever rendered it.
+  useEffect(() => {
+    if (pendingAcceptRef.current === null) {
+      // No pending accept — just stay in sync with AG Grid
+      setAcceptedValue(null)
+    } else if (String(value ?? '') === pendingAcceptRef.current) {
+      // AG Grid has caught up: clear the override and trust AG Grid going forward
+      setAcceptedValue(null)
+      pendingAcceptRef.current = null
+    }
+    // else: AG Grid still has a stale value — keep showing our accepted value
+  }, [value])
+
+  const displayValue = acceptedValue !== null ? acceptedValue : (value ?? '')
 
   const col = colDef?.field ?? ''
   const rowId = String(data?.row_id ?? '')
@@ -116,18 +152,24 @@ export function AiSuggestCellRenderer({
     setOpen((prev) => !prev)
   }
 
-  const handleAccept = () => {
-    if (suggestion?.suggestion !== undefined) {
-      onAccept(rowId, col, suggestion.suggestion)
-      setOpen(false)
-      setSuggestion(null) // reset so next open fetches fresh
-    }
+  const handleAccept = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!suggestion) return
+
+    // API can return null for "remove this value"; normalize to empty string
+    // so the edit pipeline always receives a concrete text value.
+    const accepted = suggestion.suggestion == null ? '' : String(suggestion.suggestion)
+    pendingAcceptRef.current = accepted // guard against premature useEffect reset
+    setAcceptedValue(accepted)          // show immediately, don't wait for AG Grid
+    onAccept(rowId, col, accepted)
+    setOpen(false)
+    setSuggestion(null) // reset so next open fetches fresh
   }
 
   // ── Non-quarantined: plain value ───────────────────────────────────────────
 
   if (!isQuarantined) {
-    return <span className="truncate text-sm">{value}</span>
+    return <span className="truncate text-sm">{displayValue}</span>
   }
 
   // ── Quarantined: value + ✨ button ────────────────────────────────────────
@@ -136,10 +178,10 @@ export function AiSuggestCellRenderer({
     CONFIDENCE_STYLES[suggestion?.confidence ?? 'low'] ?? CONFIDENCE_STYLES.low
 
   return (
-    <div className="flex items-center gap-1 w-full h-full overflow-hidden">
-      <span className="flex-1 truncate text-sm">{value}</span>
+    <div ref={wrapperRef} className="flex items-center gap-1 w-full h-full overflow-hidden">
+      <span className="flex-1 truncate text-sm">{displayValue}</span>
 
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={setOpen} modal={false}>
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -160,6 +202,7 @@ export function AiSuggestCellRenderer({
           side="bottom"
           align="start"
           sideOffset={4}
+          container={portalContainer}
         >
           {/* Header */}
           <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">

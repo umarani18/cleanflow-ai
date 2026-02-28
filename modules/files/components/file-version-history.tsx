@@ -176,7 +176,7 @@ export function FileVersionHistory({ rootUploadId, authToken }: FileVersionHisto
 
         <ScrollArea className="max-h-[70vh]">
           <div className="space-y-2 pr-2">
-            {versions.map((v, i) => (
+            {[...versions].reverse().map((v, i) => (
               <div key={v.upload_id}>
                 {i > 0 && <Separator className="my-2" />}
                 <div className="flex items-start justify-between gap-3">

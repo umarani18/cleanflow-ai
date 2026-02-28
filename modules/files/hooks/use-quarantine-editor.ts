@@ -5,7 +5,7 @@
  * Composes all sub-hooks and provides unified interface
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useToast } from '@/shared/hooks/use-toast'
 import {
   saveQuarantineEditsBatch,
@@ -69,15 +69,26 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
     return lineage.find((v) => v.is_latest) || lineage[lineage.length - 1]
   }, [lineage])
 
+  // Full reset when file changes — clears savedEditsMap so green indicators
+  // from a previous file don't bleed into a different file's editor.
+  const prevUploadIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (file?.upload_id && file.upload_id !== prevUploadIdRef.current) {
+      edits.reset()
+      prevUploadIdRef.current = file.upload_id
+    }
+  }, [file?.upload_id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Initialize on open
   useEffect(() => {
     if (!open || !file || !authToken) return
 
     const init = async () => {
-      // Reset all state
+      // Reset session/rows fully; only clear pending edits so the savedEditsMap
+      // (green "saved" indicators) survives a close-and-reopen of the same file.
       session.reset()
       rows.reset()
-      edits.reset()
+      edits.clearPending()
       setLastSaveSummary(null)
       setShowLineage(false)
 
@@ -271,7 +282,12 @@ export function useQuarantineEditor({ file, authToken, open }: UseQuarantineEdit
   const handleCellEdit = useCallback(
     (rowId: string, column: string, value: string) => {
       edits.editCell(rowId, column, value)
-      rows.updateRow(rowId, { [column]: value })
+      // Track the dq_status flip so the patch persists the 'edited' state to S3.
+      // On reload, query_quarantine_rows merges this into the row via patch_map,
+      // so {col}_dq_status comes back as 'edited' instead of 'quarantined',
+      // enabling the persistent ag-cell-saved (green) indicator without in-memory state.
+      edits.editCell(rowId, `${column}_dq_status`, 'edited')
+      rows.updateRow(rowId, { [column]: value, [`${column}_dq_status`]: 'edited' })
     },
     [edits, rows]
   )

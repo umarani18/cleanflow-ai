@@ -8,29 +8,23 @@
 
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Loader2, Save, Play, RefreshCw, CloudUpload } from 'lucide-react'
+import { Loader2, Play, CloudUpload } from 'lucide-react'
 import type { QuarantineSession } from '@/modules/files/types'
 
 interface QuarantineEditorToolbarProps {
   session: QuarantineSession | null
-  pendingCount: number
   saving: boolean
   submitting: boolean
   savedAt?: Date | null
-  onSave: () => void
   onReprocess: () => void
-  onRefresh: () => void
 }
 
 export function QuarantineEditorToolbar({
   session,
-  pendingCount,
   saving,
   submitting,
   savedAt,
-  onSave,
   onReprocess,
-  onRefresh,
 }: QuarantineEditorToolbarProps) {
   const [showSaved, setShowSaved] = useState(false)
 
@@ -46,13 +40,6 @@ export function QuarantineEditorToolbar({
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* Left: Action buttons */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button variant="outline" size="sm" onClick={onRefresh}>
-            <RefreshCw className="w-4 h-4 mr-1" /> Reload
-          </Button>
-          <Button size="sm" variant="outline" disabled={saving || pendingCount === 0} onClick={onSave}>
-            {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}{' '}
-            Save ({pendingCount})
-          </Button>
           <Button size="sm" disabled={submitting || !session} onClick={onReprocess}>
             {submitting ? (
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -63,7 +50,7 @@ export function QuarantineEditorToolbar({
           </Button>
         </div>
 
-        {/* Right: Save status + session */}
+        {/* Right: Autosave status + session */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {saving ? (
             <span className="flex items-center gap-1">

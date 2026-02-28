@@ -16,7 +16,7 @@
  * AG Grid handles row virtualization internally — no external virtual scroll needed.
  */
 
-import { useMemo, useCallback, useRef, useLayoutEffect } from 'react'
+import { useMemo, useCallback, useRef, useLayoutEffect, useEffect } from 'react'
 import { AgGridReact } from 'ag-grid-react'
 import {
   AllCommunityModule,
@@ -41,11 +41,6 @@ interface QuarantineAgGridTableProps {
   /** Subset of columns that are editable by the user */
   editableColumns: string[]
 
-  /**
-   * Edit state integration from useQuarantineEdits hook.
-   * Returns the current value for a cell, applying pending edits over the raw row value.
-   */
-  getCellValue: (rowId: string, column: string, row: Record<string, any>) => any
   /**
    * Returns true if the given cell has a pending (unsaved) edit.
    * Used to apply the .ag-cell-edited CSS class for visual indicators.
@@ -97,7 +92,6 @@ export function QuarantineAgGridTable({
   rows,
   columns,
   editableColumns,
-  getCellValue,
   isCellEdited,
   isCellSaved,
   onCellEdit,
@@ -121,13 +115,35 @@ export function QuarantineAgGridTable({
   const stableOnAccept = useCallback(
     (rowId: string, col: string, val: string) => {
       onCellEditRef.current(rowId, col, val)
-      // Force AG Grid to re-evaluate all valueGetters so the accepted value
-      // is immediately visible — without this, cells only refresh on the next
-      // rowData reconciliation cycle.
-      gridApiRef.current?.refreshCells({ force: true })
+      // Use applyTransaction to directly update AG Grid's internal row store.
+      // This is necessary because AG Grid's React integration does not reliably
+      // re-render cell renderers when rowData changes immutably — the React prop
+      // update cycle and AG Grid's internal reconciliation are not synchronised.
+      // applyTransaction is the documented programmatic update path and fires
+      // cell refresh immediately without relying on React's render cycle.
+      if (gridApiRef.current) {
+        const node = gridApiRef.current.getRowNode(rowId)
+        if (node?.data) {
+          // Also flip {col}_dq_status to 'edited' so the cell class rules
+          // see the updated status synchronously (node.data is read before
+          // React's rows.updateRow setState has a chance to re-render).
+          gridApiRef.current.applyTransaction({
+            update: [{ ...node.data, [col]: val, [`${col}_dq_status`]: 'edited' }],
+          })
+        }
+      }
     },
     [] // intentionally empty — uses refs
   )
+
+  // ─── Refresh cell classes after edits commit ──────────────────────────────
+  // isCellEdited gets a new reference every time editsMap changes. Running
+  // refreshCells here — after React has committed the new state and columnDefs
+  // carry the updated cellClassRules closures — ensures ag-cell-edited and
+  // ag-cell-saved classes are applied/removed on the correct cells.
+  useEffect(() => {
+    gridApiRef.current?.refreshCells({ force: true })
+  }, [isCellEdited])
 
   // ─── Column Definitions ────────────────────────────────────────────────────
 
@@ -143,10 +159,6 @@ export function QuarantineAgGridTable({
           width: 80,
           suppressMovable: true,
           resizable: false,
-          valueGetter: (params) => {
-            if (!params.data) return ''
-            return getCellValue(String(params.data.row_id), col, params.data)
-          },
         } satisfies ColDef<QuarantineRow>
       }
 
@@ -159,10 +171,6 @@ export function QuarantineAgGridTable({
         resizable: true,
         minWidth: 100,
         flex: 1,
-        valueGetter: (params) => {
-          if (!params.data) return ''
-          return getCellValue(String(params.data.row_id), col, params.data)
-        },
         // AI suggest button on editable quarantined cells
         ...(isEditable && {
           cellRenderer: AiSuggestCellRenderer,
@@ -180,8 +188,13 @@ export function QuarantineAgGridTable({
                   return isCellEdited(String(params.data.row_id), col)
                 },
                 'ag-cell-saved': (params) => {
-                  if (!params.data || !isCellSaved) return false
-                  return isCellSaved(String(params.data.row_id), col)
+                  if (!params.data) return false
+                  // In-session: cell was saved this session via the edits hook
+                  if (isCellSaved && isCellSaved(String(params.data.row_id), col)) return true
+                  // Persistent: on reload the patch includes {col}_dq_status='edited'
+                  // so the row comes back from the backend already flipped — show green
+                  // without requiring any in-memory state.
+                  return String(params.data[`${col}_dq_status`] ?? '').toLowerCase() === 'edited'
                 },
               }
             : {}),
@@ -195,7 +208,7 @@ export function QuarantineAgGridTable({
         },
       } satisfies ColDef<QuarantineRow>
     })
-  }, [columns, editableColumns, getCellValue, isCellEdited, uploadId, authToken, stableOnAccept])
+  }, [columns, editableColumns, isCellEdited, isCellSaved, uploadId, authToken, stableOnAccept])
 
   // ─── Default Column Definition ─────────────────────────────────────────────
 
@@ -248,14 +261,13 @@ export function QuarantineAgGridTable({
      * flex-1 min-h-0: standard flex overflow pattern — parent must use
      *   display:flex + flex-direction:column for the grid to fill available height
      */
-    <div className="quarantine-ag-grid flex-1 min-h-0" style={{ width: '100%', height: '100%' }}>
+    <div className="quarantine-ag-grid" style={{ width: '100%', height: '100%' }}>
       <AgGridReact<QuarantineRow>
         // Module registration — use modules prop (not global ModuleRegistry)
         // to avoid SSR conflicts and multi-grid issues
         modules={[AllCommunityModule]}
         // Modern themeQuartz — no legacy CSS imports needed
         theme={themeQuartz}
-        // Capture the grid API so stableOnAccept can call refreshCells()
         onGridReady={(params) => { gridApiRef.current = params.api }}
         // Data
         rowData={rows}
@@ -264,13 +276,15 @@ export function QuarantineAgGridTable({
         getRowId={getRowId}
         // Loading overlay: show only when loading and no rows are present yet
         loading={loading && rows.length === 0}
-        // Cell editing
+        // Cell editing — double-click (or Enter/F2) to start editing.
+        // singleClickEdit is intentionally OFF: editable columns use AiSuggestCellRenderer
+        // which embeds interactive buttons. With singleClickEdit=true, a click anywhere on
+        // the cell — including the ✨ wand button — would unmount the renderer and mount the
+        // text editor, making the AI suggestion popover impossible to open.
         onCellValueChanged={handleCellValueChanged}
         // Infinite scroll trigger
         onBodyScrollEnd={handleBodyScrollEnd}
-        // Keyboard navigation: AG Grid provides arrow key nav and Enter-to-edit
-        // out of the box when editable columns are configured.
-        // No additional enterNavigatesVertically needed for basic use.
+        // Keyboard navigation
         enterNavigatesVerticallyAfterEdit={true}
         // Suppress the default context menu (prevent browser conflict)
         suppressContextMenu={true}

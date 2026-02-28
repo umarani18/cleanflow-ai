@@ -153,7 +153,17 @@ export function useQuarantineEdits() {
   }, [state.editsMap])
 
   /**
-   * Reset edits state
+   * Clear only pending (unsaved) edits — keep savedEditsMap so cells that
+   * were already saved this session retain their green "saved" indicator
+   * when the dialog is closed and reopened.
+   */
+  const clearPending = useCallback(() => {
+    setState((prev) => ({ ...prev, editsMap: {}, activeCell: null }))
+  }, [])
+
+  /**
+   * Full reset — clears everything including savedEditsMap.
+   * Use when switching to a different file.
    */
   const reset = useCallback(() => {
     setState({ editsMap: {}, savedEditsMap: {}, activeCell: null })
@@ -173,6 +183,7 @@ export function useQuarantineEdits() {
     isRowEdited,
     getEditedRows,
     getEditsBatch,
+    clearPending,
     reset,
   }
 }
